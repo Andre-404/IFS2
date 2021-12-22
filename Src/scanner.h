@@ -5,7 +5,7 @@
 
 	using std::vector;
 
-	typedef enum TokenType {
+	enum TokenType {
 		// Single-character tokens.
 		TOKEN_LEFT_PAREN, TOKEN_RIGHT_PAREN,
 		TOKEN_LEFT_BRACE, TOKEN_RIGHT_BRACE,
@@ -31,13 +31,13 @@
 		TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE, TOKEN_HASHMAP, TOKEN_SWITCH, TOKEN_FOREACH,
 
 		TOKEN_ERROR, TOKEN_EOF
-	} TokenType;
+	};
 
-	typedef struct Token {
+	struct Token {
 		TokenType type;
 		string lexeme;
 		int line;
-	} Token;
+	};
 
 	class scanner {
 	public:
