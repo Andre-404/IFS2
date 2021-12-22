@@ -1,0 +1,85 @@
+IFS2
+
+types:
+int
+double
+int64
+string
+bool
+-------
+1
+1.56
+5
+"Hello world"
+true
+
+collections:
+array->dynamic
+hashMap[key:string, val:any]
+struct
+---------
+var arr = [];
+var Map = hashMap<>
+var struct = {field: val}
+
+
+Operators
+- ! 
+()
++ - * / %
+< > >= <=
+<< >> & | ^
+a++ ++a a-- --a
+?:
+and or
+==
+= += -= *= /= %= &= |= ^=
+---------------------------------------------------
+= += -= *= /= %= &= |= ^=
+?:
+or
+and
+|
+^
+&
+== !=
+< > >= <=
+<< >>
++ -
+* / %
+~ a++ ++a a-- --a - !
+
+
+Statements
+for
+while
+if else
+switch
+foreach->array, hashMap
+
+
+Declarations
+variable
+class(single inheritance), only global level->methods and fields
+-> init
+this
+super
+
+class roko{
+init(){
+this.x = [5, 6];
+this.y = 2;
+}
+method b(){
+var x = this.x;
+//radi
+this.x = x;
+}
+}
+
+function->func
+
+
+
+
+
