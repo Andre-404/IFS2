@@ -29,13 +29,13 @@ scanner::scanner(string* src) {
 
 	bool scanner::match(char expected) {
 		if (isAtEnd()) return false;
-		if ((*source).at(current) != expected) return false;
+		if (source->at(current) != expected) return false;
 		current++;
 		return true;
 	}
 
 	char scanner::advance() {
-		return (*source).at(current++);
+		return source->at(current++);
 	}
 
 	Token scanner::scanToken() {
@@ -58,18 +58,23 @@ scanner::scanner(string* src) {
 			case ';': return makeToken(TOKEN_SEMICOLON);
 			case ',': return makeToken(TOKEN_COMMA);
 			case '.': return makeToken(TOKEN_DOT);
-			case '-': return makeToken(TOKEN_MINUS);
-			case '+': return makeToken(TOKEN_PLUS);
-			case '/': return makeToken(TOKEN_SLASH);
-			case '*': return makeToken(TOKEN_STAR);
+			case '-': return makeToken(match('=') ? TOKEN_MINUS_EQUAL : match('-') ? TOKEN_DECREMENT : TOKEN_MINUS);
+			case '+': return makeToken(match('=') ? TOKEN_PLUS_EQUAL : match('+') ? TOKEN_INCREMENT : TOKEN_PLUS);
+			case '/': return makeToken(match('=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
+			case '*': return makeToken(match('=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
+			case '&': return makeToken(match('=') ? TOKEN_BITWISE_AND_EQUAL : match('&') ? TOKEN_AND : TOKEN_BITWISE_AND);
+			case '|': return makeToken(match('=') ? TOKEN_BITWISE_OR_EQUAL : match('|') ? TOKEN_OR : TOKEN_BITWISE_OR);
+			case '^': return makeToken(match('=') ? TOKEN_BITWISE_XOR_EQUAL : TOKEN_BITWISE_XOR);
+			case '%': return makeToken(match('=') ? TOKEN_PERCENTAGE_EQUAL : TOKEN_PERCENTAGE);
+			case '~': return makeToken(TOKEN_TILDA);
 			case '!':
 				return makeToken(match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
 			case '=':
 				return makeToken(match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
 			case '<':
-				return makeToken(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+				return makeToken(match('=') ? TOKEN_LESS_EQUAL : match('<') ? TOKEN_BITSHIFT_LEFT : TOKEN_LESS);
 			case '>':
-				return makeToken(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+				return makeToken(match('=') ? TOKEN_GREATER_EQUAL : match('>') ? TOKEN_BITSHIFT_RIGHT : TOKEN_GREATER);
 			case '"': return string_();
 		}
 
