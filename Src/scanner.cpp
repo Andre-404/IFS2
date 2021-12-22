@@ -109,7 +109,7 @@ scanner::scanner(string* src) {
 		return source->at(current+1);
 	}
 	void scanner::skipWhitespace() {
-		for (;;) {
+		while(true) {
 			char c = peek();
 			switch (c) {
 			case ' ':
@@ -187,15 +187,26 @@ scanner::scanner(string* src) {
 			case 'o': return checkKeyword(1, 1, "r", TOKEN_OR);
 			case 'p': return checkKeyword(1, 4, "rint", TOKEN_PRINT);
 			case 'r': return checkKeyword(1, 5, "eturn", TOKEN_RETURN);
-			case 's': return checkKeyword(1, 4, "uper", TOKEN_SUPER);
+			case 's': 
+				if (current - start > 1) {
+					switch (source->at(start + 1)) {
+						case 'u': return checkKeyword(1, 3, "per", TOKEN_SUPER);
+						case 'w': return checkKeyword(1, 4, "itch", TOKEN_SWITCH);
+					}
+				}
+				break;
 			case 'v': return checkKeyword(1, 2, "ar", TOKEN_VAR);
 			case 'w': return checkKeyword(1, 4, "hile", TOKEN_WHILE);
 			case 'f':
 				if (current - start > 1) {
 					switch (source->at(start+1)) {
 					case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
-					case 'o': return checkKeyword(2, 1, "r", TOKEN_FOR);
-					case 'u': return checkKeyword(2, 1, "n", TOKEN_FUN);
+					case 'o': 
+						if (current - start > 3) {
+							return checkKeyword(3, 4, "each", TOKEN_FOREACH);
+						}
+						return checkKeyword(2, 1, "r", TOKEN_FOR);
+					case 'u': return checkKeyword(2, 1, "nc", TOKEN_FUNC);
 					}
 				}
 				break;

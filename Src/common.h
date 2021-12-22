@@ -4,7 +4,7 @@
 	#include <stdlib.h>
 	#include <string>
 	#include <vector>
-	
+	#include <stdbool.h>
 
 	using std::string;
 #endif
