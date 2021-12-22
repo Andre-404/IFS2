@@ -65,18 +65,6 @@ class(single inheritance), only global level->methods and fields
 this
 super
 
-class roko{
-init(){
-this.x = [5, 6];
-this.y = 2;
-}
-method b(){
-var x = this.x;
-//radi
-this.x = x;
-}
-}
-
 function->func
 
 
