@@ -4,7 +4,6 @@
 
 scanner::scanner(string* src) {
 	line = 1;
-	vector<Token> arr;
 	source = src;
 	start = 0;
 	current = start;
@@ -15,12 +14,10 @@ scanner::scanner(string* src) {
 		token = scanToken();
 		arr.push_back(token);
 	}
-	arr.push_back(token);
-	std::cout << arr.size()<<"\n";
-	for (int i = 0; i < arr.size(); i++) {
-		Token tok = arr[i];
-		std::cout << tok.lexeme<<"\n";
-	}
+}
+
+vector<Token> scanner::getArr() {
+	return arr;
 }
 
 	bool scanner::isAtEnd() {
@@ -203,7 +200,7 @@ scanner::scanner(string* src) {
 					case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
 					case 'o': 
 						if (current - start > 3) {
-							return checkKeyword(3, 4, "each", TOKEN_FOREACH);
+							return checkKeyword(2, 5, "reach", TOKEN_FOREACH);
 						}
 						return checkKeyword(2, 1, "r", TOKEN_FOR);
 					case 'u': return checkKeyword(2, 1, "nc", TOKEN_FUNC);
@@ -221,8 +218,8 @@ scanner::scanner(string* src) {
 		}
 	}
 
-	TokenType scanner::checkKeyword(int start, int length, const char* rest, TokenType type) {
-		if (current - start == start + length && source->compare(rest) == 0) {
+	TokenType scanner::checkKeyword(int strt, int length, const char* rest, TokenType type) {
+		if (current - start == strt + length && source->substr(start + strt, length).compare(rest) == 0) {
 			return type;
 		}
 

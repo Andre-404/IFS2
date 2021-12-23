@@ -5,6 +5,7 @@
 	#include <string>
 	#include <vector>
 	#include <stdbool.h>
+	#include <iostream>
 
 	using std::string;
 #endif

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include "scanner.h"
+#include "AST.h"
 
 using std::cout;
 using std::cin;
@@ -36,8 +37,11 @@ int main() {
 	cin >> path;
 	string source = readFile(path);
 	if (!source.empty()) {
-		scanner scan(&source);
+		scanner* scan = new scanner(&source);
+		ASTBinaryExpr* lolcek = new ASTBinaryExpr(scan->getArr()[0], NULL, NULL);
 	}
+
+
 	int a;
 	cin >> a;
 	return 0;

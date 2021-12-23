@@ -1,7 +1,6 @@
 #ifndef __IFS_SCANNER
 	#define __IFS_SCANNER
 	#include "common.h"
-	#include <iostream>
 
 	using std::vector;
 
@@ -42,12 +41,13 @@
 	class scanner {
 	public:
 		scanner(string* src);
+		vector<Token> getArr();
 	private:
 		string* source;
-		vector<Token> arr;
 		int line;
 		int start;
 		int current;
+		vector<Token> arr;
 
 		bool isAtEnd();
 		bool match(char expected);
