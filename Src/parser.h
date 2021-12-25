@@ -7,10 +7,10 @@
 
 class parser {
 public:
-	parser(vector<Token> _tokens);
+	parser(vector<Token>* _tokens);
 	ASTNode* tree;
 private:
-	vector<Token> tokens;
+	vector<Token>* tokens;
 	uint16_t current;
 	bool hadError;
 #pragma region Precedence

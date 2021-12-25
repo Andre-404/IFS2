@@ -3,6 +3,7 @@
 #include <fstream>
 #include "scanner.h"
 #include "parser.h"
+#include "chunk.h"
 
 using std::cout;
 using std::cin;
@@ -40,7 +41,11 @@ int main() {
 		scanner* scan = new scanner(&source);
 		parser* parse = new parser(scan->getArr());
 	}
-
+	Chunk chunk;
+	int consta = chunk.addConstant(50);
+	chunk.writeData(OP_CONSTANT, 150);
+	chunk.writeData(consta, 150);
+	chunk.disassemble("main");
 
 	int a;
 	cin >> a;

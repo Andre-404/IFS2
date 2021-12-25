@@ -30,6 +30,12 @@
     <ClCompile Include="debug.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="chunk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="VM.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="scanner.h">
@@ -45,6 +51,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="debug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="chunk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VM.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

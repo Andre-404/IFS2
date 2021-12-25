@@ -2,7 +2,7 @@
 #include "AST.h"
 #include "debug.h"
 
-parser::parser(vector<Token> _tokens) {
+parser::parser(vector<Token>* _tokens) {
 	tokens = _tokens;
 	current = 0;
 	hadError = false;
@@ -12,7 +12,6 @@ parser::parser(vector<Token> _tokens) {
 	#ifdef DEBUG_PRINT_AST
 		debugASTPrinter printer(tree);
 	#endif // DEBUG_PRINT_AST
-
 	}
 	catch (int e) {
 		tree = NULL;
@@ -113,7 +112,7 @@ bool parser::match(const std::initializer_list<TokenType>& tokenTypes) {
 }
 
 bool parser::isAtEnd() {
-	return tokens[current].type == TOKEN_EOF;
+	return tokens->at(current).type == TOKEN_EOF;
 }
 
 bool parser::check(TokenType type) {
@@ -127,11 +126,11 @@ Token parser::advance() {
 }
 
 Token parser::peek() {
-	return tokens[current];
+	return tokens->at(current);
 }
 
 Token parser::previous() {
-	return tokens[current - 1];
+	return tokens->at(current - 1);
 }
 
 Token parser::consume(TokenType type, string msg) {

@@ -41,7 +41,7 @@
 	class scanner {
 	public:
 		scanner(string* src);
-		vector<Token> getArr();
+		vector<Token>* getArr();
 	private:
 		string* source;
 		int line;
