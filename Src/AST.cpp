@@ -3,7 +3,7 @@
 
 
 #pragma region Binary
-ASTBinaryExpr::ASTBinaryExpr(Token _op, ASTNode* _left, ASTNode* _right) {
+ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
 	op = _op;
 	left = _left;
 	right = _right;

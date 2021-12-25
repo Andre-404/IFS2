@@ -2,7 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include "scanner.h"
-#include "AST.h"
+#include "parser.h"
 
 using std::cout;
 using std::cin;
@@ -38,7 +38,7 @@ int main() {
 	string source = readFile(path);
 	if (!source.empty()) {
 		scanner* scan = new scanner(&source);
-		ASTBinaryExpr* lolcek = new ASTBinaryExpr(scan->getArr()[0], NULL, NULL);
+		parser* parse = new parser(scan->getArr());
 	}
 
 

@@ -8,4 +8,6 @@
 	#include <iostream>
 
 	using std::string;
+
+	#define DEBUG_PRINT_AST
 #endif

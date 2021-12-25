@@ -109,26 +109,26 @@ vector<Token> scanner::getArr() {
 		while(true) {
 			char c = peek();
 			switch (c) {
-			case ' ':
-			case '\r':
-			case '\t':
-				advance();
-				break;
-			case '\n':
-				line++;
-				advance();
-				break;
-			case '/':
-				if (peekNext() == '/') {
-					// A comment goes until the end of the line.
-					while (peek() != '\n' && !isAtEnd()) advance();
-				}
-				else {
+				case ' ':
+				case '\r':
+				case '\t':
+					advance();
+					break;
+				case '\n':
+					line++;
+					advance();
+					break;
+				case '/':
+					if (peekNext() == '/') {
+						// A comment goes until the end of the line.
+						while (peek() != '\n' && !isAtEnd()) advance();
+					}
+					else {
+						return;
+					}
+					break;
+				default:
 					return;
-				}
-				break;
-			default:
-				return;
 			}
 		}
 	}
@@ -203,7 +203,7 @@ vector<Token> scanner::getArr() {
 							return checkKeyword(2, 5, "reach", TOKEN_FOREACH);
 						}
 						return checkKeyword(2, 1, "r", TOKEN_FOR);
-					case 'u': return checkKeyword(2, 1, "nc", TOKEN_FUNC);
+					case 'u': return checkKeyword(2, 2, "nc", TOKEN_FUNC);
 					}
 				}
 				break;

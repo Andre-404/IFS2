@@ -1,3 +1,6 @@
+#ifndef __IFS_AST
+#define __IFS_AST
+
 #include "common.h"
 #include "scanner.h"
 
@@ -29,8 +32,12 @@ private:
 	ASTNode* left;
 	ASTNode* right;
 public:
-	ASTBinaryExpr(Token _op, ASTNode* _left, ASTNode* _right);
+	ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right);
 	void accept(visitor* vis);
+
+	Token getToken() { return op; }
+	ASTNode* getLeft() { return left; }
+	ASTNode* getRight() { return right; }
 };
 
 class ASTUnaryExpr : public ASTNode {
@@ -40,6 +47,9 @@ private:
 public:
 	ASTUnaryExpr(Token _op, ASTNode* _right);
 	void accept(visitor* vis);
+
+	Token getToken() { return op; }
+	ASTNode* getRight() { return right; }
 };
 
 class ASTGroupingExpr : public ASTNode {
@@ -48,6 +58,8 @@ private:
 public:
 	ASTGroupingExpr(ASTNode* _expr);
 	void accept(visitor* vis);
+
+	ASTNode* getExpr() { return expr; }
 };
 
 class ASTLiteralExpr : public ASTNode {
@@ -56,4 +68,8 @@ private:
 public:
 	ASTLiteralExpr(Token _token);
 	void accept(visitor* vis);
+
+	Token getToken() { return token; }
 };
+
+#endif
