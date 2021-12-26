@@ -18,8 +18,8 @@ private:
 };
 
 #pragma region Debug
-int disassembleInstruction(Chunk* chunk, int offset);
-static int constantInstruction(string name, Chunk* chunk, int offset);
+int disassembleInstruction(chunk* Chunk, int offset);
+static int constantInstruction(string name, chunk* Chunk, int offset);
 static int simpleInstruction(string name, int offset);
 void printValue(Value value);
 #pragma endregion

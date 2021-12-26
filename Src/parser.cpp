@@ -140,7 +140,7 @@ Token parser::consume(TokenType type, string msg) {
 }
 
 void parser::report(int line, string _where, string msg) {
-	std::cout << "[line " << line << "] Error" << _where << ": " << msg;
+	std::cout << "[line " << line << "] Error" << _where << ": " << msg << "\n";
 	hadError = true;
 }
 

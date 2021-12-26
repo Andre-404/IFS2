@@ -10,4 +10,6 @@
 	using std::string;
 
 	#define DEBUG_PRINT_AST
+	#define DEBUG_PRINT_CODE
+	#define DEBUG_TRACE_EXECUTION
 #endif
