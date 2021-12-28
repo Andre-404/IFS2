@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "compiler.h"
+#include "object.h"
 
 enum interpretResult {
 	INTERPRETER_OK,
@@ -18,16 +19,20 @@ public:
 	uint8_t getOp(long _ip);
 	interpretResult interpret(chunk* _chunk);
 	interpretResult run();
-	void push(Value val);
-	Value pop();
-	Value peek(int depth);
-	void resetStack();
-	void runtimeError(const char* format, ...);
+	obj* objects;//linked list
 private:
 	long ip;
 	chunk* curChunk;
 	Value stack[STACK_MAX];
 	Value* stackTop;
+	void concatenate();
+	void push(Value val);
+	Value pop();
+	Value peek(int depth);
+	void resetStack();
+	void runtimeError(const char* format, ...);
+	obj* appendObject(obj* _object);//append to the 'objects' list
+	void freeObjects();
 };
 
 

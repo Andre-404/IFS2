@@ -1,7 +1,6 @@
 #include "scanner.h"
 
 
-
 scanner::scanner(string* src) {
 	line = 1;
 	source = src;
@@ -24,6 +23,7 @@ bool scanner::isAtEnd() {
 	return current >= source->size();
 }
 
+//if matched we consume the token
 bool scanner::match(char expected) {
 	if (isAtEnd()) return false;
 	if (source->at(current) != expected) return false;
@@ -42,6 +42,7 @@ Token scanner::scanToken() {
 	if (isAtEnd()) return makeToken(TOKEN_EOF);
 
 	char c = advance();
+	//identifiers start with _ or [a-z][A-Z]
 	if (isDigit(c)) return number();
 	if (isAlpha(c)) return identifier();
 
@@ -77,15 +78,11 @@ Token scanner::scanToken() {
 
 	return errorToken("Unexpected character.");
 }
-
+//creates a string_view to save memory, points back to source
 Token scanner::makeToken(TokenType type) {
 	Token token;
 	token.type = type;
-	string buffer;
-	for (int i = start; i < current; i++) {
-		buffer += source->at(i);
-	}
-	token.lexeme = buffer;
+	token.lexeme = std::string_view(source->c_str() + start, current-start);
 	token.line = line;
 	return token;
 }
@@ -93,18 +90,21 @@ Token scanner::makeToken(TokenType type) {
 Token scanner::errorToken(const char* message) {
 	Token token;
 	token.type = TOKEN_ERROR;
-	token.lexeme = string(message);
+	token.lexeme = std::string_view(message);
 	token.line = line;
 	return token;
 }
+
 char scanner::peek() {
 	if (isAtEnd()) return '\0';
 	return source->at(current);
 }
+
 char scanner::peekNext() {
 	if (isAtEnd()) return '\0';
 	return source->at(current+1);
 }
+
 void scanner::skipWhitespace() {
 	while(true) {
 		char c = peek();
@@ -132,6 +132,7 @@ void scanner::skipWhitespace() {
 		}
 	}
 }
+
 Token scanner::string_() {
 	while (peek() != '"' && !isAtEnd()) {
 		if (peek() == '\n') line++;
@@ -174,6 +175,7 @@ Token scanner::identifier() {
 	return makeToken(identifierType());
 }
 
+//trie implementation
 TokenType scanner::identifierType() {
 	switch (source->at(start)) {
 		case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
@@ -199,6 +201,7 @@ TokenType scanner::identifierType() {
 				switch (source->at(start+1)) {
 				case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
 				case 'o': 
+					//since foreach has the same letters as for we first check the total number of letters
 					if (current - start > 3) {
 						return checkKeyword(2, 5, "reach", TOKEN_FOREACH);
 					}
@@ -218,6 +221,7 @@ TokenType scanner::identifierType() {
 	}
 }
 
+//is string.compare fast enough?
 TokenType scanner::checkKeyword(int strt, int length, const char* rest, TokenType type) {
 	if (current - start == strt + length && source->substr(start + strt, length).compare(rest) == 0) {
 		return type;

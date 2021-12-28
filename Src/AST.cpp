@@ -1,6 +1,9 @@
 #include "AST.h"
 #include "common.h"
 
+/*
+accept methods invoke the specific visitor functions for each node type
+*/
 
 #pragma region Binary
 ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {

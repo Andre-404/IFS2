@@ -1,7 +1,7 @@
 #ifndef __IFS_SCANNER
 	#define __IFS_SCANNER
 	#include "common.h"
-
+	#include <string_view>
 	using std::vector;
 
 	enum TokenType {
@@ -27,14 +27,15 @@
 		TOKEN_AND, TOKEN_CLASS, TOKEN_ELSE, TOKEN_FALSE,
 		TOKEN_FOR, TOKEN_FUNC, TOKEN_IF, TOKEN_NIL, TOKEN_OR,
 		TOKEN_PRINT, TOKEN_RETURN, TOKEN_SUPER, TOKEN_THIS,
-		TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE, TOKEN_HASHMAP, TOKEN_SWITCH, TOKEN_FOREACH,
+		TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE, TOKEN_HASHMAP, 
+		TOKEN_SWITCH, TOKEN_FOREACH,
 
 		TOKEN_ERROR, TOKEN_EOF
 	};
 
 	struct Token {
 		TokenType type;
-		string lexeme;
+		std::string_view lexeme;
 		int line;
 	};
 

@@ -3,6 +3,7 @@
 #include "common.h"
 #include "AST.h"
 #include "chunk.h"
+#include <string_view>
 
 class debugASTPrinter : public visitor {
 public:
@@ -14,7 +15,7 @@ public:
 
 private:
 	string str;
-	void buildExpr(string name, const std::initializer_list<ASTNode*>& exprs);
+	void buildExpr(std::string_view name, const std::initializer_list<ASTNode*>& exprs);
 };
 
 #pragma region Debug

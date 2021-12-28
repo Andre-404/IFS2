@@ -12,13 +12,17 @@ parser::parser(vector<Token>* _tokens) {
 	#ifdef DEBUG_PRINT_AST
 		debugASTPrinter printer(tree);
 	#endif // DEBUG_PRINT_AST
-	}
-	catch (int e) {
+	}catch (int e) {
 		tree = NULL;
 	}
 }
 
 #pragma region Precedence
+
+/*
+when matching tokens we use while to enable multiple operations one after another
+*/
+
 ASTNode* parser::expression() {
 	return equality();
 }
@@ -93,6 +97,7 @@ ASTNode* parser::primary() {
 		consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 		return new ASTGroupingExpr(expr);
 	}
+	//and literal is stored as a string_view in the token
 	if (match({ TOKEN_NUMBER, TOKEN_STRING, TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL })) return new ASTLiteralExpr(previous());
 
 	throw error(peek(), "Expect expression.");
@@ -149,11 +154,13 @@ int parser::error(Token token, string msg) {
 		report(token.line, " at end", msg);
 	}
 	else {
-		report(token.line, " at '" + token.lexeme + "'", msg);
+		//have to do this so we can concat strings(can't concat string_view
+		report(token.line, " at '" + string(token.lexeme) + "'", msg);
 	}
 	return 0;
 }
 
+//syncs when we find a ';' or one of the reserved words
 void parser::sync() {
 	advance();
 

@@ -10,6 +10,28 @@ using std::cout;
 using std::cin;
 
 
+//We use this to keep track of memory usage, this is also used by GC to determine if it's time to collect
+memoryTracker tracker;
+
+//possibly need more checks and/or throwing errors
+void* operator new(size_t size) {
+	tracker.memoryUsage += 1;
+	void* ptr = malloc(size);
+	if (ptr == NULL) {
+		cout << "Couldn't allocate necessary memory, exiting...";
+		exit;
+	}
+	return ptr;
+}
+
+void operator delete(void* memoryBlock, size_t size) {
+	tracker.memoryUsage -= 1;
+
+	free(memoryBlock);
+}
+
+
+
 string readFile(string path) {
 	FILE* source;
 	errno_t err = fopen_s(&source, path.c_str(), "rb");
@@ -42,10 +64,12 @@ int main() {
 		scanner* scan = new scanner(&source);
 		parser* parse = new parser(scan->getArr());
 		compiler* comp = new compiler(parse);
-		vm* newVm = new vm(comp);
+		vm newVM(comp);
+		delete scan;
+		delete parse;
+		delete comp;
 	}
 
-	int a;
-	cin >> a;
+	cin.get();
 	return 0;
 }

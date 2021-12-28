@@ -2,8 +2,11 @@
 #include "debug.h"
 #include <stdarg.h>
 
+extern memoryTracker tracker;
+
 vm::vm(compiler* current) {
 	curChunk = NULL;
+	objects = current->objects;
 	ip = 0;
 	resetStack();
 	if (!current->compiled) return;
@@ -11,7 +14,7 @@ vm::vm(compiler* current) {
 }
 
 vm::~vm() {
-
+	freeObjects();
 }
 
 #pragma region Helpers
@@ -53,6 +56,31 @@ void vm::runtimeError(const char* format, ...) {
 
 static bool isFalsey(Value value) {
 	return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+//concats 2 string objects and uses that to make a new string on the heap
+void vm::concatenate() {
+	objString* b = AS_STRING(pop());
+	objString* a = AS_STRING(pop());
+	
+	string* heapStr = new string(*a->str + *b->str);
+	objString* result = takeString(heapStr);
+	push(OBJ_VAL(appendObject(result)));
+}
+
+obj* vm::appendObject(obj* _object) {
+	_object->next = objects;
+	objects = _object;
+	return _object;
+}
+
+void vm::freeObjects() {
+	obj* object = objects;
+	while (object != NULL) {
+		obj* next = object->next;
+		freeObject(object);
+		object = next;
+	}
 }
 #pragma endregion
 
@@ -120,8 +148,32 @@ interpretResult vm::run() {
 			case OP_NOT:
 				push(BOOL_VAL(isFalsey(pop())));
 				break;
-			case OP_ADD:      BINARY_OP(NUMBER_VAL, +); break;
-			case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
+			case OP_BIN_NOT: {
+				if (!IS_NUMBER(peek(0))) {
+					runtimeError("Operand must be a number.");
+					return INTERPRETER_RUNTIME_ERROR;
+				}
+				int num = AS_NUMBER(pop());
+				push(NUMBER_VAL((double)~num));
+				break;
+			}
+			case OP_ADD: {
+				if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+					concatenate();
+				}
+				else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+					double b = AS_NUMBER(pop());
+					double a = AS_NUMBER(pop());
+					push(NUMBER_VAL(a + b));
+				}
+				else {
+					runtimeError(
+						"Operands must be two numbers or two strings.");
+					return INTERPRETER_RUNTIME_ERROR;
+				}
+				break;
+			}
+			case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break; 
 			case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
 			case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
 			case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;

@@ -7,7 +7,7 @@ debugASTPrinter::debugASTPrinter(ASTNode* expr) {
 	std::cout << str<<"\n";
 }
 
-void debugASTPrinter::buildExpr(string name, const std::initializer_list<ASTNode*> &exprs) {
+void debugASTPrinter::buildExpr(std::string_view name, const std::initializer_list<ASTNode*> &exprs) {
 	str.append("(").append(name);
 	for (ASTNode* expr : exprs) {
 		str.append(" ");
@@ -30,15 +30,6 @@ void debugASTPrinter::visitLiteralExpr(ASTLiteralExpr* expr) {
 }
 
 #pragma region Disassembly
-void printValue(Value value) {
-	switch (value.type) {
-	case VAL_BOOL:
-		std::cout<< (AS_BOOL(value) ? "true" : "false");
-		break;
-	case VAL_NIL: std::cout<<"nil"; break;
-	case VAL_NUM: std::cout << AS_NUMBER(value); break;
-	}
-}
 
 static int simpleInstruction(string name, int offset) {
 	std::cout << name << "\n";
@@ -47,13 +38,14 @@ static int simpleInstruction(string name, int offset) {
 
 static int constantInstruction(string name, chunk* Chunk, int offset) {
 	uint8_t constant = Chunk->code[offset + 1];
-	printf("%-16s %4d '", name.c_str(), constant);
+	printf("%-16s %4d '", name.c_str(), constant);//have to use printf because of string spacing
 	printValue(Chunk->constants[constant]);
 	printf("'\n");
 	return offset + 2;
 }
 
 int disassembleInstruction(chunk* Chunk, int offset) {
+	//printf usage because of %04d
 	printf("%04d ", offset);
 
 	if (offset > 0 && Chunk->lines[offset] == Chunk->lines[offset - 1]) {

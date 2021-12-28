@@ -9,6 +9,7 @@ class ASTUnaryExpr;
 class ASTGroupingExpr;
 class ASTLiteralExpr;
 
+//visitor pattern
 class visitor {
 public:
 	virtual ~visitor() {};

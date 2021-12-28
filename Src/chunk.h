@@ -6,12 +6,16 @@
 	using std::vector;
 
 	enum OpCode {
+		//constants
 		OP_CONSTANT,
 		OP_NIL,
 		OP_TRUE,
 		OP_FALSE,
+		//unary
 		OP_NEGATE,
 		OP_NOT,
+		OP_BIN_NOT,
+		//binary
 		OP_ADD,
 		OP_SUBTRACT,
 		OP_MULTIPLY,
@@ -19,6 +23,7 @@
 		OP_MOD,
 		OP_BITSHIFT_LEFT,
 		OP_BITSHIFT_RIGHT,
+		//comparisons and equality
 		OP_EQUAL,
 		OP_NOT_EQUAL,
 		OP_GREATER,
@@ -28,7 +33,7 @@
 		OP_RETURN
 	};
 
-
+	//disassebmle is here, but the functions it calls are in debug.cpp
 	class chunk {
 	public:
 		vector<int> lines;
