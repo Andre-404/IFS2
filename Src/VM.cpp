@@ -2,8 +2,6 @@
 #include "debug.h"
 #include <stdarg.h>
 
-extern memoryTracker tracker;
-
 vm::vm(compiler* current) {
 	curChunk = NULL;
 	objects = current->objects;
@@ -63,8 +61,8 @@ void vm::concatenate() {
 	objString* b = AS_STRING(pop());
 	objString* a = AS_STRING(pop());
 	
-	string* heapStr = new string(*a->str + *b->str);
-	objString* result = takeString(heapStr);
+	string str = string(a->str + b->str);
+	objString* result = takeString(str);
 	push(OBJ_VAL(appendObject(result)));
 }
 

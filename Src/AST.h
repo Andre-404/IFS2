@@ -34,6 +34,7 @@ private:
 	ASTNode* right;
 public:
 	ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right);
+	~ASTBinaryExpr();
 	void accept(visitor* vis);
 
 	Token getToken() { return op; }
@@ -47,6 +48,7 @@ private:
 	ASTNode* right;
 public:
 	ASTUnaryExpr(Token _op, ASTNode* _right);
+	~ASTUnaryExpr();
 	void accept(visitor* vis);
 
 	Token getToken() { return op; }
@@ -58,6 +60,7 @@ private:
 	ASTNode* expr;
 public:
 	ASTGroupingExpr(ASTNode* _expr);
+	~ASTGroupingExpr();
 	void accept(visitor* vis);
 
 	ASTNode* getExpr() { return expr; }

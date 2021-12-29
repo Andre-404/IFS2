@@ -12,6 +12,11 @@ ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
 	right = _right;
 }
 
+ASTBinaryExpr::~ASTBinaryExpr() {
+	delete left;
+	delete right;
+}
+
 void ASTBinaryExpr::accept(visitor* vis) {
 	vis->visitBinaryExpr(this);
 }
@@ -23,6 +28,10 @@ ASTUnaryExpr::ASTUnaryExpr(Token _op, ASTNode* _right) {
 	right = _right;
 }
 
+ASTUnaryExpr::~ASTUnaryExpr() {
+	delete right;
+}
+
 void ASTUnaryExpr::accept(visitor* vis) {
 	vis->visitUnaryExpr(this);
 }
@@ -31,6 +40,10 @@ void ASTUnaryExpr::accept(visitor* vis) {
 #pragma region Grouping
 ASTGroupingExpr::ASTGroupingExpr(ASTNode* _expr) {
 	expr = _expr;
+}
+
+ASTGroupingExpr::~ASTGroupingExpr() {
+	delete expr;
 }
 
 void ASTGroupingExpr::accept(visitor* vis) {

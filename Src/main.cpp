@@ -5,17 +5,17 @@
 #include "parser.h"
 #include "VM.h"
 #include "compiler.h"
-
+#include "namespaces.h"
 using std::cout;
 using std::cin;
 
-
-//We use this to keep track of memory usage, this is also used by GC to determine if it's time to collect
-memoryTracker tracker;
+//init the variables of global namespace
+long long global::memoryUsage = 0;
+hashTable global::internedStrings = hashTable();
 
 //possibly need more checks and/or throwing errors
 void* operator new(size_t size) {
-	tracker.memoryUsage += 1;
+	global::memoryUsage += size;
 	void* ptr = malloc(size);
 	if (ptr == NULL) {
 		cout << "Couldn't allocate necessary memory, exiting...";
@@ -25,7 +25,7 @@ void* operator new(size_t size) {
 }
 
 void operator delete(void* memoryBlock, size_t size) {
-	tracker.memoryUsage -= 1;
+	global::memoryUsage -= size;
 
 	free(memoryBlock);
 }

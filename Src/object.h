@@ -17,8 +17,9 @@ public:
 
 class objString : public obj {
 public:
-	string* str;
-	objString(string* _str);
+	string str;
+	unsigned long long hash;
+	objString(string _str, unsigned long long _hash);
 	~objString();
 };
 
@@ -33,10 +34,10 @@ static inline bool isObjType(Value value, ObjType type) {
 
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
-#define AS_CSTRING(value)      (*((objString*)AS_OBJ(value))->str)//gets raw string
+#define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
 
-objString* copyString(string& str);//takes a string value a heap allocates it
-objString* takeString(string* str);//assumes the string has already been heap allocated
+objString* copyString(string& str);
+objString* takeString(string& str);
 
 void printObject(Value value);
 void freeObject(obj* object);

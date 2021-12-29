@@ -17,6 +17,10 @@ parser::parser(vector<Token>* _tokens) {
 	}
 }
 
+parser::~parser() {
+	delete tree;
+}
+
 #pragma region Precedence
 
 /*

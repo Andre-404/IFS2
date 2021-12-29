@@ -9,8 +9,8 @@
 
 	using std::string;
 
-	struct memoryTracker {
-		uint32_t memoryUsage = 0;
+	namespace global {
+
 	};
 
 	#define DEBUG_PRINT_AST

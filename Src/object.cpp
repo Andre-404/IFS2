@@ -1,7 +1,5 @@
 #include "object.h"
-
-extern memoryTracker tracker;
-
+#include "namespaces.h"
 
 void printObject(Value value) {
 	switch (OBJ_TYPE(value)) {
@@ -22,23 +20,41 @@ void freeObject(obj* object) {
 	}
 }
 
-objString::objString(string* _str) {
+static unsigned long long hashString(string& str) {
+	long long hash = 14695981039346656037u;
+	int length = str.size();
+	for (int i = 0; i < length; i++) {
+		hash ^= (uint8_t)str.at(i);
+		hash *= 1099511628211;
+	}
+	return hash;
+}
+
+objString::objString(string _str, unsigned long long _hash) {
 	type = OBJ_STRING;
 	str = _str;
+	hash = _hash;
 	next = NULL;//linked list
+	global::internedStrings.set(this, NIL_VAL());
 }
 
 objString::~objString() {
-	delete str;
 }
 
 //assumes the string hasn't been heap allocated
 objString* copyString(string& str) {
-	string* heapStr = new string(str);
-	return new objString(heapStr);
+	unsigned long long hash = hashString(str);
+	objString* interned = findInternedString(&global::internedStrings, str, hash);
+	if (interned != NULL) return interned;
+	return new objString(str, hash);
 }
 
 //assumes string is heap allocated
-objString* takeString(string* str) {
-	return new objString(str);
+objString* takeString(string& str) {
+	unsigned long long hash = hashString(str);
+	objString* interned = findInternedString(&global::internedStrings, str, hash);
+	if (interned != NULL) {
+		return interned;
+	}
+	return new objString(str, hash);
 }

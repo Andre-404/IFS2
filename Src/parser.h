@@ -8,6 +8,7 @@
 class parser {
 public:
 	parser(vector<Token>* _tokens);
+	~parser();
 	ASTNode* tree;
 	bool hadError;
 private:

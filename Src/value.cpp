@@ -7,12 +7,7 @@ bool valuesEqual(Value a, Value b) {
     case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
     case VAL_NIL:    return false;
     case VAL_NUM:    return AS_NUMBER(a) == AS_NUMBER(b);
-    case VAL_OBJ: {
-        //look into alternatives for compare
-        objString* aString = AS_STRING(a);
-        objString* bString = AS_STRING(b);
-        return aString->str->compare((*bString->str)) == 0;
-    }
+    case VAL_OBJ:    return AS_OBJ(a) == AS_OBJ(b);
     default:         return false; // Unreachable.
     }
 }

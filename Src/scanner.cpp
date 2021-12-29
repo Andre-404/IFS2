@@ -1,5 +1,5 @@
 #include "scanner.h"
-
+#include <string_view>
 
 scanner::scanner(string* src) {
 	line = 1;
