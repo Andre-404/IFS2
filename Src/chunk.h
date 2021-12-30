@@ -6,6 +6,8 @@
 	using std::vector;
 
 	enum OpCode {
+		//Helpers
+		OP_POP,
 		//constants
 		OP_CONSTANT,
 		OP_NIL,
@@ -30,6 +32,11 @@
 		OP_GREATER_EQUAL,
 		OP_LESS,
 		OP_LESS_EQUAL,
+		//Statements
+		OP_PRINT,
+		OP_DEFINE_GLOBAL,
+		OP_GET_GLOBAL,
+		OP_SET_GLOBAL,
 		OP_RETURN
 	};
 

@@ -4,8 +4,9 @@
 #include "common.h"
 #include "compiler.h"
 #include "object.h"
+#include "hashTable.h"
 
-enum interpretResult {
+enum class interpretResult {
 	INTERPRETER_OK,
 	INTERPRETER_RUNTIME_ERROR
 };
@@ -25,6 +26,7 @@ private:
 	chunk* curChunk;
 	Value stack[STACK_MAX];
 	Value* stackTop;
+	hashTable globals;
 	void concatenate();
 	void push(Value val);
 	Value pop();

@@ -218,6 +218,7 @@ TokenType scanner::identifierType() {
 				}
 			}
 			break;
+		default: return TOKEN_IDENTIFIER;
 	}
 }
 

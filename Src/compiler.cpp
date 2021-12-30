@@ -16,16 +16,13 @@ compiler::compiler(parser* Parser) {
 	}
 	else {
 		current = new chunk;
-		try {
-			Parser->tree->accept(this);
-			emitReturn();
-			#ifdef DEBUG_PRINT_CODE
-						getCurrent()->disassemble("code");
-			#endif
+		for (int i = 0; i < Parser->statements.size(); i++) {
+			Parser->statements[i]->accept(this);
 		}
-		catch (int e) {
-			//If compiling fails, change this when we get statements
-		}
+		emitReturn();
+	#ifdef DEBUG_PRINT_CODE
+		getCurrent()->disassemble("code");
+	#endif
 	}
 }
 
@@ -34,6 +31,12 @@ compiler::~compiler() {
 }
 
 void error(string message);
+
+void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
+	expr->getVal()->accept(this);
+	uint8_t global = identifierConstant(expr->getToken());
+	emitBytes(OP_SET_GLOBAL, global);
+}
 
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	expr->getLeft()->accept(this);
@@ -83,6 +86,11 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 		emitConstant(OBJ_VAL(appendObject(copyString(_temp))));
 		break;
 	}
+
+	case TOKEN_IDENTIFIER: {
+		namedVar(token);
+		break;
+	}
 	}
 }
 
@@ -95,6 +103,27 @@ void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 	case TOKEN_BANG: emitByte(OP_NOT); break;
 	case TOKEN_TILDA: emitByte(OP_BIN_NOT); break;
 	}
+}
+
+void compiler::visitVarDecl(ASTVarDecl* stmt) {
+	uint8_t global = identifierConstant(stmt->getToken());
+	ASTNode* expr = stmt->getExpr();
+	if (expr == NULL) {
+		emitByte(OP_NIL);
+	}else{
+		expr->accept(this);
+	}
+	defineVar(global);
+}
+
+void compiler::visitPrintStmt(ASTPrintStmt* stmt) {
+	stmt->getExpr()->accept(this);
+	emitByte(OP_PRINT);
+}
+
+void compiler::visitExprStmt(ASTExprStmt* stmt) {
+	stmt->getExpr()->accept(this);
+	emitByte(OP_POP);
 }
 
 
@@ -126,6 +155,20 @@ void compiler::emitConstant(Value value) {
 
 void compiler::emitReturn() {
 	emitByte(OP_RETURN);
+}
+
+uint8_t compiler::identifierConstant(Token name) {
+	string temp(name.lexeme);
+	return makeConstant(OBJ_VAL(copyString(temp)));
+}
+
+void compiler::defineVar(uint8_t name) {
+	emitBytes(OP_DEFINE_GLOBAL, name);
+}
+
+void compiler::namedVar(Token token) {
+	uint8_t arg = identifierConstant(token);
+	emitBytes(OP_GET_GLOBAL, arg);
 }
 
 chunk* compiler::getCurrent() {

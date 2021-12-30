@@ -9,14 +9,27 @@ class parser {
 public:
 	parser(vector<Token>* _tokens);
 	~parser();
-	ASTNode* tree;
+	vector<ASTNode*> statements;
 	bool hadError;
 private:
 	vector<Token>* tokens;
 	uint16_t current;
+
+#pragma region Statements
+	ASTNode* declaration();
+	ASTNode* varDecl();
+	ASTNode* statement();
+
+	ASTNode* printStmt();
+	ASTNode* exprStmt();
+#pragma endregion
+
+
 #pragma region Precedence
 
 	ASTNode* expression();
+
+	ASTNode* assignment();
 
 	ASTNode* equality();
 
@@ -57,6 +70,7 @@ private:
 	void sync();
 
 #pragma endregion
+
 };
 
 

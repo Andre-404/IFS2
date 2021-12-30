@@ -7,11 +7,18 @@
 
 class debugASTPrinter : public visitor {
 public:
-	debugASTPrinter(ASTNode* expr);
+	debugASTPrinter(vector<ASTNode*> _stmts);
+
+	void visitAssignmentExpr(ASTAssignmentExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
+
+	void visitVarDecl(ASTVarDecl* stmt);
+
+	void visitPrintStmt(ASTPrintStmt* stmt);
+	void visitExprStmt(ASTExprStmt* stmt);
 
 private:
 	string str;

@@ -7,19 +7,61 @@ parser::parser(vector<Token>* _tokens) {
 	current = 0;
 	hadError = false;
 
-	try {
-		tree = expression();
-	#ifdef DEBUG_PRINT_AST
-		debugASTPrinter printer(tree);
-	#endif // DEBUG_PRINT_AST
-	}catch (int e) {
-		tree = NULL;
+	while (!isAtEnd()) {
+		try {
+			statements.push_back(declaration());
+		}
+		catch (int e) {
+			sync();
+		}
 	}
+	#ifdef DEBUG_PRINT_AST
+		debugASTPrinter printer(statements);
+	#endif // DEBUG_PRINT_AST
 }
 
 parser::~parser() {
-	delete tree;
+	for (int i = 0; i < statements.size(); i++) {
+		delete statements[i];
+	}
 }
+
+#pragma region Statements
+ASTNode* parser::declaration() {
+	if (match({ TOKEN_VAR })) return varDecl();
+	return statement();
+}
+
+ASTNode* parser::varDecl() {
+	Token name = consume(TOKEN_IDENTIFIER, "Expected a variable identifier.");
+	ASTNode* expr = NULL;
+	if (match({ TOKEN_EQUAL })) {
+		expr = expression();
+	}
+	consume(TOKEN_SEMICOLON, "Expected a ; after variable declaration.");
+	return new ASTVarDecl(name, expr);
+}
+
+ASTNode* parser::statement() {
+	if (match({ TOKEN_PRINT })) return printStmt();
+
+	return exprStmt();
+}
+
+ASTNode* parser::printStmt() {
+	ASTNode* expr = expression();
+	consume(TOKEN_SEMICOLON, "Expected ; after expression.");
+	return new ASTPrintStmt(expr);
+}
+
+ASTNode* parser::exprStmt() {
+	ASTNode* expr = expression();
+	consume(TOKEN_SEMICOLON, "Expected ; after expression.");
+	return new ASTExprStmt(expr);
+}
+
+
+#pragma endregion
 
 #pragma region Precedence
 
@@ -28,7 +70,29 @@ when matching tokens we use while to enable multiple operations one after anothe
 */
 
 ASTNode* parser::expression() {
-	return equality();
+	return assignment();
+}
+
+ASTNode* parser::assignment() {
+	ASTNode* expr = equality();
+
+	//check if this really is a assigmenent
+	if (match({ TOKEN_EQUAL })) {
+		Token prev = previous();//for errors
+		//get the right side of assingment, can be another assingment
+		//eg. a = b = 3;
+		ASTNode* val = assignment();
+
+		//check if the left side of the assignment is a literal, possibly containing a variable name
+		//(properties of objects get handled differently)
+		if (expr->type == ASTType::LITERAL) {
+			Token name = ((ASTLiteralExpr*)expr)->getToken();
+			//if this really is a variable literal, create a new assingment expr with the variable and the right side expr
+			if(name.type == TOKEN_IDENTIFIER) return new ASTAssignmentExpr(name, val);
+		}
+		error(prev, "Invalid assingment target.");
+	}
+	return expr;
 }
 
 ASTNode* parser::equality() {
@@ -102,7 +166,7 @@ ASTNode* parser::primary() {
 		return new ASTGroupingExpr(expr);
 	}
 	//and literal is stored as a string_view in the token
-	if (match({ TOKEN_NUMBER, TOKEN_STRING, TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL })) return new ASTLiteralExpr(previous());
+	if (match({ TOKEN_NUMBER, TOKEN_STRING, TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL, TOKEN_IDENTIFIER })) return new ASTLiteralExpr(previous());
 
 	throw error(peek(), "Expect expression.");
 }

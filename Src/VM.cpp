@@ -93,11 +93,12 @@ interpretResult vm::interpret(chunk* _chunk) {
 interpretResult vm::run() {
 	#define READ_BYTE() (getOp(ip++))
 	#define READ_CONSTANT() (curChunk->constants[READ_BYTE()])
+	#define READ_STRING() AS_STRING(READ_CONSTANT())
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
 			runtimeError("Operands must be numbers."); \
-			return INTERPRETER_RUNTIME_ERROR; \
+			return interpretResult::INTERPRETER_RUNTIME_ERROR; \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -107,7 +108,7 @@ interpretResult vm::run() {
 		do {\
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
 			runtimeError("Operands must be numbers."); \
-			return INTERPRETER_RUNTIME_ERROR; \
+			return interpretResult::INTERPRETER_RUNTIME_ERROR; \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -128,6 +129,16 @@ interpretResult vm::run() {
 
 		uint8_t instruction;
 		switch (instruction = READ_BYTE()) {
+		#pragma region Helpers
+			case OP_POP:
+				pop();
+				break;
+		#pragma endregion
+
+		#pragma region Constants
+
+		
+
 			case OP_CONSTANT: {
 				Value constant = READ_CONSTANT();
 				push(constant);
@@ -136,10 +147,13 @@ interpretResult vm::run() {
 			case OP_NIL: push(NIL_VAL()); break;
 			case OP_TRUE: push(BOOL_VAL(true)); break;
 			case OP_FALSE: push(BOOL_VAL(false)); break;
+		#pragma endregion
+
+		#pragma region Unary
 			case OP_NEGATE:
 				if (!IS_NUMBER(peek(0))) {
 					runtimeError("Operand must be a number.");
-					return INTERPRETER_RUNTIME_ERROR;
+					return interpretResult::INTERPRETER_RUNTIME_ERROR;
 				}
 				push(NUMBER_VAL(-AS_NUMBER(pop())));
 				break;
@@ -149,12 +163,16 @@ interpretResult vm::run() {
 			case OP_BIN_NOT: {
 				if (!IS_NUMBER(peek(0))) {
 					runtimeError("Operand must be a number.");
-					return INTERPRETER_RUNTIME_ERROR;
+					return interpretResult::INTERPRETER_RUNTIME_ERROR;
 				}
 				int num = AS_NUMBER(pop());
 				push(NUMBER_VAL((double)~num));
 				break;
 			}
+		#pragma endregion
+
+		#pragma region Binary
+
 			case OP_ADD: {
 				if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
 					concatenate();
@@ -167,7 +185,7 @@ interpretResult vm::run() {
 				else {
 					runtimeError(
 						"Operands must be two numbers or two strings.");
-					return INTERPRETER_RUNTIME_ERROR;
+					return interpretResult::INTERPRETER_RUNTIME_ERROR;
 				}
 				break;
 			}
@@ -177,6 +195,10 @@ interpretResult vm::run() {
 			case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
 			case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, <<); break;
 			case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >>); break;
+		#pragma endregion
+
+		#pragma region Binary that returns bools
+
 			case OP_EQUAL: {
 				Value b = pop();
 				Value a = pop();
@@ -188,10 +210,49 @@ interpretResult vm::run() {
 			case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >= ); break;
 			case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
 			case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <= ); break;
+		#pragma endregion
+
+		#pragma region Statements
+			case OP_PRINT: {
+				printValue(pop());
+				std::cout << "\n";
+				pop();
+				break;
+			}
+
+			case OP_DEFINE_GLOBAL: {
+				objString* name = READ_STRING();
+				globals.set(name, peek(0));
+				pop();
+				break;
+			}
+			case OP_GET_GLOBAL: {
+				objString* name = READ_STRING();
+				Value value;
+				if (!globals.get(name, &value)){
+					runtimeError("Undefined variable '%s'.", name->str.c_str());
+					return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				}
+				push(value);
+				break;
+			}
+
+			case OP_SET_GLOBAL: {
+				objString* name = READ_STRING();
+				if (globals.set(name, peek(0))) {
+					globals.del(name);
+					runtimeError("Undefined variable '%s'.", name->str.c_str());
+					return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				}
+				break;
+			}
+
+		#pragma endregion
+
 			case OP_RETURN: {
 				printValue(pop());
 				std::cout << "\n";
-				return INTERPRETER_OK;
+				return interpretResult::INTERPRETER_OK;
 			}
 		}
 	}
@@ -199,4 +260,6 @@ interpretResult vm::run() {
 	#undef READ_BYTE
 	#undef READ_CONSTANT
 	#undef BINARY_OP
+	#undef INT_BINARY_OP
+	#undef READ_STRING
 }

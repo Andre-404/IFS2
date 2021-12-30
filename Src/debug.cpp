@@ -1,10 +1,12 @@
 #include "debug.h"
 #include "value.h"
 
-debugASTPrinter::debugASTPrinter(ASTNode* expr) {
+debugASTPrinter::debugASTPrinter(vector<ASTNode*> _stmts) {
 	str = "";
-	expr->accept(this);
-	std::cout << str<<"\n";
+	for (int i = 0; i < _stmts.size(); i++) {
+		_stmts[i]->accept(this);
+	}
+	std::cout << str;
 }
 
 void debugASTPrinter::buildExpr(std::string_view name, const std::initializer_list<ASTNode*> &exprs) {
@@ -13,6 +15,13 @@ void debugASTPrinter::buildExpr(std::string_view name, const std::initializer_li
 		str.append(" ");
 		expr->accept(this);
 	}
+	str.append(")");
+}
+
+void debugASTPrinter::visitAssignmentExpr(ASTAssignmentExpr* expr) {
+	str.append("(").append(expr->getToken().lexeme);
+	str.append(" = ");
+	expr->getVal()->accept(this);
 	str.append(")");
 }
 
@@ -27,6 +36,26 @@ void debugASTPrinter::visitGroupingExpr(ASTGroupingExpr* expr) {
 }
 void debugASTPrinter::visitLiteralExpr(ASTLiteralExpr* expr) {
 	str.append(expr->getToken().lexeme);
+}
+
+void debugASTPrinter::visitExprStmt(ASTExprStmt* stmt) {
+	str.append("Expression stmt ");
+	stmt->getExpr()->accept(this);
+	str.append("\n");
+}
+
+void debugASTPrinter::visitPrintStmt(ASTPrintStmt* stmt) {
+	str.append("Print ");
+	stmt->getExpr()->accept(this);
+	str.append("\n");
+}
+
+void debugASTPrinter::visitVarDecl(ASTVarDecl* stmt) {
+	str.append("Variable declaration for '");
+	str.append(stmt->getToken().lexeme);
+	str.append("' = ");
+	stmt->getExpr()->accept(this);
+	str.append("\n");
 }
 
 #pragma region Disassembly
@@ -96,6 +125,16 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return simpleInstruction("OP_LESS", offset);
 	case OP_LESS_EQUAL: 
 		return simpleInstruction("OP LESS EQUAL", offset);
+	case OP_POP:
+		return simpleInstruction("OP POP", offset);
+	case OP_PRINT:
+		return simpleInstruction("OP PRINT", offset);
+	case OP_DEFINE_GLOBAL:
+		return constantInstruction("OP_DEFINE_GLOBAL", Chunk, offset);
+	case OP_GET_GLOBAL:
+		return constantInstruction("OP_GET_GLOBAL", Chunk, offset);
+	case OP_SET_GLOBAL:
+		return constantInstruction("OP_SET_GLOBAL", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;
