@@ -129,131 +129,142 @@ interpretResult vm::run() {
 
 		uint8_t instruction;
 		switch (instruction = READ_BYTE()) {
+
 		#pragma region Helpers
-			case OP_POP:
+		case OP_POP:
+			pop();
+			break;
+		case OP_POPN: {
+			uint8_t nToPop = READ_BYTE();
+			int i = 0;
+			while (i < nToPop) {
 				pop();
-				break;
+				i++;
+			}
+			break;
+		}
 		#pragma endregion
 
 		#pragma region Constants
-
-		
-
-			case OP_CONSTANT: {
-				Value constant = READ_CONSTANT();
-				push(constant);
-				break;
-			}
-			case OP_NIL: push(NIL_VAL()); break;
-			case OP_TRUE: push(BOOL_VAL(true)); break;
-			case OP_FALSE: push(BOOL_VAL(false)); break;
+		case OP_CONSTANT: {
+			Value constant = READ_CONSTANT();
+			push(constant);
+			break;
+		}
+		case OP_NIL: push(NIL_VAL()); break;
+		case OP_TRUE: push(BOOL_VAL(true)); break;
+		case OP_FALSE: push(BOOL_VAL(false)); break;
 		#pragma endregion
 
 		#pragma region Unary
-			case OP_NEGATE:
-				if (!IS_NUMBER(peek(0))) {
-					runtimeError("Operand must be a number.");
-					return interpretResult::INTERPRETER_RUNTIME_ERROR;
-				}
-				push(NUMBER_VAL(-AS_NUMBER(pop())));
-				break;
-			case OP_NOT:
-				push(BOOL_VAL(isFalsey(pop())));
-				break;
-			case OP_BIN_NOT: {
-				if (!IS_NUMBER(peek(0))) {
-					runtimeError("Operand must be a number.");
-					return interpretResult::INTERPRETER_RUNTIME_ERROR;
-				}
-				int num = AS_NUMBER(pop());
-				push(NUMBER_VAL((double)~num));
-				break;
+		case OP_NEGATE:
+			if (!IS_NUMBER(peek(0))) {
+				runtimeError("Operand must be a number.");
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
 			}
+			push(NUMBER_VAL(-AS_NUMBER(pop())));
+			break;
+		case OP_NOT:
+			push(BOOL_VAL(isFalsey(pop())));
+			break;
+		case OP_BIN_NOT: {
+			if (!IS_NUMBER(peek(0))) {
+				runtimeError("Operand must be a number.");
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+			}
+			int num = AS_NUMBER(pop());
+			push(NUMBER_VAL((double)~num));
+			break;
+		}
 		#pragma endregion
 
 		#pragma region Binary
-
-			case OP_ADD: {
-				if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
-					concatenate();
-				}
-				else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
-					double b = AS_NUMBER(pop());
-					double a = AS_NUMBER(pop());
-					push(NUMBER_VAL(a + b));
-				}
-				else {
-					runtimeError(
-						"Operands must be two numbers or two strings.");
-					return interpretResult::INTERPRETER_RUNTIME_ERROR;
-				}
-				break;
+		case OP_ADD: {
+			if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+				concatenate();
 			}
-			case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break; 
-			case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-			case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
-			case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
-			case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, <<); break;
-			case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >>); break;
+			else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+				double b = AS_NUMBER(pop());
+				double a = AS_NUMBER(pop());
+				push(NUMBER_VAL(a + b));
+			}
+			else {
+				runtimeError(
+					"Operands must be two numbers or two strings.");
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+			}
+			break;
+		}
+		case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break; 
+		case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
+		case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
+		case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
+		case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, <<); break;
+		case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >>); break;
 		#pragma endregion
 
 		#pragma region Binary that returns bools
-
-			case OP_EQUAL: {
-				Value b = pop();
-				Value a = pop();
-				push(BOOL_VAL(valuesEqual(a, b)));
-				break;
-			}
-			case OP_NOT_EQUAL: BINARY_OP(BOOL_VAL, != ); break;
-			case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
-			case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >= ); break;
-			case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
-			case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <= ); break;
+		case OP_EQUAL: {
+			Value b = pop();
+			Value a = pop();
+			push(BOOL_VAL(valuesEqual(a, b)));
+			break;
+		}
+		case OP_NOT_EQUAL: BINARY_OP(BOOL_VAL, != ); break;
+		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
+		case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >= ); break;
+		case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
+		case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <= ); break;
 		#pragma endregion
 
 		#pragma region Statements
-			case OP_PRINT: {
-				printValue(pop());
-				std::cout << "\n";
-				pop();
-				break;
-			}
+		case OP_PRINT: {
+			printValue(pop());
+			std::cout << "\n";
+			break;
+		}
 
-			case OP_DEFINE_GLOBAL: {
-				objString* name = READ_STRING();
-				globals.set(name, peek(0));
-				pop();
-				break;
+		case OP_DEFINE_GLOBAL: {
+			objString* name = READ_STRING();
+			globals.set(name, peek(0));
+			pop();
+			break;
+		}
+		case OP_GET_GLOBAL: {
+			objString* name = READ_STRING();
+			Value value;
+			if (!globals.get(name, &value)){
+				runtimeError("Undefined variable '%s'.", name->str.c_str());
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
 			}
-			case OP_GET_GLOBAL: {
-				objString* name = READ_STRING();
-				Value value;
-				if (!globals.get(name, &value)){
-					runtimeError("Undefined variable '%s'.", name->str.c_str());
-					return interpretResult::INTERPRETER_RUNTIME_ERROR;
-				}
-				push(value);
-				break;
-			}
+			push(value);
+			break;
+		}
 
-			case OP_SET_GLOBAL: {
-				objString* name = READ_STRING();
-				if (globals.set(name, peek(0))) {
-					globals.del(name);
-					runtimeError("Undefined variable '%s'.", name->str.c_str());
-					return interpretResult::INTERPRETER_RUNTIME_ERROR;
-				}
-				break;
+		case OP_SET_GLOBAL: {
+			objString* name = READ_STRING();
+			if (globals.set(name, peek(0))) {
+				globals.del(name);
+				runtimeError("Undefined variable '%s'.", name->str.c_str());
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
 			}
-
+			break;
+		}
+		case OP_GET_LOCAL: {
+			uint8_t slot = READ_BYTE();
+			push(stack[slot]);
+			break;
+		}
+		case OP_SET_LOCAL: {
+			uint8_t slot = READ_BYTE();
+			stack[slot] = peek(0);
+			break;
+		}
 		#pragma endregion
 
-			case OP_RETURN: {
-				printValue(pop());
-				std::cout << "\n";
-				return interpretResult::INTERPRETER_OK;
-			}
+		case OP_RETURN: {
+			return interpretResult::INTERPRETER_OK;
+		}
 		}
 	}
 

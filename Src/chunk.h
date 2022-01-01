@@ -8,6 +8,7 @@
 	enum OpCode {
 		//Helpers
 		OP_POP,
+		OP_POPN,
 		//constants
 		OP_CONSTANT,
 		OP_NIL,
@@ -34,9 +35,12 @@
 		OP_LESS_EQUAL,
 		//Statements
 		OP_PRINT,
+		//Variables
 		OP_DEFINE_GLOBAL,
 		OP_GET_GLOBAL,
 		OP_SET_GLOBAL,
+		OP_GET_LOCAL,
+		OP_SET_LOCAL,
 		OP_RETURN
 	};
 

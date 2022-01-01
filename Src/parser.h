@@ -22,6 +22,7 @@ private:
 
 	ASTNode* printStmt();
 	ASTNode* exprStmt();
+	ASTNode* blockStmt();
 #pragma endregion
 
 

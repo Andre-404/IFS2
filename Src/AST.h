@@ -14,6 +14,7 @@ class ASTVarDecl;
 
 class ASTPrintStmt;
 class ASTExprStmt;
+class ASTBlockStmt;
 
 enum class ASTType{
 	ASSINGMENT,
@@ -23,7 +24,8 @@ enum class ASTType{
 	LITERAL,
 	VAR_DECL,
 	PRINT_STMT,
-	EXPR_STMT
+	EXPR_STMT,
+	BLOCK_STMT
 };
 
 
@@ -41,6 +43,7 @@ public:
 
 	virtual void visitPrintStmt(ASTPrintStmt* stmt) = 0;
 	virtual void visitExprStmt(ASTExprStmt* stmt) = 0;
+	virtual void visitBlockStmt(ASTBlockStmt* stmt) = 0;
 };
 
 class ASTNode {
@@ -144,6 +147,16 @@ public:
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return setExpr; }
 	Token getToken() { return name; }
+};
+
+class ASTBlockStmt : public ASTNode {
+private:
+	vector<ASTNode*> statements;
+public:
+	ASTBlockStmt(vector<ASTNode*>& _statements);
+	~ASTBlockStmt();
+	void accept(visitor* vis);
+	vector<ASTNode*> getStmts() { return statements; }
 };
 
 #endif

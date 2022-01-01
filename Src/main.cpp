@@ -19,7 +19,7 @@ void* operator new(size_t size) {
 	void* ptr = malloc(size);
 	if (ptr == NULL) {
 		cout << "Couldn't allocate necessary memory, exiting...";
-		exit;
+		exit(64);
 	}
 	return ptr;
 }

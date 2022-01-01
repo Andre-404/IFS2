@@ -3,10 +3,10 @@
 
 debugASTPrinter::debugASTPrinter(vector<ASTNode*> _stmts) {
 	str = "";
+	inLocal = false;
 	for (int i = 0; i < _stmts.size(); i++) {
 		_stmts[i]->accept(this);
 	}
-	std::cout << str;
 }
 
 void debugASTPrinter::buildExpr(std::string_view name, const std::initializer_list<ASTNode*> &exprs) {
@@ -19,7 +19,7 @@ void debugASTPrinter::buildExpr(std::string_view name, const std::initializer_li
 }
 
 void debugASTPrinter::visitAssignmentExpr(ASTAssignmentExpr* expr) {
-	str.append("(").append(expr->getToken().lexeme);
+	str.append("(").append(inLocal ? "Local " : "Global ").append(expr->getToken().lexeme);
 	str.append(" = ");
 	expr->getVal()->accept(this);
 	str.append(")");
@@ -42,20 +42,39 @@ void debugASTPrinter::visitExprStmt(ASTExprStmt* stmt) {
 	str.append("Expression stmt ");
 	stmt->getExpr()->accept(this);
 	str.append("\n");
+	std::cout << str;
+	str = "";
 }
 
 void debugASTPrinter::visitPrintStmt(ASTPrintStmt* stmt) {
 	str.append("Print ");
 	stmt->getExpr()->accept(this);
 	str.append("\n");
+	std::cout << str;
+	str = "";
 }
 
 void debugASTPrinter::visitVarDecl(ASTVarDecl* stmt) {
-	str.append("Variable declaration for '");
+	str.append(inLocal ? "Local " : "Global ");
+	str.append("variable declaration for '");
 	str.append(stmt->getToken().lexeme);
 	str.append("' = ");
 	stmt->getExpr()->accept(this);
 	str.append("\n");
+	std::cout << str;
+	str = "";
+}
+
+void debugASTPrinter::visitBlockStmt(ASTBlockStmt* stmt) {
+	inLocal = true;
+	str.append("{\n");
+	for (int i = 0; i < stmt->getStmts().size(); i++) {
+		stmt->getStmts()[i]->accept(this);
+	}
+	str.append("}\n");
+	std::cout << str;
+	str = "";
+	inLocal = false;
 }
 
 #pragma region Disassembly
@@ -65,6 +84,11 @@ static int simpleInstruction(string name, int offset) {
 	return offset + 1;
 }
 
+static int byteInstruction(const char* name, chunk* Chunk, int offset) {
+	uint8_t slot = Chunk->code[offset + 1];
+	printf("%-16s %4d\n", name, slot);
+	return offset + 2;
+}
 static int constantInstruction(string name, chunk* Chunk, int offset) {
 	uint8_t constant = Chunk->code[offset + 1];
 	printf("%-16s %4d '", name.c_str(), constant);//have to use printf because of string spacing
@@ -127,14 +151,20 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return simpleInstruction("OP LESS EQUAL", offset);
 	case OP_POP:
 		return simpleInstruction("OP POP", offset);
+	case OP_POPN:
+		return byteInstruction("OP POPN", Chunk, offset);
 	case OP_PRINT:
 		return simpleInstruction("OP PRINT", offset);
 	case OP_DEFINE_GLOBAL:
-		return constantInstruction("OP_DEFINE_GLOBAL", Chunk, offset);
+		return constantInstruction("OP DEFINE GLOBAL", Chunk, offset);
 	case OP_GET_GLOBAL:
-		return constantInstruction("OP_GET_GLOBAL", Chunk, offset);
+		return constantInstruction("OP GET GLOBAL", Chunk, offset);
 	case OP_SET_GLOBAL:
-		return constantInstruction("OP_SET_GLOBAL", Chunk, offset);
+		return constantInstruction("OP SET GLOBAL", Chunk, offset);
+	case OP_GET_LOCAL:
+		return byteInstruction("OP_GET_LOCAL", Chunk, offset);
+	case OP_SET_LOCAL:
+		return byteInstruction("OP_SET_LOCAL", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

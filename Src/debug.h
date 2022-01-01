@@ -19,9 +19,11 @@ public:
 
 	void visitPrintStmt(ASTPrintStmt* stmt);
 	void visitExprStmt(ASTExprStmt* stmt);
+	void visitBlockStmt(ASTBlockStmt* stmt);
 
 private:
 	string str;
+	bool inLocal;
 	void buildExpr(std::string_view name, const std::initializer_list<ASTNode*>& exprs);
 };
 

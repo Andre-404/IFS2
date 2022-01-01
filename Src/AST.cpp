@@ -135,5 +135,24 @@ void ASTExprStmt::accept(visitor* vis) {
 
 #pragma endregion
 
+#pragma region Block stmt
+ASTBlockStmt::ASTBlockStmt(vector<ASTNode*>& _statements) {
+	statements = _statements;
+}
+
+ASTBlockStmt::~ASTBlockStmt() {
+	for (ASTNode* node : statements) {
+		delete node;
+	}
+}
+
+void ASTBlockStmt::accept(visitor* vis) {
+	vis->visitBlockStmt(this);
+}
+
+
+#pragma endregion
+
+
 
 

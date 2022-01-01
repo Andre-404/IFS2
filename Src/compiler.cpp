@@ -7,6 +7,9 @@ compiler::compiler(parser* Parser) {
 	compiled = true;
 	current = NULL;
 	line = 0;
+	//locals
+	scopeDepth = 0;
+	localCount = 0;
 	//this list will be passed to the vm when it's created
 	objects = NULL;
 	//Don't compile if we had a parse error
@@ -33,9 +36,8 @@ compiler::~compiler() {
 void error(string message);
 
 void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
-	expr->getVal()->accept(this);
-	uint8_t global = identifierConstant(expr->getToken());
-	emitBytes(OP_SET_GLOBAL, global);
+	expr->getVal()->accept(this);//compile the right side of the expression
+	namedVar(expr->getToken(), true);
 }
 
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
@@ -88,7 +90,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	}
 
 	case TOKEN_IDENTIFIER: {
-		namedVar(token);
+		namedVar(token, false);
 		break;
 	}
 	}
@@ -106,13 +108,17 @@ void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 }
 
 void compiler::visitVarDecl(ASTVarDecl* stmt) {
-	uint8_t global = identifierConstant(stmt->getToken());
+	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
+	uint8_t global = parseVar(stmt->getToken());
+	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = stmt->getExpr();
 	if (expr == NULL) {
 		emitByte(OP_NIL);
 	}else{
 		expr->accept(this);
 	}
+	//if this is a global var, we emit the code to define it in the VMs global hash table, if it's a local, do nothing
+	//the slot that the compiled value is at becomes a local var
 	defineVar(global);
 }
 
@@ -126,8 +132,20 @@ void compiler::visitExprStmt(ASTExprStmt* stmt) {
 	emitByte(OP_POP);
 }
 
+void compiler::visitBlockStmt(ASTBlockStmt* stmt) {
+	beginScope();
+	vector<ASTNode*> stmts = stmt->getStmts();
+	for (ASTNode* node : stmts) {
+		node->accept(this);
+	}
+	endScope();
+}
+
 
 #pragma region helpers
+
+#pragma region Emitting bytes
+
 void compiler::emitByte(uint8_t byte) {
 	current->writeData(byte, line);//line is incremented whenever we find a statement/expression that contains tokens
 }
@@ -157,19 +175,105 @@ void compiler::emitReturn() {
 	emitByte(OP_RETURN);
 }
 
+#pragma endregion
+
+#pragma region Variables
+
+bool identifiersEqual(Token* a, Token* b) {
+	return (a->lexeme.size() == b->lexeme.size() && a->lexeme.compare(b->lexeme) == 0);
+}
+
 uint8_t compiler::identifierConstant(Token name) {
 	string temp(name.lexeme);
 	return makeConstant(OBJ_VAL(copyString(temp)));
 }
 
 void compiler::defineVar(uint8_t name) {
+	//if this is a local var, bail out
+	if (scopeDepth > 0) { 
+		markInit();
+		return; 
+	}
 	emitBytes(OP_DEFINE_GLOBAL, name);
 }
 
-void compiler::namedVar(Token token) {
-	uint8_t arg = identifierConstant(token);
-	emitBytes(OP_GET_GLOBAL, arg);
+void compiler::namedVar(Token token, bool canAssign) {
+	uint8_t getOp;
+	uint8_t setOp;
+	uint8_t arg = resolveLocal(token);
+	if (arg != -1) {
+		getOp = OP_GET_LOCAL;
+		setOp = OP_SET_LOCAL;
+	}else {
+		arg = identifierConstant(token);
+		getOp = OP_GET_GLOBAL;
+		setOp = OP_SET_GLOBAL;
+	}
+	emitBytes(canAssign ? setOp : getOp, arg);
 }
+
+uint8_t compiler::parseVar(Token name) {
+	declareVar(name);
+	if (scopeDepth > 0) return 0;
+	return identifierConstant(name);
+}
+
+void compiler::declareVar(Token& name) {
+	if (scopeDepth == 0) return;
+	for (int i = localCount - 1; i >= 0; i--) {
+		local* _local = &locals[i];
+		if (_local->depth != -1 && _local->depth < scopeDepth) {
+			break;
+		}
+
+		if (identifiersEqual(&name, &_local->name)) {
+			error("Already a variable with this name in this scope.");
+		}
+	}
+	addLocal(name);
+}
+
+void compiler::addLocal(Token name) {
+	if (localCount == LOCAL_MAX) {
+		error("Too many local variables in function.");
+		return;
+	}
+	local* _local = &locals[localCount++];
+	_local->name = name;
+	_local->depth = -1;
+}
+
+void compiler::endScope() {
+	//Pop every variable that was declared in this scope
+	scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
+	int toPop = 0;
+	while (localCount > 0 && locals[localCount - 1].depth > scopeDepth) {
+		toPop++;
+		localCount--;
+	}
+	emitBytes(OP_POPN, toPop);
+}
+
+int compiler::resolveLocal(Token& name) {
+	//checks to see if there is a local variable with a provided name, if there is return the index of the stack slot of the var
+	for (int i = localCount - 1; i >= 0; i--) {
+		local* _local = &locals[i];
+		if (identifiersEqual(&name, &_local->name)) {
+			if (_local->depth == -1) {
+				error("Can't read local variable in its own initializer.");
+			}
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+void compiler::markInit() {
+	locals[localCount - 1].depth = scopeDepth;
+}
+
+#pragma endregion
 
 chunk* compiler::getCurrent() {
 	return current;

@@ -44,7 +44,7 @@ ASTNode* parser::varDecl() {
 
 ASTNode* parser::statement() {
 	if (match({ TOKEN_PRINT })) return printStmt();
-
+	else if (match({ TOKEN_LEFT_BRACE })) return blockStmt();
 	return exprStmt();
 }
 
@@ -58,6 +58,15 @@ ASTNode* parser::exprStmt() {
 	ASTNode* expr = expression();
 	consume(TOKEN_SEMICOLON, "Expected ; after expression.");
 	return new ASTExprStmt(expr);
+}
+
+ASTNode* parser::blockStmt() {
+	vector<ASTNode*> stmts;
+	while (!check(TOKEN_RIGHT_BRACE)) {
+		stmts.push_back(declaration());
+	}
+	consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+	return new ASTBlockStmt(stmts);
 }
 
 
