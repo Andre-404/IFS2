@@ -40,6 +40,28 @@ void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	namedVar(expr->getToken(), true);
 }
 
+void compiler::visitOrExpr(ASTOrExpr* expr) {
+	expr->getLeft()->accept(this);
+	//if the left side is true, we know that the whole expression will eval to true
+	int jump = emitJump(OP_JUMP_IF_TRUE);
+	//if now we pop the left side and eval the right side, right side result becomes the result of the whole expression
+	emitByte(OP_POP);
+	expr->getRight()->accept(this);
+	patchJump(jump);
+}
+
+void compiler::visitAndExpr(ASTAndExpr* expr) {
+	expr->getLeft()->accept(this);
+	//at this point we have the left side of the expression on the stack, and if it's false we skip to the end
+	//since we know the whole expression will evaluate to false
+	int jump = emitJump(OP_JUMP_IF_FALSE);
+	//if the left side is true, we pop it and then push the right side to the stack, and the result of right side becomes the result of
+	//whole expression
+	emitByte(OP_POP);
+	expr->getRight()->accept(this);
+	patchJump(jump);
+}
+
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	expr->getLeft()->accept(this);
 	expr->getRight()->accept(this);
@@ -109,6 +131,7 @@ void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 
 void compiler::visitVarDecl(ASTVarDecl* stmt) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
+	line = stmt->getToken().line;
 	uint8_t global = parseVar(stmt->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = stmt->getExpr();
@@ -141,6 +164,34 @@ void compiler::visitBlockStmt(ASTBlockStmt* stmt) {
 	endScope();
 }
 
+void compiler::visitIfStmt(ASTIfStmt* stmt) {
+	//compile condition and emit a jump over then branch if the condition is false
+	stmt->getCondition()->accept(this);
+	int thenJump = emitJump(OP_JUMP_IF_FALSE_POP);
+	stmt->getThen()->accept(this);
+	//prevents fallthrough to else branch
+	int elseJump = emitJump(OP_JUMP);
+	patchJump(thenJump);
+	//only compile if there is a else branch
+	if(stmt->getElse() != NULL) stmt->getElse()->accept(this);
+	patchJump(elseJump);
+
+}
+
+void compiler::visitWhileStmt(ASTWhileStmt* stmt) {
+	//the bytecode for this is almost the same as if statement
+	//but at the end of the body, we loop back to the start of the condition
+	int loopStart = current->code.size();
+	stmt->getCondition()->accept(this);
+	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
+	stmt->getBody()->accept(this);
+	emitLoop(loopStart);
+	patchJump(jump);
+}
+
+void compiler::visitForStmt(ASTForStmt* stmt) {
+
+}
 
 #pragma region helpers
 
@@ -153,6 +204,10 @@ void compiler::emitByte(uint8_t byte) {
 void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
 	emitByte(byte1);
 	emitByte(byte2);
+}
+
+void compiler::emit16Bit(unsigned short number) {
+	emitBytes((number >> 8) & 0xff, number & 0xff);
 }
 
 uint8_t compiler::makeConstant(Value value) {
@@ -173,6 +228,32 @@ void compiler::emitConstant(Value value) {
 
 void compiler::emitReturn() {
 	emitByte(OP_RETURN);
+}
+
+int compiler::emitJump(OpCode jumpType) {
+	emitByte((uint8_t)jumpType);
+	emitBytes(0xff, 0xff);
+	return current->code.size() - 2;
+}
+
+void compiler::patchJump(int offset) {
+	// -2 to adjust for the bytecode for the jump offset itself.
+	int jump = current->code.size() - offset - 2;
+	//fix for future: insert 2 more bytes into the array, but make sure to do the same in lines array
+	if (jump > UINT16_MAX) {
+		error("Too much code to jump over.");
+	}
+	current->code[offset] = (jump >> 8) & 0xff;
+	current->code[offset + 1] = jump & 0xff;
+}
+
+void compiler::emitLoop(int start) {
+	emitByte(OP_LOOP);
+
+	int offset = current->code.size() - start + 2;
+	if (offset > UINT16_MAX) error("Loop body too large.");
+
+	emit16Bit(offset);
 }
 
 #pragma endregion
@@ -200,7 +281,7 @@ void compiler::defineVar(uint8_t name) {
 void compiler::namedVar(Token token, bool canAssign) {
 	uint8_t getOp;
 	uint8_t setOp;
-	uint8_t arg = resolveLocal(token);
+	int arg = resolveLocal(token);
 	if (arg != -1) {
 		getOp = OP_GET_LOCAL;
 		setOp = OP_SET_LOCAL;
@@ -270,6 +351,7 @@ int compiler::resolveLocal(Token& name) {
 }
 
 void compiler::markInit() {
+	//marks variable as ready to use, any use of it before this call is a error
 	locals[localCount - 1].depth = scopeDepth;
 }
 

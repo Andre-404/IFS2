@@ -26,7 +26,7 @@ parser::~parser() {
 	}
 }
 
-#pragma region Statements
+#pragma region Statements and declarations
 ASTNode* parser::declaration() {
 	if (match({ TOKEN_VAR })) return varDecl();
 	return statement();
@@ -43,8 +43,15 @@ ASTNode* parser::varDecl() {
 }
 
 ASTNode* parser::statement() {
-	if (match({ TOKEN_PRINT })) return printStmt();
-	else if (match({ TOKEN_LEFT_BRACE })) return blockStmt();
+	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR })) {
+		switch (previous().type) {
+		case TOKEN_PRINT: return printStmt();
+		case TOKEN_LEFT_BRACE: return blockStmt();
+		case TOKEN_IF: return ifStmt();
+		case TOKEN_WHILE: return whileStmt();
+		case TOKEN_FOR: return forStmt();
+		}
+	}
 	return exprStmt();
 }
 
@@ -69,6 +76,52 @@ ASTNode* parser::blockStmt() {
 	return new ASTBlockStmt(stmts);
 }
 
+ASTNode* parser::ifStmt() {
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+	ASTNode* condition =  expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+	//using statement() instead of declaration() disallows declarations directly in a control flow body
+	ASTNode* thenBranch = statement();
+	ASTNode* elseBranch = NULL;
+	if (match({ TOKEN_ELSE })) {
+		elseBranch = statement();
+	}
+	return new ASTIfStmt(thenBranch, elseBranch, condition);
+}
+
+ASTNode* parser::whileStmt() {
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+	ASTNode* condition = expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+	ASTNode* body = statement();
+	return new ASTWhileStmt(body, condition);
+}
+
+ASTNode* parser::forStmt() {
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+	//initalizer
+	ASTNode* init = NULL;
+	if (match({ TOKEN_SEMICOLON })) {
+		//do nothing
+	}else if (match({ TOKEN_VAR })) {
+		init = declaration();
+	}else {
+		init = exprStmt();
+	}
+	//condition
+	ASTNode* condition = NULL;
+	//we don't want to use exprStmt() because it emits OP_POP, and we'll need the value to determine whether to jump
+	if (!match({ TOKEN_SEMICOLON })) condition = expression();
+	//increment
+	ASTNode* increment = NULL;
+	//using expression() here instead of exprStmt() because there is no trailing ';'
+	if (!check(TOKEN_RIGHT_PAREN)) increment = expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+	//disallows declarations unless they're in a block
+	ASTNode* body = statement();
+	return new ASTForStmt(init, condition, increment, body);
+}
+
 
 #pragma endregion
 
@@ -83,7 +136,7 @@ ASTNode* parser::expression() {
 }
 
 ASTNode* parser::assignment() {
-	ASTNode* expr = equality();
+	ASTNode* expr = _or();
 
 	//check if this really is a assigmenent
 	if (match({ TOKEN_EQUAL })) {
@@ -100,6 +153,24 @@ ASTNode* parser::assignment() {
 			if(name.type == TOKEN_IDENTIFIER) return new ASTAssignmentExpr(name, val);
 		}
 		error(prev, "Invalid assingment target.");
+	}
+	return expr;
+}
+
+ASTNode* parser::_or() {
+	ASTNode* expr = _and();
+	while (match({ TOKEN_OR })) {
+		ASTNode* right = _and();
+		expr = new ASTOrExpr(expr, right);
+	}
+	return expr;
+}
+
+ASTNode* parser::_and() {
+	ASTNode* expr = equality();
+	while (match({ TOKEN_AND })) {
+		ASTNode* right = equality();
+		expr = new ASTAndExpr(expr, right);
 	}
 	return expr;
 }

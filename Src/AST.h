@@ -5,6 +5,8 @@
 #include "scanner.h"
 
 class ASTAssignmentExpr;
+class ASTOrExpr;
+class ASTAndExpr;
 class ASTBinaryExpr;
 class ASTUnaryExpr;
 class ASTGroupingExpr;
@@ -15,6 +17,9 @@ class ASTVarDecl;
 class ASTPrintStmt;
 class ASTExprStmt;
 class ASTBlockStmt;
+class ASTIfStmt;
+class ASTWhileStmt;
+class ASTForStmt;
 
 enum class ASTType{
 	ASSINGMENT,
@@ -25,7 +30,10 @@ enum class ASTType{
 	VAR_DECL,
 	PRINT_STMT,
 	EXPR_STMT,
-	BLOCK_STMT
+	BLOCK_STMT,
+	IF_STMT,
+	WHILE_STMT,
+	FOR_STMT
 };
 
 
@@ -34,6 +42,8 @@ class visitor {
 public:
 	virtual ~visitor() {};
 	virtual void visitAssignmentExpr(ASTAssignmentExpr* expr) = 0;
+	virtual void visitOrExpr(ASTOrExpr* expr) = 0;
+	virtual void visitAndExpr(ASTAndExpr* expr) = 0;
 	virtual void visitBinaryExpr(ASTBinaryExpr* expr) = 0;
 	virtual void visitUnaryExpr(ASTUnaryExpr* expr) = 0;
 	virtual void visitGroupingExpr(ASTGroupingExpr* expr) = 0;
@@ -44,6 +54,9 @@ public:
 	virtual void visitPrintStmt(ASTPrintStmt* stmt) = 0;
 	virtual void visitExprStmt(ASTExprStmt* stmt) = 0;
 	virtual void visitBlockStmt(ASTBlockStmt* stmt) = 0;
+	virtual void visitIfStmt(ASTIfStmt* stmt) = 0;
+	virtual void visitWhileStmt(ASTWhileStmt* stmt) = 0;
+	virtual void visitForStmt(ASTForStmt* stmt) = 0;
 };
 
 class ASTNode {
@@ -53,6 +66,7 @@ public:
 	virtual void accept(visitor* vis) = 0;
 };
 
+#pragma region Expressions
 
 class ASTAssignmentExpr : public ASTNode {
 private:
@@ -65,6 +79,32 @@ public:
 
 	Token getToken() { return name; }
 	ASTNode* getVal() { return value; }
+};
+
+class ASTOrExpr : public ASTNode {
+private:
+	ASTNode* left;
+	ASTNode* right;
+public:
+	ASTOrExpr(ASTNode* _left, ASTNode* _right);
+	~ASTOrExpr();
+	void accept(visitor* vis);
+
+	ASTNode* getLeft() { return left; }
+	ASTNode* getRight() { return right; }
+};
+
+class ASTAndExpr : public ASTNode {
+private:
+	ASTNode* left;
+	ASTNode* right;
+public:
+	ASTAndExpr(ASTNode* _left, ASTNode* _right);
+	~ASTAndExpr();
+	void accept(visitor* vis);
+
+	ASTNode* getLeft() { return left; }
+	ASTNode* getRight() { return right; }
 };
 
 class ASTBinaryExpr : public ASTNode {
@@ -115,6 +155,9 @@ public:
 
 	Token getToken() { return token; }
 };
+#pragma endregion
+
+#pragma region Statements
 
 class ASTPrintStmt : public ASTNode {
 private:
@@ -158,5 +201,50 @@ public:
 	void accept(visitor* vis);
 	vector<ASTNode*> getStmts() { return statements; }
 };
+
+class ASTIfStmt : public ASTNode {
+private:
+	ASTNode* thenBranch;
+	ASTNode* elseBranch;
+	ASTNode* condition;
+public:
+	ASTIfStmt(ASTNode* _then, ASTNode* _else, ASTNode* _condition);
+	~ASTIfStmt();
+	void accept(visitor* vis);
+	ASTNode* getCondition() { return condition; }
+	ASTNode* getThen() { return thenBranch; }
+	ASTNode* getElse() { return elseBranch; }
+};
+
+class ASTWhileStmt : public ASTNode {
+private:
+	ASTNode* body;
+	ASTNode* condition;
+public:
+	ASTWhileStmt(ASTNode* _body, ASTNode* _condition);
+	~ASTWhileStmt();
+	void accept(visitor* vis);
+	ASTNode* getCondition() { return condition; }
+	ASTNode* getBody() { return body; }
+};
+
+class ASTForStmt : public ASTNode {
+private:
+	ASTNode* body;
+	ASTNode* init;
+	ASTNode* condition;
+	ASTNode* increment;
+public:
+	ASTForStmt(ASTNode* _init, ASTNode* _condition, ASTNode* _increment, ASTNode* _body);
+	~ASTForStmt();
+	void accept(visitor* vis);
+	ASTNode* getCondition() { return condition; }
+	ASTNode* getBody() { return body; }
+	ASTNode* getInit() { return init; }
+	ASTNode* getIncrement() { return increment; }
+};
+
+
+#pragma endregion
 
 #endif

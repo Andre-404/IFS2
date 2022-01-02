@@ -25,6 +25,14 @@ void debugASTPrinter::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	str.append(")");
 }
 
+void debugASTPrinter::visitAndExpr(ASTAndExpr* expr) {
+	buildExpr("and", { expr->getLeft(), expr->getRight() });
+}
+
+void debugASTPrinter::visitOrExpr(ASTOrExpr* expr) {
+	buildExpr("or", { expr->getLeft(), expr->getRight() });
+}
+
 void debugASTPrinter::visitBinaryExpr(ASTBinaryExpr* expr) {
 	buildExpr(expr->getToken().lexeme, { expr->getLeft(), expr->getRight() });
 }
@@ -77,6 +85,31 @@ void debugASTPrinter::visitBlockStmt(ASTBlockStmt* stmt) {
 	inLocal = false;
 }
 
+void debugASTPrinter::visitIfStmt(ASTIfStmt* stmt) {
+	str.append("if (");
+	stmt->getCondition()->accept(this);
+	str.append(")");
+	stmt->getThen()->accept(this);
+	str.append("else");
+	if (stmt->getElse() != NULL) stmt->getElse()->accept(this);
+}
+
+void debugASTPrinter::visitWhileStmt(ASTWhileStmt* stmt) {
+	str.append("while (");
+	stmt->getCondition()->accept(this);
+	str.append(")");
+	stmt->getBody()->accept(this);
+}
+
+void debugASTPrinter::visitForStmt(ASTForStmt* stmt) {
+	str.append("for (");
+	stmt->getInit()->accept(this);
+	stmt->getCondition()->accept(this);
+	stmt->getIncrement()->accept(this);
+	str.append(")");
+	stmt->getBody()->accept(this);
+}
+
 #pragma region Disassembly
 
 static int simpleInstruction(string name, int offset) {
@@ -95,6 +128,13 @@ static int constantInstruction(string name, chunk* Chunk, int offset) {
 	printValue(Chunk->constants[constant]);
 	printf("'\n");
 	return offset + 2;
+}
+
+static int jumpInstruction(const char* name, int sign, chunk* Chunk, int offset) {
+	uint16_t jump = (uint16_t)(Chunk->code[offset + 1] << 8);
+	jump |= Chunk->code[offset + 2];
+	printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
+	return offset + 3;
 }
 
 int disassembleInstruction(chunk* Chunk, int offset) {
@@ -162,9 +202,19 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	case OP_SET_GLOBAL:
 		return constantInstruction("OP SET GLOBAL", Chunk, offset);
 	case OP_GET_LOCAL:
-		return byteInstruction("OP_GET_LOCAL", Chunk, offset);
+		return byteInstruction("OP GET LOCAL", Chunk, offset);
 	case OP_SET_LOCAL:
-		return byteInstruction("OP_SET_LOCAL", Chunk, offset);
+		return byteInstruction("OP SET LOCAL", Chunk, offset);
+	case OP_JUMP:
+		return jumpInstruction("OP JUMP", 1, Chunk, offset);
+	case OP_JUMP_IF_FALSE:
+		return jumpInstruction("OP JUMP IF FALSE", 1, Chunk, offset);
+	case OP_JUMP_IF_TRUE:
+		return jumpInstruction("OP JUMP IF TRUE", 1, Chunk, offset);
+	case OP_JUMP_IF_FALSE_POP:
+		return jumpInstruction("OP JUMP IF FALSE POP", 1, Chunk, offset);
+	case OP_LOOP:
+		return jumpInstruction("OP LOOP", -1, Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

@@ -23,6 +23,9 @@ private:
 	ASTNode* printStmt();
 	ASTNode* exprStmt();
 	ASTNode* blockStmt();
+	ASTNode* ifStmt();
+	ASTNode* whileStmt();
+	ASTNode* forStmt();
 #pragma endregion
 
 
@@ -31,6 +34,10 @@ private:
 	ASTNode* expression();
 
 	ASTNode* assignment();
+
+	ASTNode* _or();
+
+	ASTNode* _and();
 
 	ASTNode* equality();
 

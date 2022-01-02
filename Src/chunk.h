@@ -41,6 +41,14 @@
 		OP_SET_GLOBAL,
 		OP_GET_LOCAL,
 		OP_SET_LOCAL,
+		//control flow
+		OP_JUMP,
+		OP_JUMP_IF_FALSE,
+		OP_JUMP_IF_TRUE,
+		OP_JUMP_IF_FALSE_POP,
+		OP_LOOP,
+
+
 		OP_RETURN
 	};
 

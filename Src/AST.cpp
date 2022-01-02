@@ -21,6 +21,35 @@ void ASTAssignmentExpr::accept(visitor* vis) {
 
 #pragma endregion
 
+#pragma region Or expr
+ASTOrExpr::ASTOrExpr(ASTNode* _left, ASTNode* _right) {
+	left = _left;
+	right = _right;
+}
+ASTOrExpr::~ASTOrExpr() {
+	delete left;
+	delete right;
+}
+void ASTOrExpr::accept(visitor* vis) {
+	vis->visitOrExpr(this);
+}
+
+#pragma endregion
+
+#pragma region And expr
+ASTAndExpr::ASTAndExpr(ASTNode* _left, ASTNode* _right) {
+	left = _left;
+	right = _right;
+}
+ASTAndExpr::~ASTAndExpr() {
+	delete left;
+	delete right;
+}
+
+void ASTAndExpr::accept(visitor* vis) {
+	vis->visitAndExpr(this);
+}
+#pragma endregion
 
 #pragma region Binary expr
 ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
@@ -102,7 +131,6 @@ void ASTVarDecl::accept(visitor* vis) {
 #pragma endregion
 
 
-
 #pragma region Print stmt
 ASTPrintStmt::ASTPrintStmt(ASTNode* _expr) {
 	expr = _expr;
@@ -153,6 +181,59 @@ void ASTBlockStmt::accept(visitor* vis) {
 
 #pragma endregion
 
+#pragma region If stmt
+ASTIfStmt::ASTIfStmt(ASTNode* _then, ASTNode* _else, ASTNode* _condition) {
+	thenBranch = _then;
+	elseBranch = _else;
+	condition = _condition;
+	type = ASTType::IF_STMT;
+}
+ASTIfStmt::~ASTIfStmt() {
+	delete thenBranch;
+	delete elseBranch;
+	delete condition;
+}
+
+void ASTIfStmt::accept(visitor* vis) {
+	vis->visitIfStmt(this);
+}
 
 
+#pragma endregion
+
+#pragma region While stmt
+ASTWhileStmt::ASTWhileStmt(ASTNode* _body, ASTNode* _condition) {
+	body = _body;
+	condition = _condition;
+	type = ASTType::WHILE_STMT;
+}
+ASTWhileStmt::~ASTWhileStmt() {
+	delete body;
+	delete condition;
+}
+void ASTWhileStmt::accept(visitor* vis) {
+	vis->visitWhileStmt(this);
+}
+#pragma endregion
+
+#pragma region For stmt
+ASTForStmt::ASTForStmt(ASTNode* _init, ASTNode* _condition, ASTNode* _increment, ASTNode* _body) {
+	init = _init;
+	condition = _condition;
+	increment = _increment;
+	body = _body;
+	type = ASTType::FOR_STMT;
+}
+
+ASTForStmt::~ASTForStmt() {
+	delete init;
+	delete condition;
+	delete increment;
+	delete body;
+}
+
+void ASTForStmt::accept(visitor* vis) {
+	vis->visitForStmt(this);
+}
+#pragma endregion
 

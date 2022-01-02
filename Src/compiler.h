@@ -10,7 +10,7 @@
 
 struct local {
 	Token name;
-	int depth;
+	int depth = -1;
 };
 
 class compiler : public visitor {
@@ -27,10 +27,17 @@ private:
 	local locals[LOCAL_MAX];
 	int localCount;
 	int scopeDepth;
-	//helpers
+
+	#pragma region Helpers
+	//emitters
 	void emitByte(uint8_t byte);
 	void emitBytes(uint8_t byte1, uint8_t byte2);
+	void emit16Bit(unsigned short number);
 	void emitConstant(Value value);
+	void emitReturn();
+	int emitJump(OpCode jumpType);
+	void patchJump(int offset);
+	void emitLoop(int start);
 	uint8_t makeConstant(Value value);
 	//variables
 	uint8_t identifierConstant(Token name);
@@ -46,11 +53,14 @@ private:
 	void endScope();
 
 	obj* appendObject(obj* _object);
-	void emitReturn();
+	
+	#pragma endregion
 	
 
 	//Visitor pattern
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
+	void visitOrExpr(ASTOrExpr* expr);
+	void visitAndExpr(ASTAndExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
@@ -61,6 +71,9 @@ private:
 	void visitPrintStmt(ASTPrintStmt* stmt);
 	void visitExprStmt(ASTExprStmt* stmt);
 	void visitBlockStmt(ASTBlockStmt* stmt);
+	void visitIfStmt(ASTIfStmt* stmt);
+	void visitWhileStmt(ASTWhileStmt* stmt);
+	void visitForStmt(ASTForStmt* stmt);
 };
 
 

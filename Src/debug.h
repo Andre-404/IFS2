@@ -10,6 +10,8 @@ public:
 	debugASTPrinter(vector<ASTNode*> _stmts);
 
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
+	void visitOrExpr(ASTOrExpr* expr);
+	void visitAndExpr(ASTAndExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
@@ -20,6 +22,9 @@ public:
 	void visitPrintStmt(ASTPrintStmt* stmt);
 	void visitExprStmt(ASTExprStmt* stmt);
 	void visitBlockStmt(ASTBlockStmt* stmt);
+	void visitIfStmt(ASTIfStmt* stmt);
+	void visitWhileStmt(ASTWhileStmt* stmt);
+	void visitForStmt(ASTForStmt* stmt);
 
 private:
 	string str;

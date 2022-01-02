@@ -91,6 +91,7 @@ interpretResult vm::interpret(chunk* _chunk) {
 }
 
 interpretResult vm::run() {
+	#pragma region Macros
 	#define READ_BYTE() (getOp(ip++))
 	#define READ_CONSTANT() (curChunk->constants[READ_BYTE()])
 	#define READ_STRING() AS_STRING(READ_CONSTANT())
@@ -104,6 +105,7 @@ interpretResult vm::run() {
 			double a = AS_NUMBER(pop()); \
 			push(valueType(a op b)); \
 		} while (false)
+
 	#define INT_BINARY_OP(valueType, op)\
 		do {\
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
@@ -114,6 +116,10 @@ interpretResult vm::run() {
 			double a = AS_NUMBER(pop()); \
 			push(valueType((double)((int)a op (int)b))); \
 		} while (false)
+
+	#define READ_SHORT() (ip += 2, (uint16_t)((getOp(ip-2) << 8) | getOp(ip-1)))
+
+	#pragma endregion
 
 	while (true) {
 		#ifdef DEBUG_TRACE_EXECUTION
@@ -261,6 +267,35 @@ interpretResult vm::run() {
 			break;
 		}
 		#pragma endregion
+
+		#pragma region Control flow
+		case OP_JUMP_IF_TRUE: {
+			uint16_t offset = READ_SHORT();
+			if (!isFalsey(peek(0))) ip += offset;
+			break;
+		}
+		case OP_JUMP_IF_FALSE: {
+			uint16_t offset = READ_SHORT();
+			if (isFalsey(peek(0))) ip += offset;
+			break;
+		}
+		case OP_JUMP_IF_FALSE_POP: {
+			uint16_t offset = READ_SHORT();
+			if (isFalsey(pop())) ip += offset;
+			break;
+		}
+		case OP_JUMP: {
+			uint16_t offset = READ_SHORT();
+			ip += offset;
+			break;
+		}
+		case OP_LOOP: {
+			uint16_t offset = READ_SHORT();
+			ip -= offset;
+			break;
+		}
+		#pragma endregion
+
 
 		case OP_RETURN: {
 			return interpretResult::INTERPRETER_OK;
