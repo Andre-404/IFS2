@@ -179,7 +179,16 @@ Token scanner::identifier() {
 TokenType scanner::identifierType() {
 	switch (source->at(start)) {
 		case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
-		case 'c': return checkKeyword(1, 4, "lass", TOKEN_CLASS);
+		case 'b': return checkKeyword(1, 4, "reak", TOKEN_BREAK);
+		case 'c': 
+			if (current - start > 1) {
+				switch (source->at(start + 1)) {
+				case 'l': return checkKeyword(2, 3, "ass", TOKEN_CLASS);
+				case 'a': return checkKeyword(2, 2, "se", TOKEN_CASE);
+				}
+			}
+			break;
+		case 'd': return checkKeyword(1, 6, "efault", TOKEN_DEFAULT);
 		case 'e': return checkKeyword(1, 3, "lse", TOKEN_ELSE);
 		case 'i': return checkKeyword(1, 1, "f", TOKEN_IF);
 		case 'n': return checkKeyword(1, 2, "il", TOKEN_NIL);
@@ -218,8 +227,8 @@ TokenType scanner::identifierType() {
 				}
 			}
 			break;
-		default: return TOKEN_IDENTIFIER;
 	}
+	return TOKEN_IDENTIFIER;
 }
 
 //is string.compare fast enough?

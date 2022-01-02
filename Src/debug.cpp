@@ -110,6 +110,12 @@ void debugASTPrinter::visitForStmt(ASTForStmt* stmt) {
 	stmt->getBody()->accept(this);
 }
 
+void debugASTPrinter::visitBreakStmt(ASTBreakStmt* stmt) {
+	str.append("Break\n");
+	std::cout << str;
+	str = "";
+}
+
 #pragma region Disassembly
 
 static int simpleInstruction(string name, int offset) {
@@ -215,6 +221,14 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return jumpInstruction("OP JUMP IF FALSE POP", 1, Chunk, offset);
 	case OP_LOOP:
 		return jumpInstruction("OP LOOP", -1, Chunk, offset);
+	case OP_BREAK: {
+		uint16_t toPop = (uint16_t)(Chunk->code[offset + 1] << 8);
+		toPop |= Chunk->code[offset + 2];
+		uint16_t jump = (uint16_t)(Chunk->code[offset + 3] << 8);
+		jump |= Chunk->code[offset + 4];
+		printf("%-16s %4d -> %d POP %d\n", "OP BREAK" , offset, offset + 5 + jump, toPop);
+		return offset + 5;
+	}
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

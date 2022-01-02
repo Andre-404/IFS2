@@ -19,13 +19,20 @@ compiler::compiler(parser* Parser) {
 	}
 	else {
 		current = new chunk;
-		for (int i = 0; i < Parser->statements.size(); i++) {
-			Parser->statements[i]->accept(this);
+		try {
+			for (int i = 0; i < Parser->statements.size(); i++) {
+				Parser->statements[i]->accept(this);
+			}
+			emitReturn();
+			#ifdef DEBUG_PRINT_CODE
+						getCurrent()->disassemble("code");
+			#endif
 		}
-		emitReturn();
-	#ifdef DEBUG_PRINT_CODE
-		getCurrent()->disassemble("code");
-	#endif
+		catch (int e) {
+			delete current;
+			current = NULL;
+			compiled = false;
+		}
 	}
 }
 
@@ -169,12 +176,15 @@ void compiler::visitIfStmt(ASTIfStmt* stmt) {
 	stmt->getCondition()->accept(this);
 	int thenJump = emitJump(OP_JUMP_IF_FALSE_POP);
 	stmt->getThen()->accept(this);
-	//prevents fallthrough to else branch
-	int elseJump = emitJump(OP_JUMP);
-	patchJump(thenJump);
 	//only compile if there is a else branch
-	if(stmt->getElse() != NULL) stmt->getElse()->accept(this);
-	patchJump(elseJump);
+	if (stmt->getElse() != NULL) {
+		//prevents fallthrough to else branch
+		int elseJump = emitJump(OP_JUMP);
+		patchJump(thenJump);
+		
+		stmt->getElse()->accept(this);
+		patchJump(elseJump);
+	}else patchJump(thenJump);
 
 }
 
@@ -187,10 +197,44 @@ void compiler::visitWhileStmt(ASTWhileStmt* stmt) {
 	stmt->getBody()->accept(this);
 	emitLoop(loopStart);
 	patchJump(jump);
+	patchBreak();
 }
 
 void compiler::visitForStmt(ASTForStmt* stmt) {
+	//we wrap this in a scope so if there is a var declaration in the initialization it's scoped to the loop
+	beginScope();
+	if(stmt->getInit() != NULL) stmt->getInit()->accept(this);
+	int loopStart = current->code.size();
+	//only emit the exit jump code if there is a condition expression
+	int exitJump = -1;
+	if (stmt->getCondition() != NULL) { 
+		stmt->getCondition()->accept(this); 
+		exitJump = emitJump(OP_JUMP_IF_FALSE_POP);
+	}
+	//body is mandatory
+	stmt->getBody()->accept(this);
+	//if there is a increment expression, we compile it and emit a POP to get rid of the result
+	if (stmt->getIncrement() != NULL) {
+		stmt->getIncrement()->accept(this);
+		emitByte(OP_POP);
+	}
+	emitLoop(loopStart);
+	//exit jump still needs to handle scoping appropriately 
+	if (exitJump != -1) patchJump(exitJump);
+	endScope();
+	//patch breaks AFTER we close the for scope
+	patchBreak();
+}
 
+void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
+	//the amount of variables to pop and the amount of code to jump is determined in handleBreak()
+	//which is called at the end of loops
+	line = stmt->getToken().line;
+	emitByte(OP_BREAK);
+	int breakJump = current->code.size();
+	emitBytes(0xff, 0xff);
+	emitBytes(0xff, 0xff);
+	breakStmts.emplace_back(scopeDepth, breakJump, localCount);
 }
 
 #pragma region helpers
@@ -353,6 +397,27 @@ int compiler::resolveLocal(Token& name) {
 void compiler::markInit() {
 	//marks variable as ready to use, any use of it before this call is a error
 	locals[localCount - 1].depth = scopeDepth;
+}
+
+void compiler::patchBreak() {
+	int curCode = current->code.size();
+	//most recent breaks are going to be on top
+	for (int i = breakStmts.size() - 1; i >= 0; i--) {
+		_break curBreak = breakStmts[i];
+		//if the break stmt we're looking at has a depth that's equal or higher than current depth, we bail out
+		if (curBreak.depth > scopeDepth) {
+			int jumpLenght = curCode - curBreak.offset - 4;
+			int toPop = curBreak.varNum - localCount;
+			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
+			current->code[curBreak.offset] = (toPop >> 8) & 0xff;
+			current->code[curBreak.offset + 1] = toPop & 0xff;
+			//amount to jump
+			current->code[curBreak.offset + 2] = (jumpLenght >> 8) & 0xff;
+			current->code[curBreak.offset + 3] = jumpLenght & 0xff;
+			//delete break from array
+			breakStmts.pop_back();
+		}else break;
+	}
 }
 
 #pragma endregion

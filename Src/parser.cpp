@@ -6,6 +6,7 @@ parser::parser(vector<Token>* _tokens) {
 	tokens = _tokens;
 	current = 0;
 	hadError = false;
+	scopeDepth = 0;
 
 	while (!isAtEnd()) {
 		try {
@@ -43,13 +44,14 @@ ASTNode* parser::varDecl() {
 }
 
 ASTNode* parser::statement() {
-	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR })) {
+	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK })) {
 		switch (previous().type) {
 		case TOKEN_PRINT: return printStmt();
 		case TOKEN_LEFT_BRACE: return blockStmt();
 		case TOKEN_IF: return ifStmt();
 		case TOKEN_WHILE: return whileStmt();
 		case TOKEN_FOR: return forStmt();
+		case TOKEN_BREAK: return breakStmt();
 		}
 	}
 	return exprStmt();
@@ -69,10 +71,12 @@ ASTNode* parser::exprStmt() {
 
 ASTNode* parser::blockStmt() {
 	vector<ASTNode*> stmts;
+	scopeDepth++;
 	while (!check(TOKEN_RIGHT_BRACE)) {
 		stmts.push_back(declaration());
 	}
 	consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+	scopeDepth--;
 	return new ASTBlockStmt(stmts);
 }
 
@@ -98,13 +102,13 @@ ASTNode* parser::whileStmt() {
 }
 
 ASTNode* parser::forStmt() {
-	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
 	//initalizer
 	ASTNode* init = NULL;
 	if (match({ TOKEN_SEMICOLON })) {
 		//do nothing
 	}else if (match({ TOKEN_VAR })) {
-		init = declaration();
+		init = varDecl();
 	}else {
 		init = exprStmt();
 	}
@@ -112,16 +116,22 @@ ASTNode* parser::forStmt() {
 	ASTNode* condition = NULL;
 	//we don't want to use exprStmt() because it emits OP_POP, and we'll need the value to determine whether to jump
 	if (!match({ TOKEN_SEMICOLON })) condition = expression();
+	consume(TOKEN_SEMICOLON, "Expect ';' after loop condition");
 	//increment
 	ASTNode* increment = NULL;
 	//using expression() here instead of exprStmt() because there is no trailing ';'
 	if (!check(TOKEN_RIGHT_PAREN)) increment = expression();
-	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
 	//disallows declarations unless they're in a block
 	ASTNode* body = statement();
 	return new ASTForStmt(init, condition, increment, body);
 }
 
+ASTNode* parser::breakStmt() {
+	if (scopeDepth == 0) error(previous(), "Cannot use break in global scope");
+	consume(TOKEN_SEMICOLON, "Expect ';' after break.");
+	return new ASTBreakStmt(previous());
+}
 
 #pragma endregion
 

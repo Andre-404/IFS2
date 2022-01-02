@@ -54,7 +54,11 @@ Statements
 for
 while
 if else
+break
+continue
 switch
+case
+default
 foreach->array, hashMap
 
 

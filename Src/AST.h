@@ -20,9 +20,12 @@ class ASTBlockStmt;
 class ASTIfStmt;
 class ASTWhileStmt;
 class ASTForStmt;
+class ASTBreakStmt;
 
-enum class ASTType{
+enum class ASTType {
 	ASSINGMENT,
+	AND,
+	OR,
 	BINARY,
 	UNARY,
 	GROUPING,
@@ -33,7 +36,8 @@ enum class ASTType{
 	BLOCK_STMT,
 	IF_STMT,
 	WHILE_STMT,
-	FOR_STMT
+	FOR_STMT,
+	BREAK_STMT
 };
 
 
@@ -57,6 +61,7 @@ public:
 	virtual void visitIfStmt(ASTIfStmt* stmt) = 0;
 	virtual void visitWhileStmt(ASTWhileStmt* stmt) = 0;
 	virtual void visitForStmt(ASTForStmt* stmt) = 0;
+	virtual void visitBreakStmt(ASTBreakStmt* stmt) = 0;
 };
 
 class ASTNode {
@@ -244,6 +249,14 @@ public:
 	ASTNode* getIncrement() { return increment; }
 };
 
+class ASTBreakStmt : public ASTNode {
+private:
+	Token token;
+public:
+	ASTBreakStmt(Token _token);
+	void accept(visitor* vis);
+	Token getToken() { return token; }
+};
 
 #pragma endregion
 

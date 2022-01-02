@@ -13,6 +13,13 @@ struct local {
 	int depth = -1;
 };
 
+struct _break {
+	int depth = 0;
+	int offset = -1;
+	int varNum = 0;
+	_break(int _d, int _o, int _varNum) : depth(_d), offset(_o), varNum(_varNum) {}
+};
+
 class compiler : public visitor {
 public:
 	bool compiled;
@@ -23,6 +30,8 @@ public:
 private:
 	chunk* current;
 	int line;
+	//keeps track of every break statement that has been encountered
+	vector<_break> breakStmts;
 	//locals
 	local locals[LOCAL_MAX];
 	int localCount;
@@ -35,9 +44,11 @@ private:
 	void emit16Bit(unsigned short number);
 	void emitConstant(Value value);
 	void emitReturn();
+	//control flow
 	int emitJump(OpCode jumpType);
 	void patchJump(int offset);
 	void emitLoop(int start);
+	void patchBreak();
 	uint8_t makeConstant(Value value);
 	//variables
 	uint8_t identifierConstant(Token name);
@@ -74,6 +85,7 @@ private:
 	void visitIfStmt(ASTIfStmt* stmt);
 	void visitWhileStmt(ASTWhileStmt* stmt);
 	void visitForStmt(ASTForStmt* stmt);
+	void visitBreakStmt(ASTBreakStmt* stmt);
 };
 
 

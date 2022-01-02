@@ -14,6 +14,7 @@ public:
 private:
 	vector<Token>* tokens;
 	uint16_t current;
+	int scopeDepth;
 
 #pragma region Statements
 	ASTNode* declaration();
@@ -26,6 +27,7 @@ private:
 	ASTNode* ifStmt();
 	ASTNode* whileStmt();
 	ASTNode* forStmt();
+	ASTNode* breakStmt();
 #pragma endregion
 
 

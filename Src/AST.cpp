@@ -3,6 +3,7 @@
 
 /*
 accept methods invoke the specific visitor functions for each node type
+WARNING: don't forget to add 'type' field in the constructor
 */
 #pragma region Assigment expr
 ASTAssignmentExpr::ASTAssignmentExpr(Token _name, ASTNode* _value) {
@@ -25,6 +26,7 @@ void ASTAssignmentExpr::accept(visitor* vis) {
 ASTOrExpr::ASTOrExpr(ASTNode* _left, ASTNode* _right) {
 	left = _left;
 	right = _right;
+	type = ASTType::OR;
 }
 ASTOrExpr::~ASTOrExpr() {
 	delete left;
@@ -40,6 +42,7 @@ void ASTOrExpr::accept(visitor* vis) {
 ASTAndExpr::ASTAndExpr(ASTNode* _left, ASTNode* _right) {
 	left = _left;
 	right = _right;
+	type = ASTType::AND;
 }
 ASTAndExpr::~ASTAndExpr() {
 	delete left;
@@ -116,7 +119,7 @@ void ASTLiteralExpr::accept(visitor* vis) {
 ASTVarDecl::ASTVarDecl(Token _name, ASTNode* _setExpr) {
 	name = _name;
 	setExpr = _setExpr;
-	ASTType::VAR_DECL;
+	type = ASTType::VAR_DECL;
 }
 
 ASTVarDecl::~ASTVarDecl() {
@@ -166,6 +169,7 @@ void ASTExprStmt::accept(visitor* vis) {
 #pragma region Block stmt
 ASTBlockStmt::ASTBlockStmt(vector<ASTNode*>& _statements) {
 	statements = _statements;
+	type = ASTType::BLOCK_STMT;
 }
 
 ASTBlockStmt::~ASTBlockStmt() {
@@ -237,3 +241,12 @@ void ASTForStmt::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Break stmt
+ASTBreakStmt::ASTBreakStmt(Token _token) {
+	token = _token;
+	type = ASTType::BREAK_STMT;
+}
+void ASTBreakStmt::accept(visitor* vis) {
+	vis->visitBreakStmt(this);
+}
+#pragma endregion

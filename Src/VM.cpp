@@ -294,6 +294,17 @@ interpretResult vm::run() {
 			ip -= offset;
 			break;
 		}
+		case OP_BREAK: {
+			uint16_t toPop = READ_SHORT();
+			int i = 0;
+			while (i < toPop) {
+				pop();
+				i++;
+			}
+			uint16_t offset = READ_SHORT();
+			ip += offset;
+			break;
+		}
 		#pragma endregion
 
 
