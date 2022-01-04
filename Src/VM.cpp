@@ -305,6 +305,56 @@ interpretResult vm::run() {
 			ip += offset;
 			break;
 		}
+		case OP_SWITCH: {
+			if (IS_STRING(peek(0)) || IS_NUMBER(peek(0))) {
+				int pos = READ_BYTE();
+				switchTable& _table = curChunk->switchTables[pos];
+				//default jump exists for every switch, and if it's not user defined it jumps to the end of switch
+				switch (_table.type) {
+				case switchType::NUM: {
+					//if it's a all number switch stmt, and we have something that isn't a number, we immediatelly jump to default
+					if (IS_NUMBER(peek(0))) {
+						int num = AS_NUMBER(pop());
+						long jumpLength = _table.getJump(num);
+						if (jumpLength != -1) {
+							ip += jumpLength;
+							break;
+						}
+					}
+					ip += _table.defaultJump;
+					break;
+				}
+				case switchType::STRING: {
+					if (IS_STRING(peek(0))) {
+						objString* str = AS_STRING(pop());
+						long jumpLength = _table.getJump(str->str);
+						if (jumpLength != -1) {
+							ip += jumpLength;
+							break;
+						}
+					}
+					ip += _table.defaultJump;
+					break;
+				}
+				case switchType::MIXED: {
+					string str;
+					//this can be either a number or a string, so we need more checks
+					if (IS_STRING(peek(0))) str = AS_STRING(pop())->str;
+					else str = std::to_string((int)AS_NUMBER(pop()));
+					long jumpLength = _table.getJump(str);
+					if (jumpLength != -1) {
+						ip += jumpLength;
+						break;
+					}
+					ip += _table.defaultJump;
+					break;
+				}
+				}
+			}else {
+				runtimeError("Switch expression can be only string or number.");
+			}
+			break;
+		}
 		#pragma endregion
 
 

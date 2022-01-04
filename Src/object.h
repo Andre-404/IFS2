@@ -23,6 +23,10 @@ public:
 	~objString();
 };
 
+class objFunc : public obj {
+
+};
+
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 

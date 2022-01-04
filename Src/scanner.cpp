@@ -74,6 +74,7 @@ Token scanner::scanToken() {
 		case '>':
 			return makeToken(match('=') ? TOKEN_GREATER_EQUAL : match('>') ? TOKEN_BITSHIFT_RIGHT : TOKEN_GREATER);
 		case '"': return string_();
+		case ':': return makeToken(TOKEN_COLON);
 	}
 
 	return errorToken("Unexpected character.");
@@ -198,8 +199,8 @@ TokenType scanner::identifierType() {
 		case 's': 
 			if (current - start > 1) {
 				switch (source->at(start + 1)) {
-					case 'u': return checkKeyword(1, 3, "per", TOKEN_SUPER);
-					case 'w': return checkKeyword(1, 4, "itch", TOKEN_SWITCH);
+					case 'u': return checkKeyword(2, 3, "per", TOKEN_SUPER);
+					case 'w': return checkKeyword(2, 4, "itch", TOKEN_SWITCH);
 				}
 			}
 			break;

@@ -28,6 +28,7 @@
     <ClCompile Include="object.cpp" />
     <ClCompile Include="parser.cpp" />
     <ClCompile Include="scanner.cpp" />
+    <ClCompile Include="switch.cpp" />
     <ClCompile Include="value.cpp" />
     <ClCompile Include="VM.cpp" />
   </ItemGroup>
@@ -42,6 +43,7 @@
     <ClInclude Include="object.h" />
     <ClInclude Include="parser.h" />
     <ClInclude Include="scanner.h" />
+    <ClInclude Include="switch.h" />
     <ClInclude Include="value.h" />
     <ClInclude Include="VM.h" />
   </ItemGroup>

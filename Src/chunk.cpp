@@ -18,6 +18,12 @@ int chunk::addConstant(Value val) {
 	return size;
 }
 
+int chunk::addSwitch(switchTable table) {
+	int size = switchTables.size();
+	switchTables.push_back(table);
+	return size;
+}
+
 void chunk::disassemble(string name) {
 	std::cout << "=======" << name << "=======\n";
 	//prints every instruction in chunk

@@ -68,6 +68,7 @@ int main() {
 		delete scan;
 		delete parse;
 		delete comp;
+		std::cout << "mem usage after deleteions: " << global::memoryUsage;
 	}
 
 	cin.get();

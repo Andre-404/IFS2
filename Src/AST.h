@@ -21,6 +21,8 @@ class ASTIfStmt;
 class ASTWhileStmt;
 class ASTForStmt;
 class ASTBreakStmt;
+class ASTSwitchStmt;
+class ASTCase;
 
 enum class ASTType {
 	ASSINGMENT,
@@ -37,7 +39,15 @@ enum class ASTType {
 	IF_STMT,
 	WHILE_STMT,
 	FOR_STMT,
-	BREAK_STMT
+	BREAK_STMT,
+	SWITCH_STMT,
+	CASE
+};
+
+enum class switchType {
+	MIXED,
+	NUM,
+	STRING
 };
 
 
@@ -62,6 +72,8 @@ public:
 	virtual void visitWhileStmt(ASTWhileStmt* stmt) = 0;
 	virtual void visitForStmt(ASTForStmt* stmt) = 0;
 	virtual void visitBreakStmt(ASTBreakStmt* stmt) = 0;
+	virtual void visitSwitchStmt(ASTSwitchStmt* stmt) = 0;
+	virtual void visitCase(ASTCase* _case) = 0;
 };
 
 class ASTNode {
@@ -256,6 +268,39 @@ public:
 	ASTBreakStmt(Token _token);
 	void accept(visitor* vis);
 	Token getToken() { return token; }
+};
+
+class ASTSwitchStmt : public ASTNode {
+private:
+	ASTNode* expr;
+	vector<ASTNode*> cases;
+	int numCases;
+	switchType casesType;
+	bool hasDefault;
+public:
+	ASTSwitchStmt(ASTNode* _expr, vector<ASTNode*>& _cases, switchType _type, bool _hasDefault);
+	~ASTSwitchStmt();
+	void accept(visitor* vis);
+	ASTNode* getExpr() { return expr; }
+	vector<ASTNode*> getCases() { return cases; }
+	switchType getType() { return casesType; }
+};
+
+class ASTCase : public ASTNode {
+private:
+	ASTNode* expr;
+	vector<ASTNode*> stmts;
+	TokenType caseType;
+	bool isDefault;
+public:
+	ASTCase(ASTNode* _expr, vector<ASTNode*>& _stmts, bool _isDefault);
+	~ASTCase();
+	void accept(visitor* vis);
+	ASTNode* getExpr() { return expr; }
+	vector<ASTNode*> getStmts() { return stmts; }
+	TokenType getCaseType() { return caseType; }
+	void setDef(bool _newDefault) { isDefault = _newDefault; }
+	bool getDef() { return isDefault; }
 };
 
 #pragma endregion

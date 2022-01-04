@@ -116,6 +116,30 @@ void debugASTPrinter::visitBreakStmt(ASTBreakStmt* stmt) {
 	str = "";
 }
 
+void debugASTPrinter::visitSwitchStmt(ASTSwitchStmt* stmt) {
+	str.append("Switch( ");
+	stmt->getExpr()->accept(this);
+	str.append(" ){\n");
+	for (ASTNode* _case : stmt->getCases()) {
+		_case->accept(this);
+	}
+	str.append("}\n");
+	std::cout << str;
+	str = "";
+}
+
+void debugASTPrinter::visitCase(ASTCase* _case) {
+	str.append("case ");
+	if(_case->getExpr() != NULL)_case->getExpr()->accept(this);
+	str.append(":\n");
+	for (ASTNode* stmt : _case->getStmts()) {
+		stmt->accept(this);
+	}
+	str.append("\n");
+	std::cout << str;
+	str = "";
+}
+
 #pragma region Disassembly
 
 static int simpleInstruction(string name, int offset) {
@@ -228,6 +252,9 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		jump |= Chunk->code[offset + 4];
 		printf("%-16s %4d -> %d POP %d\n", "OP BREAK" , offset, offset + 5 + jump, toPop);
 		return offset + 5;
+	}
+	case OP_SWITCH:{
+		return byteInstruction("OP SWITCH", Chunk, offset);
 	}
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";

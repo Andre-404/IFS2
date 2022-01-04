@@ -250,3 +250,50 @@ void ASTBreakStmt::accept(visitor* vis) {
 	vis->visitBreakStmt(this);
 }
 #pragma endregion
+
+#pragma region Switch stmt
+ASTSwitchStmt::ASTSwitchStmt(ASTNode* _expr, vector<ASTNode*>& _cases, switchType _type, bool _hasDefault) {
+	expr = _expr;
+	cases = _cases;
+	type = ASTType::SWITCH_STMT;
+	casesType = _type;
+	numCases = cases.size();
+	hasDefault = _hasDefault;
+}
+ASTSwitchStmt::~ASTSwitchStmt() {
+	delete expr;
+	for (ASTNode* _case : cases) {
+		delete _case;
+	}
+}
+
+void ASTSwitchStmt::accept(visitor* vis) {
+	vis->visitSwitchStmt(this);
+}
+#pragma endregion
+
+#pragma region Switch case
+ASTCase::ASTCase(ASTNode* _expr, vector<ASTNode*>& _stmts, bool _isDefault) {
+	if (_expr != NULL) {
+		expr = _expr;
+		caseType = ((ASTLiteralExpr*)expr)->getToken().type;
+	}
+	else {
+		expr = NULL;
+		caseType = TokenType::TOKEN_ERROR;
+	}
+	stmts = _stmts;
+	type = ASTType::CASE;
+	isDefault = _isDefault;
+}
+ASTCase::~ASTCase() {
+	delete expr;
+	for (ASTNode* stmt : stmts) {
+		delete stmt;
+	}
+}
+void ASTCase::accept(visitor* vis) {
+	vis->visitCase(this);
+}
+#pragma endregion
+

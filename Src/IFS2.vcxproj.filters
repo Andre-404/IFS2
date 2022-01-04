@@ -48,6 +48,9 @@
     <ClCompile Include="hashTable.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="switch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="scanner.h">
@@ -84,6 +87,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="namespaces.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="switch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

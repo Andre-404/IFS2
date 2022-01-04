@@ -2,6 +2,7 @@
 	#define __IFS_CHUNK
 	#include "common.h"
 	#include "value.h"
+	#include "switch.h"
 
 	using std::vector;
 
@@ -48,21 +49,23 @@
 		OP_JUMP_IF_FALSE_POP,
 		OP_LOOP,
 		OP_BREAK,
-
+		OP_SWITCH,
 
 		OP_RETURN
 	};
 
-	//disassebmle is here, but the functions it calls are in debug.cpp
+	//disassemble is here, but the functions it calls are in debug.cpp
 	class chunk {
 	public:
 		vector<int> lines;
 		vector<uint8_t> code;
 		vector<Value> constants;
+		vector<switchTable> switchTables;
 		chunk();
 		void writeData(uint8_t opCode, int line);
 		void disassemble(string name);
 		int addConstant(Value val);
+		int addSwitch(switchTable table);
 	};
 
 #endif // !__IFS_CHUNK

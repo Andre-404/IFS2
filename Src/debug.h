@@ -26,6 +26,8 @@ public:
 	void visitWhileStmt(ASTWhileStmt* stmt);
 	void visitForStmt(ASTForStmt* stmt);
 	void visitBreakStmt(ASTBreakStmt* stmt);
+	void visitSwitchStmt(ASTSwitchStmt* stmt);
+	void visitCase(ASTCase* _case);
 
 private:
 	string str;

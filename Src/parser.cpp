@@ -7,6 +7,8 @@ parser::parser(vector<Token>* _tokens) {
 	current = 0;
 	hadError = false;
 	scopeDepth = 0;
+	loopDepth = 0;
+	switchDepth = 0;
 
 	while (!isAtEnd()) {
 		try {
@@ -44,7 +46,7 @@ ASTNode* parser::varDecl() {
 }
 
 ASTNode* parser::statement() {
-	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK })) {
+	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK, TOKEN_SWITCH})) {
 		switch (previous().type) {
 		case TOKEN_PRINT: return printStmt();
 		case TOKEN_LEFT_BRACE: return blockStmt();
@@ -52,6 +54,7 @@ ASTNode* parser::statement() {
 		case TOKEN_WHILE: return whileStmt();
 		case TOKEN_FOR: return forStmt();
 		case TOKEN_BREAK: return breakStmt();
+		case TOKEN_SWITCH: return switchStmt();
 		}
 	}
 	return exprStmt();
@@ -128,9 +131,55 @@ ASTNode* parser::forStmt() {
 }
 
 ASTNode* parser::breakStmt() {
-	if (scopeDepth == 0) error(previous(), "Cannot use break in global scope");
+	if (loopDepth == 0 && switchDepth == 0) throw error(previous(), "Cannot use 'break' outside of loops or switch statements.");
 	consume(TOKEN_SEMICOLON, "Expect ';' after break.");
 	return new ASTBreakStmt(previous());
+}
+
+ASTNode* parser::switchStmt() {
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after switch.");
+	ASTNode* expr = expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
+	consume(TOKEN_LEFT_BRACE, "Expect '{' after switch expression.");
+	switchDepth++;
+	vector<ASTNode*> cases;
+	bool allStrings = true;
+	bool allNum = true;
+	bool hasDefault = false;
+
+	while (!check(TOKEN_RIGHT_BRACE) && match({ TOKEN_CASE, TOKEN_DEFAULT })) {
+		Token prev = previous();//to see if it's a default statement
+		ASTCase* curCase = (ASTCase*)_case();
+		if (curCase->getCaseType() == TOKEN_NUMBER) allStrings = false;
+		else if (curCase->getCaseType() == TOKEN_STRING) allNum = false;
+		else {
+			allNum = false;
+			allStrings = false;
+		}
+		if (prev.type == TOKEN_DEFAULT) {
+			if (hasDefault) error(prev, "Only 1 default case is allowed inside a switch statement.");
+			curCase->setDef(true);
+			hasDefault = true;
+		}
+		cases.push_back(curCase);
+	}
+	consume(TOKEN_RIGHT_BRACE, "Expect '}' after switch body.");
+	switchDepth--;
+	return new ASTSwitchStmt(expr, cases, allNum ? switchType::NUM : allStrings ? switchType::STRING : switchType::MIXED, hasDefault);
+}
+
+ASTNode* parser::_case() {
+	ASTNode* matchExpr = NULL;
+	if (previous().type != TOKEN_DEFAULT) {
+		matchExpr = primary();
+		if (matchExpr->type == ASTType::GROUPING) throw error(previous(), "Cannot have a grouping expression as a match expression in case.");
+	}
+	consume(TOKEN_COLON, "Expect ':' after case.");
+	vector<ASTNode*> stmts;
+	while (!check(TOKEN_CASE) && !check(TOKEN_RIGHT_BRACE) && !check(TOKEN_DEFAULT)) {
+		stmts.push_back(statement());
+	}
+	return new ASTCase(matchExpr, stmts, false);
 }
 
 #pragma endregion

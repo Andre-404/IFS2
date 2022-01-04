@@ -1,7 +1,9 @@
 #include "compiler.h"
+#include "namespaces.h"
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
+
 
 compiler::compiler(parser* Parser) {
 	compiled = true;
@@ -222,7 +224,7 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 	//exit jump still needs to handle scoping appropriately 
 	if (exitJump != -1) patchJump(exitJump);
 	endScope();
-	//patch breaks AFTER we close the for scope
+	//patch breaks AFTER we close the for scope because breaks that are in current scope aren't patched
 	patchBreak();
 }
 
@@ -235,6 +237,70 @@ void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
 	breakStmts.emplace_back(scopeDepth, breakJump, localCount);
+}
+
+void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
+	beginScope();
+	//compile the expression in ()
+	stmt->getExpr()->accept(this);
+	//based on the switch stmt type(all num, all string or mixed) we create a new switch table struct and get it's pos
+	//passing in the size to call .reserve() on map/vector
+	switchType type = stmt->getType();
+	int pos = current->addSwitch(switchTable(type, stmt->getCases().size()));
+	switchTable& table = current->switchTables[pos];
+	emitBytes(OP_SWITCH, pos);
+
+	long start = current->code.size();
+	//TODO:defaults
+	for (ASTNode* _case : stmt->getCases()) {
+		ASTCase* curCase = (ASTCase*)_case;
+		//based on the type of switch stmt, we either convert all token lexemes to numbers,
+		//or add the strings to a hash table
+		if (!curCase->getDef()) {
+			switch (type) {
+			case switchType::NUM: {
+				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
+				//TODO: round this?
+				int key = std::stoi(string(expr->getToken().lexeme));
+				long _ip = current->code.size() - start;
+
+				table.addToArr(key, _ip);
+				break;
+			}
+								//for both strings and mixed switches we pass them as strings
+			case switchType::STRING:
+			case switchType::MIXED: {
+				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
+				long _ip = current->code.size() - start;
+				//converts string_view to string and get's rid of ""
+				string _temp(expr->getToken().lexeme);
+				if (expr->getToken().type == TOKEN_STRING) {
+					_temp.erase(0, 1);
+					_temp.erase(_temp.size() - 1, 1);
+				}
+				table.addToTable(_temp, _ip);
+				break;
+			}
+			}
+		}
+		else {
+			table.defaultJump = current->code.size() - start;
+		}
+		curCase->accept(this);
+	}
+	//implicit default if the user hasn't defined one, jumps to the end of switch stmt
+	if (table.defaultJump == -1) table.defaultJump = current->code.size() - start;
+	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
+	endScope();
+	patchBreak();
+}
+
+void compiler::visitCase(ASTCase* stmt) {
+	//compile every statement in the case
+	//user has to worry about fallthrough
+	for (ASTNode* stmt : stmt->getStmts()) {
+		stmt->accept(this);
+	}
 }
 
 #pragma region helpers
@@ -376,7 +442,7 @@ void compiler::endScope() {
 		toPop++;
 		localCount--;
 	}
-	emitBytes(OP_POPN, toPop);
+	if(toPop > 0) emitBytes(OP_POPN, toPop);
 }
 
 int compiler::resolveLocal(Token& name) {
@@ -430,6 +496,7 @@ void error(string message) {
 	std::cout << "Compile error: " << message << "\n";
 	throw 20;
 }
+
 //adds the object to compilers objects list
 obj* compiler::appendObject(obj* _object) {
 	_object->next = objects;
