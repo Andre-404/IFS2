@@ -140,6 +140,18 @@ void debugASTPrinter::visitCase(ASTCase* _case) {
 	str = "";
 }
 
+void debugASTPrinter::visitFuncDecl(ASTFunc* decl) {
+
+}
+
+void debugASTPrinter::visitCallExpr(ASTCallExpr* expr) {
+
+}
+
+void debugASTPrinter::visitReturnStmt(ASTReturn* stmt) {
+
+}
+
 #pragma region Disassembly
 
 static int simpleInstruction(string name, int offset) {
@@ -256,6 +268,8 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	case OP_SWITCH:{
 		return byteInstruction("OP SWITCH", Chunk, offset);
 	}
+	case OP_CALL:
+		return byteInstruction("OP CALL", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

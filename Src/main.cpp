@@ -12,6 +12,7 @@ using std::cin;
 //init the variables of global namespace
 long long global::memoryUsage = 0;
 hashTable global::internedStrings = hashTable();
+obj* global::objects = NULL;
 
 //possibly need more checks and/or throwing errors
 void* operator new(size_t size) {
@@ -63,7 +64,7 @@ int main() {
 	if (!source.empty()) {
 		scanner* scan = new scanner(&source);
 		parser* parse = new parser(scan->getArr());
-		compiler* comp = new compiler(parse);
+		compiler* comp = new compiler(parse, funcType::TYPE_SCRIPT);
 		vm newVM(comp);
 		delete scan;
 		delete parse;

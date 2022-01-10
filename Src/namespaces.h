@@ -5,4 +5,5 @@
 namespace global {
 	extern long long memoryUsage;
 	extern hashTable internedStrings;
+	extern obj* objects;
 };

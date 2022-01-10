@@ -51,6 +51,8 @@
 		OP_BREAK,
 		OP_SWITCH,
 
+		//Functions
+		OP_CALL,
 		OP_RETURN
 	};
 

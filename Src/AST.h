@@ -11,8 +11,10 @@ class ASTBinaryExpr;
 class ASTUnaryExpr;
 class ASTGroupingExpr;
 class ASTLiteralExpr;
+class ASTCallExpr;
 
 class ASTVarDecl;
+class ASTFunc;
 
 class ASTPrintStmt;
 class ASTExprStmt;
@@ -23,6 +25,7 @@ class ASTForStmt;
 class ASTBreakStmt;
 class ASTSwitchStmt;
 class ASTCase;
+class ASTReturn;
 
 enum class ASTType {
 	ASSINGMENT,
@@ -41,7 +44,10 @@ enum class ASTType {
 	FOR_STMT,
 	BREAK_STMT,
 	SWITCH_STMT,
-	CASE
+	CASE,
+	FUNC,
+	CALL,
+	RETURN,
 };
 
 enum class switchType {
@@ -61,9 +67,11 @@ public:
 	virtual void visitBinaryExpr(ASTBinaryExpr* expr) = 0;
 	virtual void visitUnaryExpr(ASTUnaryExpr* expr) = 0;
 	virtual void visitGroupingExpr(ASTGroupingExpr* expr) = 0;
+	virtual void visitCallExpr(ASTCallExpr* expr) = 0;
 	virtual void visitLiteralExpr(ASTLiteralExpr* expr) = 0;
 
 	virtual void visitVarDecl(ASTVarDecl* stmt) = 0;
+	virtual void visitFuncDecl(ASTFunc* decl) = 0;
 
 	virtual void visitPrintStmt(ASTPrintStmt* stmt) = 0;
 	virtual void visitExprStmt(ASTExprStmt* stmt) = 0;
@@ -74,6 +82,7 @@ public:
 	virtual void visitBreakStmt(ASTBreakStmt* stmt) = 0;
 	virtual void visitSwitchStmt(ASTSwitchStmt* stmt) = 0;
 	virtual void visitCase(ASTCase* _case) = 0;
+	virtual void visitReturnStmt(ASTReturn* stmt) = 0;
 };
 
 class ASTNode {
@@ -150,6 +159,18 @@ public:
 
 	Token getToken() { return op; }
 	ASTNode* getRight() { return right; }
+};
+
+class ASTCallExpr : public ASTNode {
+private:
+	ASTNode* callee;
+	vector<ASTNode*> args;
+public:
+	ASTCallExpr(ASTNode* _callee, vector<ASTNode*>& _args);
+	~ASTCallExpr();
+	void accept(visitor* vis);
+	ASTNode* getCallee() { return callee; }
+	vector<ASTNode*> getArgs() { return args; }
 };
 
 class ASTGroupingExpr : public ASTNode {
@@ -303,6 +324,31 @@ public:
 	bool getDef() { return isDefault; }
 };
 
+class ASTFunc : public ASTNode {
+private:
+	vector<Token> args;
+	int arity;
+	ASTNode* body;
+	Token name;
+public:
+	ASTFunc(Token _name, vector<Token>& _args, int arity, ASTNode* _body);
+	~ASTFunc();
+	void accept(visitor* vis);
+	int getArity() { return arity; }
+	vector<Token> getArgs() { return args; }
+	ASTNode* getBody() { return body; }
+	Token getName() { return name; }
+};
+
+class ASTReturn : public ASTNode {
+private:
+	ASTNode* expr;
+public:
+	ASTReturn(ASTNode* _expr);
+	~ASTReturn();
+	void accept(visitor* vis);
+	ASTNode* getExpr() { return expr; }
+};
 #pragma endregion
 
 #endif

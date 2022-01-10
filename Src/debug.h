@@ -14,10 +14,12 @@ public:
 	void visitAndExpr(ASTAndExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);
+	void visitCallExpr(ASTCallExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
 
 	void visitVarDecl(ASTVarDecl* stmt);
+	void visitFuncDecl(ASTFunc* decl);
 
 	void visitPrintStmt(ASTPrintStmt* stmt);
 	void visitExprStmt(ASTExprStmt* stmt);
@@ -28,6 +30,8 @@ public:
 	void visitBreakStmt(ASTBreakStmt* stmt);
 	void visitSwitchStmt(ASTSwitchStmt* stmt);
 	void visitCase(ASTCase* _case);
+	void visitReturnStmt(ASTReturn* stmt);
+	
 
 private:
 	string str;

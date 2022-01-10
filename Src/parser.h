@@ -21,6 +21,7 @@ private:
 #pragma region Statements
 	ASTNode* declaration();
 	ASTNode* varDecl();
+	ASTNode* funcDecl();
 	ASTNode* statement();
 
 	ASTNode* printStmt();
@@ -32,8 +33,8 @@ private:
 	ASTNode* breakStmt();
 	ASTNode* switchStmt();
 	ASTNode* _case();
+	ASTNode* _return();
 #pragma endregion
-
 
 #pragma region Precedence
 
@@ -56,6 +57,8 @@ private:
 	ASTNode* factor();
 
 	ASTNode* unary();
+
+	ASTNode* call();
 
 	ASTNode* primary();
 
@@ -82,6 +85,8 @@ private:
 	void report(int line, string _where, string msg);
 
 	void sync();
+
+	ASTCallExpr* finishCall(ASTNode* callee);
 
 #pragma endregion
 

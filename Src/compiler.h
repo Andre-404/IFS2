@@ -8,8 +8,13 @@
 
 #define LOCAL_MAX 256
 
+enum class funcType {
+	TYPE_FUNC,
+	TYPE_SCRIPT
+};
+
 struct local {
-	Token name;
+	string name;
 	int depth = -1;
 };
 
@@ -23,12 +28,17 @@ struct _break {
 class compiler : public visitor {
 public:
 	bool compiled;
-	obj* objects;//linked list
-	compiler(parser* Parser);
+	objFunc* func;
+	compiler* enclosing;
+	compiler(parser* Parser, funcType _type);//for compiling top level code
+	compiler(ASTNode* node, funcType _type);//for compiling functions
 	~compiler();
 	chunk* getCurrent();
+	objFunc* endCompiler();
 private:
+	//compiler only ever emits the code for a single function, top level code is considered a function
 	chunk* current;
+	funcType type;
 	int line;
 	//keeps track of every break statement that has been encountered
 	vector<_break> breakStmts;
@@ -62,8 +72,6 @@ private:
 	void markInit();
 	void beginScope() { scopeDepth++; }
 	void endScope();
-
-	obj* appendObject(obj* _object);
 	
 	#pragma endregion
 	
@@ -74,10 +82,12 @@ private:
 	void visitAndExpr(ASTAndExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
+	void visitCallExpr(ASTCallExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);
 
 	void visitVarDecl(ASTVarDecl* stmt);
+	void visitFuncDecl(ASTFunc* decl);
 
 	void visitPrintStmt(ASTPrintStmt* stmt);
 	void visitExprStmt(ASTExprStmt* stmt);
@@ -88,6 +98,7 @@ private:
 	void visitBreakStmt(ASTBreakStmt* stmt);
 	void visitSwitchStmt(ASTSwitchStmt* stmt);
 	void visitCase(ASTCase* _case);
+	void visitReturnStmt(ASTReturn* stmt);
 };
 
 

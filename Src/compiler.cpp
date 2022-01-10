@@ -5,39 +5,65 @@
 #endif
 
 
-compiler::compiler(parser* Parser) {
+compiler::compiler(parser* Parser, funcType _type) {
 	compiled = true;
+	enclosing = NULL;
+	func = new objFunc();
 	current = NULL;
 	line = 0;
+	type = _type;
 	//locals
 	scopeDepth = 0;
 	localCount = 0;
-	//this list will be passed to the vm when it's created
-	objects = NULL;
 	//Don't compile if we had a parse error
 	if (Parser->hadError) {
 		//Do nothing
 		compiled = false;
 	}
 	else {
-		current = new chunk;
+		current = &func->body;
+		local* _local = &locals[localCount++];
+		_local->depth = 0;
+		_local->name = "";
 		try {
 			for (int i = 0; i < Parser->statements.size(); i++) {
 				Parser->statements[i]->accept(this);
 			}
-			emitReturn();
-			#ifdef DEBUG_PRINT_CODE
-						getCurrent()->disassemble("code");
-			#endif
 		}
 		catch (int e) {
-			delete current;
+			delete func;
 			current = NULL;
+			func = NULL;
 			compiled = false;
 		}
 	}
 }
 
+compiler::compiler(ASTNode* node, funcType _type) {
+	compiled = true;
+	enclosing = NULL;
+	func = new objFunc();//everything gets compiled to this func, meaning 1 compiler per function
+	line = 0;
+	type = _type;
+	//locals
+	scopeDepth = 0;
+	localCount = 0;
+	current = &func->body;
+	//first slot in the callstack is always taken
+	local* _local = &locals[localCount++];
+	_local->depth = 0;
+	_local->name = "";
+	try {
+		node->accept(this);
+	}
+	catch (int e) {
+		delete func;
+		current = NULL;
+		func = NULL;
+		compiled = false;
+	}
+
+}
 compiler::~compiler() {
 
 }
@@ -95,6 +121,14 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	}
 }
 
+void compiler::visitCallExpr(ASTCallExpr* expr) {
+	expr->getCallee()->accept(this);
+	for (ASTNode* arg : expr->getArgs()) {
+		arg->accept(this);
+	}
+	emitBytes(OP_CALL, expr->getArgs().size());
+}
+
 void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {
 	expr->getExpr()->accept(this);
 }
@@ -116,7 +150,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 		string _temp(token.lexeme);//converts string_view to string
 		_temp.erase(0, 1);
 		_temp.erase(_temp.size() - 1, 1);
-		emitConstant(OBJ_VAL(appendObject(copyString(_temp))));
+		emitConstant(OBJ_VAL(copyString(_temp)));
 		break;
 	}
 
@@ -138,6 +172,8 @@ void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 	}
 }
 
+
+
 void compiler::visitVarDecl(ASTVarDecl* stmt) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
 	line = stmt->getToken().line;
@@ -153,6 +189,34 @@ void compiler::visitVarDecl(ASTVarDecl* stmt) {
 	//the slot that the compiled value is at becomes a local var
 	defineVar(global);
 }
+
+void compiler::visitFuncDecl(ASTFunc* decl) {
+	//this is a bit weird(and goes against visitor principle), but there is not other way of doing it
+	//maybe we can make it not requite a second compiler by resetting every var and writing to a new chunk
+	if (type == funcType::TYPE_SCRIPT) {
+		uint8_t name = parseVar(decl->getName());
+		//enclosing field is for closures, endCompiler ensures there is always a return op at the end
+		compiler temp = compiler(decl, funcType::TYPE_FUNC);
+		temp.enclosing = this;
+		objFunc* func = temp.endCompiler();
+		emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(func)));
+		defineVar(name);
+		return;
+	}
+	//this is executed in child instances of compiler(where type isn't TYPE_SCRIPT), this compiles the actual function
+	beginScope();
+	for (Token& var : decl->getArgs()) {
+		uint8_t constant = parseVar(var);
+		defineVar(constant);
+	}
+	decl->getBody()->accept(this);
+	//endScope();
+	func->arity = decl->getArgs().size();
+	string str(decl->getName().lexeme);
+	func->name = copyString(str);
+}
+
+
 
 void compiler::visitPrintStmt(ASTPrintStmt* stmt) {
 	stmt->getExpr()->accept(this);
@@ -233,7 +297,7 @@ void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
 	//which is called at the end of loops
 	line = stmt->getToken().line;
 	emitByte(OP_BREAK);
-	int breakJump = current->code.size();
+	int breakJump = getCurrent()->code.size();
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
 	breakStmts.emplace_back(scopeDepth, breakJump, localCount);
@@ -246,11 +310,11 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 	//based on the switch stmt type(all num, all string or mixed) we create a new switch table struct and get it's pos
 	//passing in the size to call .reserve() on map/vector
 	switchType type = stmt->getType();
-	int pos = current->addSwitch(switchTable(type, stmt->getCases().size()));
-	switchTable& table = current->switchTables[pos];
+	int pos = getCurrent()->addSwitch(switchTable(type, stmt->getCases().size()));
+	switchTable& table = getCurrent()->switchTables[pos];
 	emitBytes(OP_SWITCH, pos);
 
-	long start = current->code.size();
+	long start = getCurrent()->code.size();
 	//TODO:defaults
 	for (ASTNode* _case : stmt->getCases()) {
 		ASTCase* curCase = (ASTCase*)_case;
@@ -262,7 +326,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
 				//TODO: round this?
 				int key = std::stoi(string(expr->getToken().lexeme));
-				long _ip = current->code.size() - start;
+				long _ip = getCurrent()->code.size() - start;
 
 				table.addToArr(key, _ip);
 				break;
@@ -271,7 +335,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			case switchType::STRING:
 			case switchType::MIXED: {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
-				long _ip = current->code.size() - start;
+				long _ip = getCurrent()->code.size() - start;
 				//converts string_view to string and get's rid of ""
 				string _temp(expr->getToken().lexeme);
 				if (expr->getToken().type == TOKEN_STRING) {
@@ -284,12 +348,12 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			}
 		}
 		else {
-			table.defaultJump = current->code.size() - start;
+			table.defaultJump = getCurrent()->code.size() - start;
 		}
 		curCase->accept(this);
 	}
 	//implicit default if the user hasn't defined one, jumps to the end of switch stmt
-	if (table.defaultJump == -1) table.defaultJump = current->code.size() - start;
+	if (table.defaultJump == -1) table.defaultJump = getCurrent()->code.size() - start;
 	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
 	endScope();
 	patchBreak();
@@ -303,12 +367,24 @@ void compiler::visitCase(ASTCase* stmt) {
 	}
 }
 
+void compiler::visitReturnStmt(ASTReturn* stmt) {
+	if (type == funcType::TYPE_SCRIPT) {
+		error("Can't return from top-level code.");
+	}
+	if (stmt->getExpr() == NULL) {
+		emitReturn();
+		return;
+	}
+	stmt->getExpr()->accept(this);
+	emitByte(OP_RETURN);
+}
+
 #pragma region helpers
 
 #pragma region Emitting bytes
 
 void compiler::emitByte(uint8_t byte) {
-	current->writeData(byte, line);//line is incremented whenever we find a statement/expression that contains tokens
+	getCurrent()->writeData(byte, line);//line is incremented whenever we find a statement/expression that contains tokens
 }
 
 void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
@@ -337,13 +413,14 @@ void compiler::emitConstant(Value value) {
 
 
 void compiler::emitReturn() {
+	emitByte(OP_NIL);
 	emitByte(OP_RETURN);
 }
 
 int compiler::emitJump(OpCode jumpType) {
 	emitByte((uint8_t)jumpType);
 	emitBytes(0xff, 0xff);
-	return current->code.size() - 2;
+	return getCurrent()->code.size() - 2;
 }
 
 void compiler::patchJump(int offset) {
@@ -370,8 +447,8 @@ void compiler::emitLoop(int start) {
 
 #pragma region Variables
 
-bool identifiersEqual(Token* a, Token* b) {
-	return (a->lexeme.size() == b->lexeme.size() && a->lexeme.compare(b->lexeme) == 0);
+bool identifiersEqual(string* a, string* b) {
+	return (a->size() == b->size() && a->compare(*b) == 0);
 }
 
 uint8_t compiler::identifierConstant(Token name) {
@@ -416,8 +493,8 @@ void compiler::declareVar(Token& name) {
 		if (_local->depth != -1 && _local->depth < scopeDepth) {
 			break;
 		}
-
-		if (identifiersEqual(&name, &_local->name)) {
+		string str = string(name.lexeme);
+		if (identifiersEqual(&str, &_local->name)) {
 			error("Already a variable with this name in this scope.");
 		}
 	}
@@ -430,7 +507,7 @@ void compiler::addLocal(Token name) {
 		return;
 	}
 	local* _local = &locals[localCount++];
-	_local->name = name;
+	_local->name = name.lexeme;
 	_local->depth = -1;
 }
 
@@ -449,7 +526,8 @@ int compiler::resolveLocal(Token& name) {
 	//checks to see if there is a local variable with a provided name, if there is return the index of the stack slot of the var
 	for (int i = localCount - 1; i >= 0; i--) {
 		local* _local = &locals[i];
-		if (identifiersEqual(&name, &_local->name)) {
+		string str = string(name.lexeme);
+		if (identifiersEqual(&str, &_local->name)) {
 			if (_local->depth == -1) {
 				error("Can't read local variable in its own initializer.");
 			}
@@ -461,6 +539,7 @@ int compiler::resolveLocal(Token& name) {
 }
 
 void compiler::markInit() {
+	if (scopeDepth == 0) return;
 	//marks variable as ready to use, any use of it before this call is a error
 	locals[localCount - 1].depth = scopeDepth;
 }
@@ -497,11 +576,12 @@ void error(string message) {
 	throw 20;
 }
 
-//adds the object to compilers objects list
-obj* compiler::appendObject(obj* _object) {
-	_object->next = objects;
-	objects = _object;
-	return _object;
+objFunc* compiler::endCompiler() {
+	emitReturn();
+	#ifdef DEBUG_PRINT_CODE
+		func->body.disassemble(func->name == NULL ? "script" : func->name->str);
+	#endif
+	return func;
 }
 
 #pragma endregion

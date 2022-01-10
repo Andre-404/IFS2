@@ -2,7 +2,6 @@
 #define __IFS_SWITCH
 
 #include "common.h"
-#include "hashTable.h"
 #include "AST.h"
 #include <unordered_map>
 

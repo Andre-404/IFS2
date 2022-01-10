@@ -32,6 +32,7 @@ parser::~parser() {
 #pragma region Statements and declarations
 ASTNode* parser::declaration() {
 	if (match({ TOKEN_VAR })) return varDecl();
+	else if (match({ TOKEN_FUNC })) return funcDecl();
 	return statement();
 }
 
@@ -45,8 +46,32 @@ ASTNode* parser::varDecl() {
 	return new ASTVarDecl(name, expr);
 }
 
+ASTNode* parser::funcDecl() {
+	Token name = consume(TOKEN_IDENTIFIER, "Expected a function name.");
+	if (scopeDepth > 0) {
+		throw error(name, "Can't declare a function outside of global scope.");
+	}
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+	vector<Token> args;
+	int arity = 0;
+	if (!check(TOKEN_RIGHT_PAREN)) {
+		do {
+			Token arg = consume(TOKEN_IDENTIFIER, "Expect argument name");
+			args.push_back(arg);
+			arity++;
+			if (arity > 255) {
+				throw error(arg, "Functions can't have more than 255 arguments");
+			}
+		} while (match({ TOKEN_COMMA }));
+	}
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments");
+	consume(TOKEN_LEFT_BRACE, "Expect '{' after arguments.");
+	ASTNode* body = blockStmt();
+	return new ASTFunc(name, args, arity, body);
+}
+
 ASTNode* parser::statement() {
-	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK, TOKEN_SWITCH})) {
+	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK, TOKEN_SWITCH, TOKEN_RETURN})) {
 		switch (previous().type) {
 		case TOKEN_PRINT: return printStmt();
 		case TOKEN_LEFT_BRACE: return blockStmt();
@@ -55,6 +80,7 @@ ASTNode* parser::statement() {
 		case TOKEN_FOR: return forStmt();
 		case TOKEN_BREAK: return breakStmt();
 		case TOKEN_SWITCH: return switchStmt();
+		case TOKEN_RETURN: return _return();
 		}
 	}
 	return exprStmt();
@@ -182,6 +208,15 @@ ASTNode* parser::_case() {
 	return new ASTCase(matchExpr, stmts, false);
 }
 
+ASTNode* parser::_return() {
+	ASTNode* expr = NULL;
+	if (!match({ TOKEN_SEMICOLON })) {
+		expr = expression();
+		consume(TOKEN_SEMICOLON, "Expect ';' at the end of return.");
+	}
+	return new ASTReturn(expr);
+}
+
 #pragma endregion
 
 #pragma region Precedence
@@ -290,12 +325,28 @@ ASTNode* parser::factor() {
 }
 
 ASTNode* parser::unary() {
+	//TODO: fix this mess
 	while(match({ TOKEN_MINUS, TOKEN_BANG, TOKEN_TILDA })) {
 		Token op = previous();
-		ASTNode* right = primary();
+		ASTNode* right = call();
 		return new ASTUnaryExpr(op, right);
 	}
-	return primary();
+	return call();
+}
+
+ASTNode* parser::call() {
+	ASTNode* expr = primary();
+
+	while (true) {
+		if (match({ TOKEN_LEFT_PAREN })) {
+			expr = finishCall(expr);
+		}
+		else {
+			break;
+		}
+	}
+
+	return expr;
 }
 
 ASTNode* parser::primary() {
@@ -390,6 +441,19 @@ void parser::sync() {
 
 		advance();
 	}
+}
+
+ASTCallExpr* parser::finishCall(ASTNode* callee) {
+	vector<ASTNode*> args;
+
+	if (!check(TOKEN_RIGHT_PAREN)) {
+		do {
+			args.push_back(expression());
+		} while (match({ TOKEN_COMMA }));
+	}
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+
+	return new ASTCallExpr(callee, args);
 }
 
 #pragma endregion

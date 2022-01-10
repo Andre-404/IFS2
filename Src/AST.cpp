@@ -88,6 +88,25 @@ void ASTUnaryExpr::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Call expr
+ASTCallExpr::ASTCallExpr(ASTNode* _callee, vector<ASTNode*>& _args) {
+	callee = _callee;
+	args = _args;
+	type = ASTType::CALL;
+}
+ASTCallExpr::~ASTCallExpr() {
+	delete callee;
+	for (ASTNode* node : args) {
+		delete node;
+	}
+}
+
+void ASTCallExpr::accept(visitor* vis) {
+	vis->visitCallExpr(this);
+}
+
+#pragma endregion
+
 #pragma region Grouping expr
 ASTGroupingExpr::ASTGroupingExpr(ASTNode* _expr) {
 	expr = _expr;
@@ -115,7 +134,7 @@ void ASTLiteralExpr::accept(visitor* vis) {
 #pragma endregion
 
 
-#pragma region Var declaration
+#pragma region Var decl
 ASTVarDecl::ASTVarDecl(Token _name, ASTNode* _setExpr) {
 	name = _name;
 	setExpr = _setExpr;
@@ -132,6 +151,24 @@ void ASTVarDecl::accept(visitor* vis) {
 
 
 #pragma endregion
+
+#pragma region Function decl
+ASTFunc::ASTFunc(Token _name, vector<Token>& _args, int _arity, ASTNode* _body) {
+	args = _args;
+	arity = _arity;
+	body = _body;
+	type = ASTType::FUNC;
+	name = _name;
+}
+ASTFunc::~ASTFunc() {
+	delete body;
+}
+
+void ASTFunc::accept(visitor* vis) {
+	vis->visitFuncDecl(this);
+}
+#pragma endregion
+
 
 
 #pragma region Print stmt
@@ -296,4 +333,20 @@ void ASTCase::accept(visitor* vis) {
 	vis->visitCase(this);
 }
 #pragma endregion
+
+#pragma region Return
+ASTReturn::ASTReturn(ASTNode* _expr) {
+	expr = _expr;
+	type = ASTType::RETURN;
+}
+ASTReturn::~ASTReturn() {
+	delete expr;
+}
+
+void ASTReturn::accept(visitor* vis) {
+	vis->visitReturnStmt(this);
+}
+#pragma endregion
+
+
 

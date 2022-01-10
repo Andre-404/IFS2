@@ -11,21 +11,27 @@ enum class interpretResult {
 	INTERPRETER_RUNTIME_ERROR
 };
 
-#define STACK_MAX 256
+struct callFrame {
+	objFunc* function;
+	long ip;
+	Value* slots;
+};
+
+#define FRAMES_MAX 64
+#define STACK_MAX (FRAMES_MAX * 255)
 
 class vm {
 public:
 	vm(compiler* current);
 	~vm();
 	uint8_t getOp(long _ip);
-	interpretResult interpret(chunk* _chunk);
+	interpretResult interpret(objFunc* _chunk);
 	interpretResult run();
-	obj* objects;//linked list
 private:
-	long ip;
-	chunk* curChunk;
 	Value stack[STACK_MAX];
 	Value* stackTop;
+	callFrame frames[FRAMES_MAX];
+	int frameCount;
 	hashTable globals;
 	void concatenate();
 	void push(Value val);
@@ -33,8 +39,9 @@ private:
 	Value peek(int depth);
 	void resetStack();
 	void runtimeError(const char* format, ...);
-	obj* appendObject(obj* _object);//append to the 'objects' list
 	void freeObjects();
+	bool callValue(Value callee, int argCount);
+	bool call(objFunc* function, int argCount);
 };
 
 

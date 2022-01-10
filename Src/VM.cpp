@@ -1,14 +1,13 @@
 #include "VM.h"
 #include "debug.h"
+#include "namespaces.h"
 #include <stdarg.h>
 
 vm::vm(compiler* current) {
-	curChunk = NULL;
-	objects = current->objects;
-	ip = 0;
+	frameCount = 0;
 	resetStack();
 	if (!current->compiled) return;
-	interpret(current->getCurrent());
+	interpret(current->endCompiler());
 }
 
 vm::~vm() {
@@ -18,7 +17,7 @@ vm::~vm() {
 #pragma region Helpers
 
 uint8_t vm::getOp(long _ip) {
-	return curChunk->code[_ip];
+	return frames[frameCount - 1].function->body.code[_ip];
 }
 
 void vm::push(Value val) {
@@ -46,9 +45,13 @@ void vm::runtimeError(const char* format, ...) {
 	va_end(args);
 	fputs("\n", stderr);
 
-	size_t instruction = ip - 1;
-	int line = curChunk->lines[instruction];
-	fprintf(stderr, "[line %d] in script\n", line);
+	for (int i = frameCount - 1; i >= 0; i--) {
+		callFrame* frame = &frames[i];
+		objFunc* function = frame->function;
+		size_t instruction = frame->ip - 1;
+		fprintf(stderr, "[line %d] in ", function->body.lines[instruction]);
+		std::cout << (function->name == NULL ? "script" : function->name->str) << "()\n";
+	}
 	resetStack();
 }
 
@@ -63,37 +66,67 @@ void vm::concatenate() {
 	
 	string str = string(a->str + b->str);
 	objString* result = takeString(str);
-	push(OBJ_VAL(appendObject(result)));
-}
-
-obj* vm::appendObject(obj* _object) {
-	_object->next = objects;
-	objects = _object;
-	return _object;
+	push(OBJ_VAL(result));
 }
 
 void vm::freeObjects() {
-	obj* object = objects;
+	obj* object = global::objects;
 	while (object != NULL) {
 		obj* next = object->next;
 		freeObject(object);
 		object = next;
 	}
 }
+
+bool vm::callValue(Value callee, int argCount) {
+	if (IS_OBJ(callee)) {
+		switch (OBJ_TYPE(callee)) {
+		case OBJ_FUNC:
+			return call(AS_FUNCTION(callee), argCount);
+		default:
+			break; // Non-callable object type.
+		}
+	}
+	runtimeError("Can only call functions and classes.");
+	return false;
+}
+
+bool vm::call(objFunc* function, int argCount) {
+	if (argCount != function->arity) {
+		runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+		return false;
+	}
+
+	if (frameCount == FRAMES_MAX) {
+		runtimeError("Stack overflow.");
+		return false;
+	}
+
+	callFrame* frame = &frames[frameCount++];
+	frame->function = function;
+	frame->ip = 0;
+	frame->slots = stackTop - argCount - 1;
+	return true;
+
+}
 #pragma endregion
 
 
 
-interpretResult vm::interpret(chunk* _chunk) {
-	curChunk = _chunk;
-	ip = 0;
+interpretResult vm::interpret(objFunc* func) {
+	//create a new function(implicit one for the whole code), and put it on the call stack
+	if (func == NULL) return interpretResult::INTERPRETER_RUNTIME_ERROR;
+	push(OBJ_VAL(func));
+	call(func, 0);
+
 	return run();
 }
 
 interpretResult vm::run() {
+	callFrame* frame = &frames[frameCount - 1];
 	#pragma region Macros
-	#define READ_BYTE() (getOp(ip++))
-	#define READ_CONSTANT() (curChunk->constants[READ_BYTE()])
+	#define READ_BYTE() (getOp(frame->ip++))
+	#define READ_CONSTANT() (frames[frameCount - 1].function->body.constants[READ_BYTE()])
 	#define READ_STRING() AS_STRING(READ_CONSTANT())
 	#define BINARY_OP(valueType, op) \
 		do { \
@@ -117,9 +150,12 @@ interpretResult vm::run() {
 			push(valueType((double)((int)a op (int)b))); \
 		} while (false)
 
-	#define READ_SHORT() (ip += 2, (uint16_t)((getOp(ip-2) << 8) | getOp(ip-1)))
+	#define READ_SHORT() (frame->ip += 2, (uint16_t)((getOp(frame->ip-2) << 8) | getOp(frame->ip-1)))
 
 	#pragma endregion
+	#ifdef DEBUG_TRACE_EXECUTION
+		std::cout << "-------------Code execution starts-------------\n";
+	#endif // DEBUG_TRACE_EXECUTION
 
 	while (true) {
 		#ifdef DEBUG_TRACE_EXECUTION
@@ -130,7 +166,7 @@ interpretResult vm::run() {
 			std::cout << "] ";
 		}
 		std::cout << "\n";
-		disassembleInstruction(curChunk, ip);
+		disassembleInstruction(&frame->function->body, frames[frameCount - 1].ip);
 		#endif
 
 		uint8_t instruction;
@@ -258,12 +294,12 @@ interpretResult vm::run() {
 		}
 		case OP_GET_LOCAL: {
 			uint8_t slot = READ_BYTE();
-			push(stack[slot]);
+			push(frame->slots[slot]);
 			break;
 		}
 		case OP_SET_LOCAL: {
 			uint8_t slot = READ_BYTE();
-			stack[slot] = peek(0);
+			frame->slots[slot] = peek(0);
 			break;
 		}
 		#pragma endregion
@@ -271,27 +307,27 @@ interpretResult vm::run() {
 		#pragma region Control flow
 		case OP_JUMP_IF_TRUE: {
 			uint16_t offset = READ_SHORT();
-			if (!isFalsey(peek(0))) ip += offset;
+			if (!isFalsey(peek(0))) frame->ip += offset;
 			break;
 		}
 		case OP_JUMP_IF_FALSE: {
 			uint16_t offset = READ_SHORT();
-			if (isFalsey(peek(0))) ip += offset;
+			if (isFalsey(peek(0))) frame->ip += offset;
 			break;
 		}
 		case OP_JUMP_IF_FALSE_POP: {
 			uint16_t offset = READ_SHORT();
-			if (isFalsey(pop())) ip += offset;
+			if (isFalsey(pop())) frame->ip += offset;
 			break;
 		}
 		case OP_JUMP: {
 			uint16_t offset = READ_SHORT();
-			ip += offset;
+			frame->ip += offset;
 			break;
 		}
 		case OP_LOOP: {
 			uint16_t offset = READ_SHORT();
-			ip -= offset;
+			frame->ip -= offset;
 			break;
 		}
 		case OP_BREAK: {
@@ -302,13 +338,13 @@ interpretResult vm::run() {
 				i++;
 			}
 			uint16_t offset = READ_SHORT();
-			ip += offset;
+			frame->ip += offset;
 			break;
 		}
 		case OP_SWITCH: {
 			if (IS_STRING(peek(0)) || IS_NUMBER(peek(0))) {
 				int pos = READ_BYTE();
-				switchTable& _table = curChunk->switchTables[pos];
+				switchTable& _table = frames[frameCount - 1].function->body.switchTables[pos];
 				//default jump exists for every switch, and if it's not user defined it jumps to the end of switch
 				switch (_table.type) {
 				case switchType::NUM: {
@@ -317,11 +353,11 @@ interpretResult vm::run() {
 						int num = AS_NUMBER(pop());
 						long jumpLength = _table.getJump(num);
 						if (jumpLength != -1) {
-							ip += jumpLength;
+							frame->ip += jumpLength;
 							break;
 						}
 					}
-					ip += _table.defaultJump;
+					frame->ip += _table.defaultJump;
 					break;
 				}
 				case switchType::STRING: {
@@ -329,11 +365,11 @@ interpretResult vm::run() {
 						objString* str = AS_STRING(pop());
 						long jumpLength = _table.getJump(str->str);
 						if (jumpLength != -1) {
-							ip += jumpLength;
+							frame->ip += jumpLength;
 							break;
 						}
 					}
-					ip += _table.defaultJump;
+					frame->ip += _table.defaultJump;
 					break;
 				}
 				case switchType::MIXED: {
@@ -343,24 +379,47 @@ interpretResult vm::run() {
 					else str = std::to_string((int)AS_NUMBER(pop()));
 					long jumpLength = _table.getJump(str);
 					if (jumpLength != -1) {
-						ip += jumpLength;
+						frame->ip += jumpLength;
 						break;
 					}
-					ip += _table.defaultJump;
+					frame->ip += _table.defaultJump;
 					break;
 				}
 				}
 			}else {
 				runtimeError("Switch expression can be only string or number.");
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
 			}
 			break;
 		}
 		#pragma endregion
 
-
-		case OP_RETURN: {
-			return interpretResult::INTERPRETER_OK;
+		#pragma region Functions
+		case OP_CALL: {
+			int argCount = READ_BYTE();
+			if (!callValue(peek(argCount), argCount)) {
+				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+			}
+			frame = &frames[frameCount - 1];
+			break;
 		}
+		case OP_RETURN: {
+			Value result = pop();
+			frameCount--;
+			if (frameCount == 0) {
+				pop();
+				return interpretResult::INTERPRETER_OK;
+			}
+
+			stackTop = frame->slots;
+			push(result);
+			frame = &frames[frameCount - 1];
+			break;
+		}
+		#pragma endregion
+
+
+		
 		}
 	}
 
