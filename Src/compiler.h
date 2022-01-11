@@ -25,27 +25,37 @@ struct _break {
 	_break(int _d, int _o, int _varNum) : depth(_d), offset(_o), varNum(_varNum) {}
 };
 
-class compiler : public visitor {
-public:
-	bool compiled;
-	objFunc* func;
-	compiler* enclosing;
-	compiler(parser* Parser, funcType _type);//for compiling top level code
-	compiler(ASTNode* node, funcType _type);//for compiling functions
-	~compiler();
-	chunk* getCurrent();
-	objFunc* endCompiler();
-private:
-	//compiler only ever emits the code for a single function, top level code is considered a function
-	chunk* current;
+struct compilerInfo {
+	//for closures
+	compilerInfo* enclosing;
+	//function that's currently being compiled
+	objFunc* func = new objFunc();
+	chunk* code = &func->body;
 	funcType type;
-	int line;
+
+	int line = 0;
 	//keeps track of every break statement that has been encountered
 	vector<_break> breakStmts;
 	//locals
 	local locals[LOCAL_MAX];
-	int localCount;
-	int scopeDepth;
+	int localCount = 0;
+	int scopeDepth = 0;
+	compilerInfo(compilerInfo* _enclosing, funcType _type);
+};
+
+class compiler : public visitor {
+public:
+	bool compiled;
+	//objFunc* func;
+	//compiler* enclosing;
+	compiler(parser* Parser, funcType _type);//for compiling top level code
+	compiler(ASTNode* node, funcType _type);//for compiling functions
+	~compiler();
+	chunk* getChunk();
+	objFunc* endFuncDecl();
+private:
+	//compiler only ever emits the code for a single function, top level code is considered a function
+	compilerInfo* current;
 
 	#pragma region Helpers
 	//emitters
@@ -70,7 +80,7 @@ private:
 	void addLocal(Token name);
 	int resolveLocal(Token& name);
 	void markInit();
-	void beginScope() { scopeDepth++; }
+	void beginScope() { current->scopeDepth++; }
 	void endScope();
 	
 	#pragma endregion

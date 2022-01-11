@@ -42,6 +42,7 @@ private:
 	void freeObjects();
 	bool callValue(Value callee, int argCount);
 	bool call(objFunc* function, int argCount);
+	void defineNative(string name, NativeFn func, int arity);
 };
 
 

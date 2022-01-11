@@ -20,7 +20,12 @@ void printValue(Value value) {
         std::cout << (AS_BOOL(value) ? "true" : "false");
         break;
     case VAL_NIL: std::cout << "nil"; break;
-    case VAL_NUM: std::cout << AS_NUMBER(value); break;
+    case VAL_NUM: {
+        double num = AS_NUMBER(value);
+        if (num != ((int)num)) std::cout << num;
+        else std::cout << (int)num;
+        break;
+    }
     case VAL_OBJ: printObject(value); break;
     }
 }
@@ -39,6 +44,7 @@ Value NIL_VAL() {
     val.as.num = 0;
     return val;
 }
+
 Value NUMBER_VAL(double number) {
     Value val;
     val.type = VAL_NUM;

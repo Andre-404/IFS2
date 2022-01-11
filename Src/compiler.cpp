@@ -5,65 +5,34 @@
 #endif
 
 
+compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing(_enclosing), type(_type) {
+	//first slot is claimed for functio name
+	local* _local = &locals[localCount++];
+	_local->depth = 0;
+	_local->name = "";
+}
+
+
 compiler::compiler(parser* Parser, funcType _type) {
 	compiled = true;
-	enclosing = NULL;
-	func = new objFunc();
-	current = NULL;
-	line = 0;
-	type = _type;
-	//locals
-	scopeDepth = 0;
-	localCount = 0;
+	current = new compilerInfo(NULL, funcType::TYPE_SCRIPT);
 	//Don't compile if we had a parse error
 	if (Parser->hadError) {
 		//Do nothing
 		compiled = false;
 	}
 	else {
-		current = &func->body;
-		local* _local = &locals[localCount++];
-		_local->depth = 0;
-		_local->name = "";
 		try {
 			for (int i = 0; i < Parser->statements.size(); i++) {
 				Parser->statements[i]->accept(this);
 			}
 		}
 		catch (int e) {
-			delete func;
-			current = NULL;
-			func = NULL;
 			compiled = false;
 		}
 	}
 }
 
-compiler::compiler(ASTNode* node, funcType _type) {
-	compiled = true;
-	enclosing = NULL;
-	func = new objFunc();//everything gets compiled to this func, meaning 1 compiler per function
-	line = 0;
-	type = _type;
-	//locals
-	scopeDepth = 0;
-	localCount = 0;
-	current = &func->body;
-	//first slot in the callstack is always taken
-	local* _local = &locals[localCount++];
-	_local->depth = 0;
-	_local->name = "";
-	try {
-		node->accept(this);
-	}
-	catch (int e) {
-		delete func;
-		current = NULL;
-		func = NULL;
-		compiled = false;
-	}
-
-}
 compiler::~compiler() {
 
 }
@@ -100,7 +69,7 @@ void compiler::visitAndExpr(ASTAndExpr* expr) {
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	expr->getLeft()->accept(this);
 	expr->getRight()->accept(this);
-	line = expr->getToken().line;
+	current->line = expr->getToken().line;
 	switch (expr->getToken().type) {
 	//take in double or string(in case of add)
 	case TOKEN_PLUS: emitByte(OP_ADD); break;
@@ -135,7 +104,7 @@ void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {
 
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	const Token& token = expr->getToken();
-	line = token.line;
+	current->line = token.line;
 	switch (token.type) {
 	case TOKEN_NUMBER: {
 		double num = std::stod(string(token.lexeme));//doing this becuase stod doesn't accept string_view
@@ -164,7 +133,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 	expr->getRight()->accept(this);
 	Token token = expr->getToken();
-	line = token.line;
+	current->line = token.line;
 	switch (token.type) {
 	case TOKEN_MINUS: emitByte(OP_NEGATE); break;
 	case TOKEN_BANG: emitByte(OP_NOT); break;
@@ -176,7 +145,7 @@ void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 
 void compiler::visitVarDecl(ASTVarDecl* stmt) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
-	line = stmt->getToken().line;
+	current->line = stmt->getToken().line;
 	uint8_t global = parseVar(stmt->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = stmt->getExpr();
@@ -191,29 +160,27 @@ void compiler::visitVarDecl(ASTVarDecl* stmt) {
 }
 
 void compiler::visitFuncDecl(ASTFunc* decl) {
-	//this is a bit weird(and goes against visitor principle), but there is not other way of doing it
-	//maybe we can make it not requite a second compiler by resetting every var and writing to a new chunk
-	if (type == funcType::TYPE_SCRIPT) {
-		uint8_t name = parseVar(decl->getName());
-		//enclosing field is for closures, endCompiler ensures there is always a return op at the end
-		compiler temp = compiler(decl, funcType::TYPE_FUNC);
-		temp.enclosing = this;
-		objFunc* func = temp.endCompiler();
-		emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(func)));
-		defineVar(name);
-		return;
-	}
+	uint8_t name = parseVar(decl->getName());
+	markInit();
+	current = new compilerInfo(current, funcType::TYPE_FUNC);
 	//this is executed in child instances of compiler(where type isn't TYPE_SCRIPT), this compiles the actual function
+	//no need for a endScope, since returning from the function discards the entire callstack
 	beginScope();
+	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
+	//we just assign those positions to each arg
 	for (Token& var : decl->getArgs()) {
 		uint8_t constant = parseVar(var);
 		defineVar(constant);
 	}
 	decl->getBody()->accept(this);
-	//endScope();
-	func->arity = decl->getArgs().size();
+	current->func->arity = decl->getArgs().size();
+	//could get away with using string instead of objString?
 	string str(decl->getName().lexeme);
-	func->name = copyString(str);
+	current->func->name = copyString(str);
+
+	objFunc* func = endFuncDecl();
+	emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(func)));
+	defineVar(name);
 }
 
 
@@ -257,7 +224,7 @@ void compiler::visitIfStmt(ASTIfStmt* stmt) {
 void compiler::visitWhileStmt(ASTWhileStmt* stmt) {
 	//the bytecode for this is almost the same as if statement
 	//but at the end of the body, we loop back to the start of the condition
-	int loopStart = current->code.size();
+	int loopStart = getChunk()->code.size();
 	stmt->getCondition()->accept(this);
 	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
 	stmt->getBody()->accept(this);
@@ -270,7 +237,7 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 	//we wrap this in a scope so if there is a var declaration in the initialization it's scoped to the loop
 	beginScope();
 	if(stmt->getInit() != NULL) stmt->getInit()->accept(this);
-	int loopStart = current->code.size();
+	int loopStart = getChunk()->code.size();
 	//only emit the exit jump code if there is a condition expression
 	int exitJump = -1;
 	if (stmt->getCondition() != NULL) { 
@@ -295,12 +262,12 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
 	//the amount of variables to pop and the amount of code to jump is determined in handleBreak()
 	//which is called at the end of loops
-	line = stmt->getToken().line;
+	current->line = stmt->getToken().line;
 	emitByte(OP_BREAK);
-	int breakJump = getCurrent()->code.size();
+	int breakJump = getChunk()->code.size();
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
-	breakStmts.emplace_back(scopeDepth, breakJump, localCount);
+	current->breakStmts.emplace_back(current->scopeDepth, breakJump, current->localCount);
 }
 
 void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
@@ -310,11 +277,11 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 	//based on the switch stmt type(all num, all string or mixed) we create a new switch table struct and get it's pos
 	//passing in the size to call .reserve() on map/vector
 	switchType type = stmt->getType();
-	int pos = getCurrent()->addSwitch(switchTable(type, stmt->getCases().size()));
-	switchTable& table = getCurrent()->switchTables[pos];
+	int pos = getChunk()->addSwitch(switchTable(type, stmt->getCases().size()));
+	switchTable& table = getChunk()->switchTables[pos];
 	emitBytes(OP_SWITCH, pos);
 
-	long start = getCurrent()->code.size();
+	long start = getChunk()->code.size();
 	//TODO:defaults
 	for (ASTNode* _case : stmt->getCases()) {
 		ASTCase* curCase = (ASTCase*)_case;
@@ -326,7 +293,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
 				//TODO: round this?
 				int key = std::stoi(string(expr->getToken().lexeme));
-				long _ip = getCurrent()->code.size() - start;
+				long _ip = getChunk()->code.size() - start;
 
 				table.addToArr(key, _ip);
 				break;
@@ -335,7 +302,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			case switchType::STRING:
 			case switchType::MIXED: {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
-				long _ip = getCurrent()->code.size() - start;
+				long _ip = getChunk()->code.size() - start;
 				//converts string_view to string and get's rid of ""
 				string _temp(expr->getToken().lexeme);
 				if (expr->getToken().type == TOKEN_STRING) {
@@ -348,12 +315,12 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			}
 		}
 		else {
-			table.defaultJump = getCurrent()->code.size() - start;
+			table.defaultJump = getChunk()->code.size() - start;
 		}
 		curCase->accept(this);
 	}
 	//implicit default if the user hasn't defined one, jumps to the end of switch stmt
-	if (table.defaultJump == -1) table.defaultJump = getCurrent()->code.size() - start;
+	if (table.defaultJump == -1) table.defaultJump = getChunk()->code.size() - start;
 	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
 	endScope();
 	patchBreak();
@@ -368,7 +335,7 @@ void compiler::visitCase(ASTCase* stmt) {
 }
 
 void compiler::visitReturnStmt(ASTReturn* stmt) {
-	if (type == funcType::TYPE_SCRIPT) {
+	if (current->type == funcType::TYPE_SCRIPT) {
 		error("Can't return from top-level code.");
 	}
 	if (stmt->getExpr() == NULL) {
@@ -384,7 +351,7 @@ void compiler::visitReturnStmt(ASTReturn* stmt) {
 #pragma region Emitting bytes
 
 void compiler::emitByte(uint8_t byte) {
-	getCurrent()->writeData(byte, line);//line is incremented whenever we find a statement/expression that contains tokens
+	getChunk()->writeData(byte, current->line);//line is incremented whenever we find a statement/expression that contains tokens
 }
 
 void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
@@ -397,7 +364,7 @@ void compiler::emit16Bit(unsigned short number) {
 }
 
 uint8_t compiler::makeConstant(Value value) {
-	int constant = getCurrent()->addConstant(value);
+	int constant = getChunk()->addConstant(value);
 	if (constant > UINT8_MAX) {
 		error("Too many constants in one chunk.");
 		return 0;
@@ -420,24 +387,24 @@ void compiler::emitReturn() {
 int compiler::emitJump(OpCode jumpType) {
 	emitByte((uint8_t)jumpType);
 	emitBytes(0xff, 0xff);
-	return getCurrent()->code.size() - 2;
+	return getChunk()->code.size() - 2;
 }
 
 void compiler::patchJump(int offset) {
 	// -2 to adjust for the bytecode for the jump offset itself.
-	int jump = current->code.size() - offset - 2;
+	int jump = getChunk()->code.size() - offset - 2;
 	//fix for future: insert 2 more bytes into the array, but make sure to do the same in lines array
 	if (jump > UINT16_MAX) {
 		error("Too much code to jump over.");
 	}
-	current->code[offset] = (jump >> 8) & 0xff;
-	current->code[offset + 1] = jump & 0xff;
+	getChunk()->code[offset] = (jump >> 8) & 0xff;
+	getChunk()->code[offset + 1] = jump & 0xff;
 }
 
 void compiler::emitLoop(int start) {
 	emitByte(OP_LOOP);
 
-	int offset = current->code.size() - start + 2;
+	int offset = getChunk()->code.size() - start + 2;
 	if (offset > UINT16_MAX) error("Loop body too large.");
 
 	emit16Bit(offset);
@@ -458,7 +425,7 @@ uint8_t compiler::identifierConstant(Token name) {
 
 void compiler::defineVar(uint8_t name) {
 	//if this is a local var, bail out
-	if (scopeDepth > 0) { 
+	if (current->scopeDepth > 0) { 
 		markInit();
 		return; 
 	}
@@ -482,15 +449,15 @@ void compiler::namedVar(Token token, bool canAssign) {
 
 uint8_t compiler::parseVar(Token name) {
 	declareVar(name);
-	if (scopeDepth > 0) return 0;
+	if (current->scopeDepth > 0) return 0;
 	return identifierConstant(name);
 }
 
 void compiler::declareVar(Token& name) {
-	if (scopeDepth == 0) return;
-	for (int i = localCount - 1; i >= 0; i--) {
-		local* _local = &locals[i];
-		if (_local->depth != -1 && _local->depth < scopeDepth) {
+	if (current->scopeDepth == 0) return;
+	for (int i = current->localCount - 1; i >= 0; i--) {
+		local* _local = &current->locals[i];
+		if (_local->depth != -1 && _local->depth < current->scopeDepth) {
 			break;
 		}
 		string str = string(name.lexeme);
@@ -502,30 +469,30 @@ void compiler::declareVar(Token& name) {
 }
 
 void compiler::addLocal(Token name) {
-	if (localCount == LOCAL_MAX) {
+	if (current->localCount == LOCAL_MAX) {
 		error("Too many local variables in function.");
 		return;
 	}
-	local* _local = &locals[localCount++];
+	local* _local = &current->locals[current->localCount++];
 	_local->name = name.lexeme;
 	_local->depth = -1;
 }
 
 void compiler::endScope() {
 	//Pop every variable that was declared in this scope
-	scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
+	current->scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
 	int toPop = 0;
-	while (localCount > 0 && locals[localCount - 1].depth > scopeDepth) {
+	while (current->localCount > 0 && current->locals[current->localCount - 1].depth > current->scopeDepth) {
 		toPop++;
-		localCount--;
+		current->localCount--;
 	}
 	if(toPop > 0) emitBytes(OP_POPN, toPop);
 }
 
 int compiler::resolveLocal(Token& name) {
 	//checks to see if there is a local variable with a provided name, if there is return the index of the stack slot of the var
-	for (int i = localCount - 1; i >= 0; i--) {
-		local* _local = &locals[i];
+	for (int i = current->localCount - 1; i >= 0; i--) {
+		local* _local = &current->locals[i];
 		string str = string(name.lexeme);
 		if (identifiersEqual(&str, &_local->name)) {
 			if (_local->depth == -1) {
@@ -539,36 +506,36 @@ int compiler::resolveLocal(Token& name) {
 }
 
 void compiler::markInit() {
-	if (scopeDepth == 0) return;
+	if (current->scopeDepth == 0) return;
 	//marks variable as ready to use, any use of it before this call is a error
-	locals[localCount - 1].depth = scopeDepth;
+	current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
 void compiler::patchBreak() {
-	int curCode = current->code.size();
+	int curCode = getChunk()->code.size();
 	//most recent breaks are going to be on top
-	for (int i = breakStmts.size() - 1; i >= 0; i--) {
-		_break curBreak = breakStmts[i];
+	for (int i = current->breakStmts.size() - 1; i >= 0; i--) {
+		_break curBreak = current->breakStmts[i];
 		//if the break stmt we're looking at has a depth that's equal or higher than current depth, we bail out
-		if (curBreak.depth > scopeDepth) {
+		if (curBreak.depth > current->scopeDepth) {
 			int jumpLenght = curCode - curBreak.offset - 4;
-			int toPop = curBreak.varNum - localCount;
+			int toPop = curBreak.varNum - current->localCount;
 			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
-			current->code[curBreak.offset] = (toPop >> 8) & 0xff;
-			current->code[curBreak.offset + 1] = toPop & 0xff;
+			getChunk()->code[curBreak.offset] = (toPop >> 8) & 0xff;
+			getChunk()->code[curBreak.offset + 1] = toPop & 0xff;
 			//amount to jump
-			current->code[curBreak.offset + 2] = (jumpLenght >> 8) & 0xff;
-			current->code[curBreak.offset + 3] = jumpLenght & 0xff;
+			getChunk()->code[curBreak.offset + 2] = (jumpLenght >> 8) & 0xff;
+			getChunk()->code[curBreak.offset + 3] = jumpLenght & 0xff;
 			//delete break from array
-			breakStmts.pop_back();
+			current->breakStmts.pop_back();
 		}else break;
 	}
 }
 
 #pragma endregion
 
-chunk* compiler::getCurrent() {
-	return current;
+chunk* compiler::getChunk() {
+	return current->code;
 }
 
 void error(string message) {
@@ -576,11 +543,15 @@ void error(string message) {
 	throw 20;
 }
 
-objFunc* compiler::endCompiler() {
+objFunc* compiler::endFuncDecl() {
 	emitReturn();
 	#ifdef DEBUG_PRINT_CODE
-		func->body.disassemble(func->name == NULL ? "script" : func->name->str);
+		current->func->body.disassemble(current->func->name == NULL ? "script" : current->func->name->str);
 	#endif
+	objFunc* func = current->func;
+	compilerInfo* temp = current->enclosing;
+	delete current;
+	current = temp;
 	return func;
 }
 

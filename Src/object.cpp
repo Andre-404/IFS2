@@ -18,6 +18,9 @@ void printObject(Value value) {
 	case OBJ_FUNC:
 		printFunction(AS_FUNCTION(value));
 		break;
+	case OBJ_NATIVE:
+		std::cout << "<native fn>";
+		break;
 	}
 }
 
@@ -32,6 +35,9 @@ void freeObject(obj* object) {
 	case OBJ_FUNC: {
 		delete ((objFunc*)object);
 		break;
+	}
+	case OBJ_NATIVE: {
+		delete ((objNativeFn*)object);
 	}
 	}
 }
@@ -79,7 +85,15 @@ objString* takeString(string& str) {
 objFunc::objFunc() {
 	name = NULL;
 	arity = 0;
+	type = OBJ_FUNC;
 	next = global::objects;
 	global::objects = this;
-	type = OBJ_FUNC;
+}
+
+objNativeFn::objNativeFn(NativeFn _func, int _arity) {
+	func = _func;
+	arity = _arity;
+	type = OBJ_NATIVE;
+	next = global::objects;
+	global::objects = this;
 }

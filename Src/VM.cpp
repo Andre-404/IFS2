@@ -3,11 +3,18 @@
 #include "namespaces.h"
 #include <stdarg.h>
 
+static Value clockNative(int argCount, Value* args) {
+	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
 vm::vm(compiler* current) {
 	frameCount = 0;
 	resetStack();
 	if (!current->compiled) return;
-	interpret(current->endCompiler());
+	defineNative("clock", clockNative, 0);
+
+
+	interpret(current->endFuncDecl());
 }
 
 vm::~vm() {
@@ -45,6 +52,7 @@ void vm::runtimeError(const char* format, ...) {
 	va_end(args);
 	fputs("\n", stderr);
 
+	//prints callstack
 	for (int i = frameCount - 1; i >= 0; i--) {
 		callFrame* frame = &frames[i];
 		objFunc* function = frame->function;
@@ -83,6 +91,18 @@ bool vm::callValue(Value callee, int argCount) {
 		switch (OBJ_TYPE(callee)) {
 		case OBJ_FUNC:
 			return call(AS_FUNCTION(callee), argCount);
+		case OBJ_NATIVE: {
+			int arity = AS_NATIVE(callee)->arity;
+			if (argCount != arity) {
+				runtimeError("Expected %d arguments but got %d.", arity, argCount);
+				return false;
+			}
+			NativeFn native = AS_NATIVE(callee)->func;
+			Value result = native(argCount, stackTop - argCount);
+			stackTop -= argCount + 1;
+			push(result);
+			return true;
+		}
 		default:
 			break; // Non-callable object type.
 		}
@@ -108,6 +128,14 @@ bool vm::call(objFunc* function, int argCount) {
 	frame->slots = stackTop - argCount - 1;
 	return true;
 
+}
+
+void vm::defineNative(string name, NativeFn func, int arity) {
+	push(OBJ_VAL(copyString(name)));
+	push(OBJ_VAL(new objNativeFn(func, arity)));
+	globals.set(AS_STRING(stack[0]), stack[1]);
+	pop();
+	pop();
 }
 #pragma endregion
 
@@ -152,11 +180,11 @@ interpretResult vm::run() {
 
 	#define READ_SHORT() (frame->ip += 2, (uint16_t)((getOp(frame->ip-2) << 8) | getOp(frame->ip-1)))
 
-	#pragma endregion
 	#ifdef DEBUG_TRACE_EXECUTION
 		std::cout << "-------------Code execution starts-------------\n";
 	#endif // DEBUG_TRACE_EXECUTION
-
+	#pragma endregion
+	
 	while (true) {
 		#ifdef DEBUG_TRACE_EXECUTION
 		std::cout << "          ";
@@ -396,16 +424,19 @@ interpretResult vm::run() {
 
 		#pragma region Functions
 		case OP_CALL: {
+			//how many values are on the stack right now
 			int argCount = READ_BYTE();
 			if (!callValue(peek(argCount), argCount)) {
 				return interpretResult::INTERPRETER_RUNTIME_ERROR;
 			}
+			//if the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
 			break;
 		}
 		case OP_RETURN: {
 			Value result = pop();
 			frameCount--;
+			//if we're returning from the implicit funcition
 			if (frameCount == 0) {
 				pop();
 				return interpretResult::INTERPRETER_OK;
@@ -413,6 +444,7 @@ interpretResult vm::run() {
 
 			stackTop = frame->slots;
 			push(result);
+			//if the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
 			break;
 		}
