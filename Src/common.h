@@ -16,5 +16,5 @@
 	#define DEBUG_PRINT_AST
 	//WARNING: massivly slows down code execution
 	#define DEBUG_PRINT_CODE
-	#define DEBUG_TRACE_EXECUTION
+	//#define DEBUG_TRACE_EXECUTION
 #endif

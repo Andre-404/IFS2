@@ -27,6 +27,9 @@ void printValue(Value value) {
         break;
     }
     case VAL_OBJ: printObject(value); break;
+    default:
+        std::cout << "Error printing object";
+        exit(64);
     }
 }
 

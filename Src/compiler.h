@@ -46,16 +46,15 @@ struct compilerInfo {
 class compiler : public visitor {
 public:
 	bool compiled;
-	//objFunc* func;
-	//compiler* enclosing;
 	compiler(parser* Parser, funcType _type);//for compiling top level code
-	compiler(ASTNode* node, funcType _type);//for compiling functions
 	~compiler();
 	chunk* getChunk();
 	objFunc* endFuncDecl();
 private:
 	//compiler only ever emits the code for a single function, top level code is considered a function
 	compilerInfo* current;
+
+	parser* Parser;
 
 	#pragma region Helpers
 	//emitters
@@ -88,10 +87,9 @@ private:
 
 	//Visitor pattern
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
-	void visitOrExpr(ASTOrExpr* expr);
-	void visitAndExpr(ASTAndExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
+	void visitArrayDeclExpr(ASTArrayDeclExpr* expr);
 	void visitCallExpr(ASTCallExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);

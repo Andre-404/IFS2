@@ -5,13 +5,12 @@
 #include "scanner.h"
 
 class ASTAssignmentExpr;
-class ASTOrExpr;
-class ASTAndExpr;
 class ASTBinaryExpr;
 class ASTUnaryExpr;
+class ASTArrayDeclExpr;
+class ASTCallExpr;
 class ASTGroupingExpr;
 class ASTLiteralExpr;
-class ASTCallExpr;
 
 class ASTVarDecl;
 class ASTFunc;
@@ -48,6 +47,7 @@ enum class ASTType {
 	FUNC,
 	CALL,
 	RETURN,
+	ARRAY,
 };
 
 enum class switchType {
@@ -62,12 +62,11 @@ class visitor {
 public:
 	virtual ~visitor() {};
 	virtual void visitAssignmentExpr(ASTAssignmentExpr* expr) = 0;
-	virtual void visitOrExpr(ASTOrExpr* expr) = 0;
-	virtual void visitAndExpr(ASTAndExpr* expr) = 0;
 	virtual void visitBinaryExpr(ASTBinaryExpr* expr) = 0;
 	virtual void visitUnaryExpr(ASTUnaryExpr* expr) = 0;
-	virtual void visitGroupingExpr(ASTGroupingExpr* expr) = 0;
+	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
 	virtual void visitCallExpr(ASTCallExpr* expr) = 0;
+	virtual void visitGroupingExpr(ASTGroupingExpr* expr) = 0;
 	virtual void visitLiteralExpr(ASTLiteralExpr* expr) = 0;
 
 	virtual void visitVarDecl(ASTVarDecl* stmt) = 0;
@@ -107,32 +106,6 @@ public:
 	ASTNode* getVal() { return value; }
 };
 
-class ASTOrExpr : public ASTNode {
-private:
-	ASTNode* left;
-	ASTNode* right;
-public:
-	ASTOrExpr(ASTNode* _left, ASTNode* _right);
-	~ASTOrExpr();
-	void accept(visitor* vis);
-
-	ASTNode* getLeft() { return left; }
-	ASTNode* getRight() { return right; }
-};
-
-class ASTAndExpr : public ASTNode {
-private:
-	ASTNode* left;
-	ASTNode* right;
-public:
-	ASTAndExpr(ASTNode* _left, ASTNode* _right);
-	~ASTAndExpr();
-	void accept(visitor* vis);
-
-	ASTNode* getLeft() { return left; }
-	ASTNode* getRight() { return right; }
-};
-
 class ASTBinaryExpr : public ASTNode {
 private:
 	Token op;
@@ -161,16 +134,30 @@ public:
 	ASTNode* getRight() { return right; }
 };
 
+class ASTArrayDeclExpr : public ASTNode {
+private:
+	vector<ASTNode*> members;
+	int size;
+public:
+	ASTArrayDeclExpr(vector<ASTNode*>& _members);
+	~ASTArrayDeclExpr();
+	void accept(visitor* vis);
+	vector<ASTNode*> getMembers() { return members; }
+	int getSize() { return size; }
+};
+
 class ASTCallExpr : public ASTNode {
 private:
 	ASTNode* callee;
+	Token accessor;
 	vector<ASTNode*> args;
 public:
-	ASTCallExpr(ASTNode* _callee, vector<ASTNode*>& _args);
+	ASTCallExpr(ASTNode* _callee, Token _accessor, vector<ASTNode*>& _args);
 	~ASTCallExpr();
 	void accept(visitor* vis);
 	ASTNode* getCallee() { return callee; }
 	vector<ASTNode*> getArgs() { return args; }
+	Token getAccessor() { return accessor; }
 };
 
 class ASTGroupingExpr : public ASTNode {

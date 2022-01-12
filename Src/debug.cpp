@@ -25,14 +25,6 @@ void debugASTPrinter::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	str.append(")");
 }
 
-void debugASTPrinter::visitAndExpr(ASTAndExpr* expr) {
-	buildExpr("and", { expr->getLeft(), expr->getRight() });
-}
-
-void debugASTPrinter::visitOrExpr(ASTOrExpr* expr) {
-	buildExpr("or", { expr->getLeft(), expr->getRight() });
-}
-
 void debugASTPrinter::visitBinaryExpr(ASTBinaryExpr* expr) {
 	buildExpr(expr->getToken().lexeme, { expr->getLeft(), expr->getRight() });
 }
@@ -149,6 +141,10 @@ void debugASTPrinter::visitCallExpr(ASTCallExpr* expr) {
 }
 
 void debugASTPrinter::visitReturnStmt(ASTReturn* stmt) {
+
+}
+
+void debugASTPrinter::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 
 }
 
@@ -270,6 +266,8 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	}
 	case OP_CALL:
 		return byteInstruction("OP CALL", Chunk, offset);
+	case OP_CREATE_ARRAY:
+		return byteInstruction("OP CREATE ARRAY", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

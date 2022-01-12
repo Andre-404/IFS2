@@ -6,14 +6,15 @@
 
 
 compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing(_enclosing), type(_type) {
-	//first slot is claimed for functio name
+	//first slot is claimed for function name
 	local* _local = &locals[localCount++];
 	_local->depth = 0;
 	_local->name = "";
 }
 
 
-compiler::compiler(parser* Parser, funcType _type) {
+compiler::compiler(parser* _parser, funcType _type) {
+	Parser = _parser;
 	compiled = true;
 	current = new compilerInfo(NULL, funcType::TYPE_SCRIPT);
 	//Don't compile if we had a parse error
@@ -34,7 +35,7 @@ compiler::compiler(parser* Parser, funcType _type) {
 }
 
 compiler::~compiler() {
-
+	delete Parser;
 }
 
 void error(string message);
@@ -44,30 +45,27 @@ void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	namedVar(expr->getToken(), true);
 }
 
-void compiler::visitOrExpr(ASTOrExpr* expr) {
-	expr->getLeft()->accept(this);
-	//if the left side is true, we know that the whole expression will eval to true
-	int jump = emitJump(OP_JUMP_IF_TRUE);
-	//if now we pop the left side and eval the right side, right side result becomes the result of the whole expression
-	emitByte(OP_POP);
-	expr->getRight()->accept(this);
-	patchJump(jump);
-}
-
-void compiler::visitAndExpr(ASTAndExpr* expr) {
-	expr->getLeft()->accept(this);
-	//at this point we have the left side of the expression on the stack, and if it's false we skip to the end
-	//since we know the whole expression will evaluate to false
-	int jump = emitJump(OP_JUMP_IF_FALSE);
-	//if the left side is true, we pop it and then push the right side to the stack, and the result of right side becomes the result of
-	//whole expression
-	emitByte(OP_POP);
-	expr->getRight()->accept(this);
-	patchJump(jump);
-}
-
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	expr->getLeft()->accept(this);
+	if (expr->type == ASTType::OR) {
+		//if the left side is true, we know that the whole expression will eval to true
+		int jump = emitJump(OP_JUMP_IF_TRUE);
+		//if now we pop the left side and eval the right side, right side result becomes the result of the whole expression
+		emitByte(OP_POP);
+		expr->getRight()->accept(this);
+		patchJump(jump);
+		return;
+	}else if (expr->type == ASTType::AND) {
+		//at this point we have the left side of the expression on the stack, and if it's false we skip to the end
+		//since we know the whole expression will evaluate to false
+		int jump = emitJump(OP_JUMP_IF_FALSE);
+		//if the left side is true, we pop it and then push the right side to the stack, and the result of right side becomes the result of
+		//whole expression
+		emitByte(OP_POP);
+		expr->getRight()->accept(this);
+		patchJump(jump);
+		return;
+	}
 	expr->getRight()->accept(this);
 	current->line = expr->getToken().line;
 	switch (expr->getToken().type) {
@@ -88,6 +86,24 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	case TOKEN_LESS: emitByte(OP_LESS); break;
 	case TOKEN_LESS_EQUAL: emitByte(OP_LESS_EQUAL); break;
 	}
+}
+
+void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
+	expr->getRight()->accept(this);
+	Token token = expr->getToken();
+	current->line = token.line;
+	switch (token.type) {
+	case TOKEN_MINUS: emitByte(OP_NEGATE); break;
+	case TOKEN_BANG: emitByte(OP_NOT); break;
+	case TOKEN_TILDA: emitByte(OP_BIN_NOT); break;
+	}
+}
+
+void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
+	for (ASTNode* node : expr->getMembers()) {
+		node->accept(this);
+	}
+	emitBytes(OP_CREATE_ARRAY, expr->getSize());
 }
 
 void compiler::visitCallExpr(ASTCallExpr* expr) {
@@ -127,17 +143,6 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 		namedVar(token, false);
 		break;
 	}
-	}
-}
-
-void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
-	expr->getRight()->accept(this);
-	Token token = expr->getToken();
-	current->line = token.line;
-	switch (token.type) {
-	case TOKEN_MINUS: emitByte(OP_NEGATE); break;
-	case TOKEN_BANG: emitByte(OP_NOT); break;
-	case TOKEN_TILDA: emitByte(OP_BIN_NOT); break;
 	}
 }
 

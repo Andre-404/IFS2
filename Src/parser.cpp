@@ -2,6 +2,67 @@
 #include "AST.h"
 #include "debug.h"
 
+#pragma region Parselets
+
+class assignmentExpr : public infixParselet {
+	ASTNode* parse(ASTNode* left, Token token) {
+		ASTNode* right = cur->expression(prec - 1);
+		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
+			throw cur->error(token, "Left side is not assignable");
+		}
+		return new ASTAssignmentExpr(((ASTLiteralExpr*)left)->getToken(), right);
+	}
+};
+
+class unaryExpr : public prefixParselet {
+	ASTNode* parse(Token token) {
+		ASTNode* expr = cur->expression(prec);
+		return new ASTUnaryExpr(token, expr);
+	}
+};
+
+class arrayExpr : public prefixParselet {
+	ASTNode* parse(Token token) {
+		vector<ASTNode*> members;
+		do {
+			members.push_back(cur->expression());
+		} while (cur->match({ TOKEN_COMMA }));
+		cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
+		return new ASTArrayDeclExpr(members);
+	}
+};
+
+class literalExpr : public prefixParselet {
+	ASTNode* parse(Token token) {
+		if (token.type == TOKEN_LEFT_PAREN) {
+			ASTNode* expr = cur->expression();
+			cur->consume(TOKEN_RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
+			return new ASTGroupingExpr(expr);
+		}
+		return new ASTLiteralExpr(token);
+	}
+};
+
+class binaryExpr : public infixParselet {
+	ASTNode* parse(ASTNode* left, Token token) {
+		ASTNode* right = cur->expression(prec);
+		return new ASTBinaryExpr(left, token, right);
+	}
+};
+
+class callExpr : public infixParselet {
+	ASTNode* parse(ASTNode* left, Token token) {
+		vector<ASTNode*> args;
+		do{
+			args.push_back(cur->expression(prec));
+		} while (cur->match({ TOKEN_COMMA }));
+		cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
+		return new ASTCallExpr(left, token, args);
+	}
+};
+
+#pragma endregion
+
 parser::parser(vector<Token>* _tokens) {
 	tokens = _tokens;
 	current = 0;
@@ -9,6 +70,52 @@ parser::parser(vector<Token>* _tokens) {
 	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
+	#pragma region Parselets
+		//Prefix
+		addPrefix(TOKEN_BANG, new unaryExpr, precedence::NOT);
+		addPrefix(TOKEN_MINUS, new unaryExpr, precedence::NOT);
+		addPrefix(TOKEN_TILDA, new unaryExpr, precedence::NOT);
+
+		addPrefix(TOKEN_IDENTIFIER, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_STRING, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_NUMBER, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_TRUE, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_FALSE, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_NIL, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_PAREN, new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_BRACKET, new arrayExpr, precedence::PRIMARY);
+
+		//Infix
+		addInfix(TOKEN_EQUAL, new assignmentExpr, precedence::ASSIGNMENT);
+
+		addInfix(TOKEN_OR, new binaryExpr, precedence::OR);
+		addInfix(TOKEN_AND, new binaryExpr, precedence::AND);
+
+		addInfix(TOKEN_BITWISE_OR, new binaryExpr, precedence::BIN_OR);
+		addInfix(TOKEN_BITWISE_XOR, new binaryExpr, precedence::BIN_XOR);
+		addInfix(TOKEN_BITWISE_AND, new binaryExpr, precedence::BIN_AND);
+
+		addInfix(TOKEN_EQUAL_EQUAL, new binaryExpr, precedence::EQUALITY);
+		addInfix(TOKEN_BANG_EQUAL, new binaryExpr, precedence::EQUALITY);
+
+		addInfix(TOKEN_LESS, new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_LESS_EQUAL, new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER, new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER_EQUAL, new binaryExpr, precedence::COMPARISON);
+
+		addInfix(TOKEN_BITSHIFT_LEFT, new binaryExpr, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_RIGHT, new binaryExpr, precedence::BITSHIFT);
+
+		addInfix(TOKEN_PLUS, new binaryExpr, precedence::SUM);
+		addInfix(TOKEN_MINUS, new binaryExpr, precedence::SUM);
+
+		addInfix(TOKEN_SLASH, new binaryExpr, precedence::FACTOR);
+		addInfix(TOKEN_STAR, new binaryExpr, precedence::FACTOR);
+		addInfix(TOKEN_PERCENTAGE, new binaryExpr, precedence::FACTOR);
+
+		addInfix(TOKEN_LEFT_PAREN, new callExpr, precedence::CALL);
+	#pragma endregion
+
 
 	while (!isAtEnd()) {
 		try {
@@ -27,6 +134,8 @@ parser::~parser() {
 	for (int i = 0; i < statements.size(); i++) {
 		delete statements[i];
 	}
+	for (std::map<TokenType, prefixParselet*>::iterator it = prefixParselets.begin(); it != prefixParselets.end(); ++it) delete it->second;
+	for (std::map<TokenType, infixParselet*>::iterator it = infixParselets.begin(); it != infixParselets.end(); ++it) delete it->second;
 }
 
 #pragma region Statements and declarations
@@ -197,7 +306,7 @@ ASTNode* parser::switchStmt() {
 ASTNode* parser::_case() {
 	ASTNode* matchExpr = NULL;
 	if (previous().type != TOKEN_DEFAULT) {
-		matchExpr = primary();
+		matchExpr = expression((int)precedence::PRIMARY);
 		if (matchExpr->type == ASTType::GROUPING) throw error(previous(), "Cannot have a grouping expression as a match expression in case.");
 	}
 	consume(TOKEN_COLON, "Expect ':' after case.");
@@ -219,149 +328,26 @@ ASTNode* parser::_return() {
 
 #pragma endregion
 
-#pragma region Precedence
+ASTNode* parser::expression(int prec) {
+	Token token = advance();
+	if (prefixParselets.count(token.type) <= 0) {
+		error(token, "Expected expression.");
+	}
+	prefixParselet* prefix = prefixParselets[token.type];
+	ASTNode* left = prefix->parse(token);
 
-/*
-when matching tokens we use while to enable multiple operations one after another
-*/
+	while (prec < getPrec()) {
+		token = advance();
+
+		infixParselet* infix = infixParselets[token.type];
+		left = infix->parse(left, token);
+	}
+	return left;
+}
 
 ASTNode* parser::expression() {
-	return assignment();
+	return expression(0);
 }
-
-ASTNode* parser::assignment() {
-	ASTNode* expr = _or();
-
-	//check if this really is a assigmenent
-	if (match({ TOKEN_EQUAL })) {
-		Token prev = previous();//for errors
-		//get the right side of assingment, can be another assingment
-		//eg. a = b = 3;
-		ASTNode* val = assignment();
-
-		//check if the left side of the assignment is a literal, possibly containing a variable name
-		//(properties of objects get handled differently)
-		if (expr->type == ASTType::LITERAL) {
-			Token name = ((ASTLiteralExpr*)expr)->getToken();
-			//if this really is a variable literal, create a new assingment expr with the variable and the right side expr
-			if(name.type == TOKEN_IDENTIFIER) return new ASTAssignmentExpr(name, val);
-		}
-		error(prev, "Invalid assingment target.");
-	}
-	return expr;
-}
-
-ASTNode* parser::_or() {
-	ASTNode* expr = _and();
-	while (match({ TOKEN_OR })) {
-		ASTNode* right = _and();
-		expr = new ASTOrExpr(expr, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::_and() {
-	ASTNode* expr = equality();
-	while (match({ TOKEN_AND })) {
-		ASTNode* right = equality();
-		expr = new ASTAndExpr(expr, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::equality() {
-	ASTNode* expr = comparison();
-
-	while(match({ TOKEN_EQUAL_EQUAL })) {
-		Token op = previous();
-		ASTNode* right = comparison();
-		expr = new ASTBinaryExpr(expr, op, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::comparison() {
-	ASTNode* expr = bitshift();
-
-	while(match({ TOKEN_GREATER, TOKEN_GREATER_EQUAL, TOKEN_LESS, TOKEN_LESS_EQUAL })) {
-		Token op = previous();
-		ASTNode* right = bitshift();
-		expr = new ASTBinaryExpr(expr, op, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::bitshift() {
-	ASTNode* expr = term();
-
-	while(match({ TOKEN_BITSHIFT_LEFT, TOKEN_BITSHIFT_RIGHT })) {
-		Token op = previous();
-		ASTNode* right = term();
-		expr = new ASTBinaryExpr(expr, op, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::term() {
-	ASTNode* expr = factor();
-
-	while(match({ TOKEN_PLUS, TOKEN_MINUS })) {
-		Token op = previous();
-		ASTNode* right = factor();
-		expr = new ASTBinaryExpr(expr, op, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::factor() {
-	ASTNode* expr = unary();
-
-	while(match({ TOKEN_SLASH, TOKEN_STAR, TOKEN_PERCENTAGE })) {
-		Token op = previous();
-		ASTNode* right = unary();
-		expr = new ASTBinaryExpr(expr, op, right);
-	}
-	return expr;
-}
-
-ASTNode* parser::unary() {
-	//TODO: fix this mess
-	while(match({ TOKEN_MINUS, TOKEN_BANG, TOKEN_TILDA })) {
-		Token op = previous();
-		ASTNode* right = call();
-		return new ASTUnaryExpr(op, right);
-	}
-	return call();
-}
-
-ASTNode* parser::call() {
-	ASTNode* expr = primary();
-
-	while (true) {
-		if (match({ TOKEN_LEFT_PAREN })) {
-			expr = finishCall(expr);
-		}
-		else {
-			break;
-		}
-	}
-
-	return expr;
-}
-
-ASTNode* parser::primary() {
-	if (match({ TOKEN_LEFT_PAREN })) {
-		ASTNode* expr = expression();
-		consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
-		return new ASTGroupingExpr(expr);
-	}
-	//and literal is stored as a string_view in the token
-	if (match({ TOKEN_NUMBER, TOKEN_STRING, TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL, TOKEN_IDENTIFIER })) return new ASTLiteralExpr(previous());
-
-	throw error(peek(), "Expect expression.");
-}
-
-#pragma endregion
 
 #pragma region Helpers
 bool parser::match(const std::initializer_list<TokenType>& tokenTypes) {
@@ -444,16 +430,37 @@ void parser::sync() {
 }
 
 ASTCallExpr* parser::finishCall(ASTNode* callee) {
+	Token prev = previous();
 	vector<ASTNode*> args;
 
 	if (!check(TOKEN_RIGHT_PAREN)) {
 		do {
-			args.push_back(expression());
+			args.push_back(expression(0));
 		} while (match({ TOKEN_COMMA }));
 	}
 	consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
 
-	return new ASTCallExpr(callee, args);
+	return new ASTCallExpr(callee, prev, args);
+}
+
+void parser::addPrefix(TokenType type, prefixParselet* parselet, precedence prec) {
+	parselet->cur = this;
+	parselet->prec = (int)prec;
+	prefixParselets.insert_or_assign(type, parselet);
+}
+
+void parser::addInfix(TokenType type, infixParselet* parselet, precedence prec) {
+	parselet->cur = this;
+	parselet->prec = (int)prec;
+	infixParselets.insert_or_assign(type, parselet);
+}
+
+int parser::getPrec() {
+	Token token = peek();
+	if (infixParselets.count(token.type) == 0) {
+		return 0;
+	}
+	return infixParselets[token.type]->prec;
 }
 
 #pragma endregion

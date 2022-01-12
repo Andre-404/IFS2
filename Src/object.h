@@ -50,6 +50,7 @@ public:
 class objArray : public obj {
 public:
 	vector<Value> values;
+	objArray(vector<Value> vals);
 };
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)

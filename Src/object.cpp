@@ -21,6 +21,15 @@ void printObject(Value value) {
 	case OBJ_NATIVE:
 		std::cout << "<native fn>";
 		break;
+	case OBJ_ARRAY: {
+		std::cout << "[";
+		vector<Value> vals = AS_ARRAY(value)->values;
+		for (int i = 0; i < vals.size(); i++) {
+			printValue(vals[i]);
+			if(i != vals.size() - 1) std::cout << ", ";
+		}
+		std::cout << "]";
+	}
 	}
 }
 
@@ -38,6 +47,11 @@ void freeObject(obj* object) {
 	}
 	case OBJ_NATIVE: {
 		delete ((objNativeFn*)object);
+		break;
+	}
+	case OBJ_ARRAY: {
+		delete ((objArray*)object);
+		break;
 	}
 	}
 }
@@ -94,6 +108,13 @@ objNativeFn::objNativeFn(NativeFn _func, int _arity) {
 	func = _func;
 	arity = _arity;
 	type = OBJ_NATIVE;
+	next = global::objects;
+	global::objects = this;
+}
+
+objArray::objArray(vector<Value> vals) {
+	values = vals;
+	type = OBJ_ARRAY;
 	next = global::objects;
 	global::objects = this;
 }

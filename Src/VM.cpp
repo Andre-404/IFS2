@@ -13,8 +13,9 @@ vm::vm(compiler* current) {
 	if (!current->compiled) return;
 	defineNative("clock", clockNative, 0);
 
-
-	interpret(current->endFuncDecl());
+	objFunc* func = current->endFuncDecl();
+	delete current;
+	interpret(func);
 }
 
 vm::~vm() {
@@ -446,6 +447,26 @@ interpretResult vm::run() {
 			push(result);
 			//if the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
+			break;
+		}
+		#pragma endregion
+
+		#pragma region Arrays
+		case OP_CREATE_ARRAY: {
+			int size = READ_BYTE();
+			int i = 0;
+			vector<Value> vals;
+			while (i < size) {
+				vals.push_back(peek(size - i - 1));
+				i++;
+			}
+			objArray* arr = new objArray(vals);
+			i = 0;
+			while (i < size) {
+				pop();
+				i++;
+			}
+			push(OBJ_VAL(arr));
 			break;
 		}
 		#pragma endregion

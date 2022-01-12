@@ -42,6 +42,10 @@
 		OP_SET_GLOBAL,
 		OP_GET_LOCAL,
 		OP_SET_LOCAL,
+		//Arrays
+		OP_CREATE_ARRAY,
+		OP_GET_ARRAY,
+		OP_SET_ARRAY,
 		//control flow
 		OP_JUMP,
 		OP_JUMP_IF_FALSE,

@@ -1,6 +1,5 @@
 #include "switch.h"
 
-
 using std::vector;
 
 //based on the type we create either a hash map or array on the heap(to save space), and leave the other as null

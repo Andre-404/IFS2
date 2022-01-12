@@ -6,6 +6,7 @@
 #include "VM.h"
 #include "compiler.h"
 #include "namespaces.h"
+
 using std::cout;
 using std::cin;
 
@@ -57,6 +58,8 @@ string readFile(string path) {
 	free(buffer);
 	return s;
 }
+
+
 int main() {
 	string path;
 	cin >> path;
@@ -65,12 +68,11 @@ int main() {
 		scanner* scan = new scanner(&source);
 		parser* parse = new parser(scan->getArr());
 		compiler* comp = new compiler(parse, funcType::TYPE_SCRIPT);
-		vm newVM(comp);
 		delete scan;
-		delete parse;
-		delete comp;
-		std::cout << "mem usage after deleteions: " << global::memoryUsage;
+		vm* newVm = new vm(comp);
+		delete newVm;
 	}
+	global::internedStrings = hashTable();
 
 	cin.get();
 	return 0;

@@ -1,5 +1,4 @@
 #include "AST.h"
-#include "common.h"
 
 /*
 accept methods invoke the specific visitor functions for each node type
@@ -20,38 +19,6 @@ void ASTAssignmentExpr::accept(visitor* vis) {
 	vis->visitAssignmentExpr(this);
 }
 
-#pragma endregion
-
-#pragma region Or expr
-ASTOrExpr::ASTOrExpr(ASTNode* _left, ASTNode* _right) {
-	left = _left;
-	right = _right;
-	type = ASTType::OR;
-}
-ASTOrExpr::~ASTOrExpr() {
-	delete left;
-	delete right;
-}
-void ASTOrExpr::accept(visitor* vis) {
-	vis->visitOrExpr(this);
-}
-
-#pragma endregion
-
-#pragma region And expr
-ASTAndExpr::ASTAndExpr(ASTNode* _left, ASTNode* _right) {
-	left = _left;
-	right = _right;
-	type = ASTType::AND;
-}
-ASTAndExpr::~ASTAndExpr() {
-	delete left;
-	delete right;
-}
-
-void ASTAndExpr::accept(visitor* vis) {
-	vis->visitAndExpr(this);
-}
 #pragma endregion
 
 #pragma region Binary expr
@@ -88,11 +55,30 @@ void ASTUnaryExpr::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Array decl expr
+ASTArrayDeclExpr::ASTArrayDeclExpr(vector<ASTNode*>& _members) {
+	members = _members;
+	size = members.size();
+}
+ASTArrayDeclExpr::~ASTArrayDeclExpr() {
+	for (ASTNode* member : members) {
+		delete member;
+	}
+}
+
+void ASTArrayDeclExpr::accept(visitor* vis) {
+	vis->visitArrayDeclExpr(this);
+}
+
+#pragma endregion
+
+
 #pragma region Call expr
-ASTCallExpr::ASTCallExpr(ASTNode* _callee, vector<ASTNode*>& _args) {
+ASTCallExpr::ASTCallExpr(ASTNode* _callee, Token _accessor, vector<ASTNode*>& _args) {
 	callee = _callee;
 	args = _args;
 	type = ASTType::CALL;
+	accessor = _accessor;
 }
 ASTCallExpr::~ASTCallExpr() {
 	delete callee;
