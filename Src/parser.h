@@ -107,35 +107,6 @@ private:
 	ASTNode* _return();
 #pragma endregion
 
-#pragma region Precedence
-
-	
-
-	/*ASTNode* assignment();
-
-	ASTNode* _or();
-
-	ASTNode* _and();
-
-	ASTNode* equality();
-
-	ASTNode* comparison();
-
-	ASTNode* bitshift();
-
-	ASTNode* term();
-
-	ASTNode* factor();
-
-	ASTNode* unary();
-
-	ASTNode* arrayDecl();
-
-	ASTNode* call();
-
-	ASTNode* primary();*/
-
-#pragma endregion
 
 };
 

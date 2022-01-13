@@ -20,6 +20,7 @@ public:
 	hashTable();
 	bool set(objString* key, Value val);
 	bool get(objString* key, Value* val);
+	objString* getKey(Value val);
 	bool del(objString* key);
 	void tableAddAll(hashTable* src);
 private:

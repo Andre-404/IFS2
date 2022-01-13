@@ -1,6 +1,7 @@
 #include "VM.h"
 #include "debug.h"
 #include "namespaces.h"
+#include "builtInFunction.h"
 #include <stdarg.h>
 
 static Value clockNative(int argCount, Value* args) {
@@ -12,6 +13,15 @@ vm::vm(compiler* current) {
 	resetStack();
 	if (!current->compiled) return;
 	defineNative("clock", clockNative, 0);
+
+	defineNative("arrayCreate", nativeArrayCreate, 1);
+	defineNative("arrayResize", nativeArrayResize, 2);
+	defineNative("arrayCopy", nativeArrayCopy, 1);
+	defineNative("arrayPush", nativeArrayPush, 2);
+	defineNative("arrayPop", nativeArrayPop, 1);
+	defineNative("arrayInsert", nativeArrayInsert, 3);
+	defineNative("arrayDelete", nativeArrayDelete, 2);
+	defineNative("arrayLength", nativeArrayLength, 1);
 
 	objFunc* func = current->endFuncDecl();
 	delete current;
@@ -46,7 +56,7 @@ Value vm::peek(int depth) {
 	return stackTop[-1 - depth];
 }
 
-void vm::runtimeError(const char* format, ...) {
+interpretResult vm::runtimeError(const char* format, ...) {
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
@@ -62,6 +72,7 @@ void vm::runtimeError(const char* format, ...) {
 		std::cout << (function->name == NULL ? "script" : function->name->str) << "()\n";
 	}
 	resetStack();
+	return interpretResult::INTERPRETER_RUNTIME_ERROR;
 }
 
 static bool isFalsey(Value value) {
@@ -99,7 +110,15 @@ bool vm::callValue(Value callee, int argCount) {
 				return false;
 			}
 			NativeFn native = AS_NATIVE(callee)->func;
-			Value result = native(argCount, stackTop - argCount);
+			Value result = NIL_VAL();
+			try {
+				result = native(argCount, stackTop - argCount);
+			}catch (const char* str) {
+				const char* name = globals.getKey(callee)->str.c_str();
+				runtimeError("Error in %s: %s", name, str);
+				return false;
+			}
+			
 			stackTop -= argCount + 1;
 			push(result);
 			return true;
@@ -230,8 +249,7 @@ interpretResult vm::run() {
 		#pragma region Unary
 		case OP_NEGATE:
 			if (!IS_NUMBER(peek(0))) {
-				runtimeError("Operand must be a number.");
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return runtimeError("Operand must be a number.");
 			}
 			push(NUMBER_VAL(-AS_NUMBER(pop())));
 			break;
@@ -240,8 +258,7 @@ interpretResult vm::run() {
 			break;
 		case OP_BIN_NOT: {
 			if (!IS_NUMBER(peek(0))) {
-				runtimeError("Operand must be a number.");
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return runtimeError("Operand must be a number.");
 			}
 			int num = AS_NUMBER(pop());
 			push(NUMBER_VAL((double)~num));
@@ -260,9 +277,7 @@ interpretResult vm::run() {
 				push(NUMBER_VAL(a + b));
 			}
 			else {
-				runtimeError(
-					"Operands must be two numbers or two strings.");
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return runtimeError("Operands must be two numbers or two strings.");
 			}
 			break;
 		}
@@ -305,8 +320,7 @@ interpretResult vm::run() {
 			objString* name = READ_STRING();
 			Value value;
 			if (!globals.get(name, &value)){
-				runtimeError("Undefined variable '%s'.", name->str.c_str());
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return runtimeError("Undefined variable '%s'.", name->str.c_str());
 			}
 			push(value);
 			break;
@@ -316,8 +330,7 @@ interpretResult vm::run() {
 			objString* name = READ_STRING();
 			if (globals.set(name, peek(0))) {
 				globals.del(name);
-				runtimeError("Undefined variable '%s'.", name->str.c_str());
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return runtimeError("Undefined variable '%s'.", name->str.c_str());
 			}
 			break;
 		}
@@ -416,8 +429,7 @@ interpretResult vm::run() {
 				}
 				}
 			}else {
-				runtimeError("Switch expression can be only string or number.");
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return runtimeError("Switch expression can be only string or number.");
 			}
 			break;
 		}
@@ -451,7 +463,7 @@ interpretResult vm::run() {
 		}
 		#pragma endregion
 
-		#pragma region Arrays
+		#pragma region Objects, arrays and maps
 		case OP_CREATE_ARRAY: {
 			int size = READ_BYTE();
 			int i = 0;
@@ -467,6 +479,53 @@ interpretResult vm::run() {
 				i++;
 			}
 			push(OBJ_VAL(arr));
+			break;
+		}
+
+		case OP_GET: {
+			Value index = pop();
+			Value callee = pop();
+			if (!IS_OBJ(callee))
+				runtimeError("Expected a compund type, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			obj* object = AS_OBJ(callee);
+			switch (object->type) {
+			case OBJ_ARRAY: {
+				if (index.type != VAL_NUM) return runtimeError("Index must be a number.");
+				double ind = AS_NUMBER(index);
+				if ((int)ind != ind) return runtimeError("Expected interger, got float.");
+				if (ind < 0 || ind >((objArray*)object)->values.size() - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (int)ind, ((objArray*)object)->values.size() - 1);
+				push(((objArray*)object)->values[AS_NUMBER(index)]);
+				break;
+			}
+			}
+			break;
+		}
+
+		case OP_SET: {
+			switch (READ_BYTE()) {
+			case 0: {
+				Value val = peek(0);
+				Value field = peek(1);
+				Value callee = peek(2);
+				if (!IS_OBJ(callee))
+					runtimeError("Expected a compund type, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+				switch (AS_OBJ(callee)->type) {
+				case OBJ_ARRAY: {
+					objArray* arr = (objArray*)AS_OBJ(callee);
+					if (!IS_NUMBER(field)) return runtimeError("Index has to be a number");
+					double index = AS_NUMBER(field);
+					if (index != (int)index) return runtimeError("Index has to be a integer.");
+					if (index < 0 || index >arr->values.size() - 1)
+						return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values.size() - 1);
+					arr->values[index] = val;
+					}
+				}
+				pop();
+				pop();
+				break;
+			}
+			}
 			break;
 		}
 		#pragma endregion

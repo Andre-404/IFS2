@@ -10,6 +10,7 @@ public:
 	debugASTPrinter(vector<ASTNode*> _stmts);
 
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
+	void visitSetExpr(ASTSetExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);
 	void visitArrayDeclExpr(ASTArrayDeclExpr* expr);

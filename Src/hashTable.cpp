@@ -1,5 +1,5 @@
 #include "hashTable.h"
-#define TABLE_LOAD_FACTOR 0.75//arbitrary, test and see what's best
+#define TABLE_LOAD_FACTOR 0.5//arbitrary, test and see what's best
 
 hashTable::hashTable() {
 	capacity = 0;
@@ -46,7 +46,7 @@ bool hashTable::del(objString* key) {
 
 
 entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
-	unsigned long long index = key->hash % capacity;
+	unsigned long long index = key->hash % _entries.size();
 	entry* tombstone = NULL;
 	//loop until we either find the key we're looking for, or a open slot
 	while(true) {
@@ -96,6 +96,12 @@ void hashTable::tableAddAll(hashTable* src) {
 		if (_entry->key != NULL) {
 			set(_entry->key, _entry->val);
 		}
+	}
+}
+
+objString* hashTable::getKey(Value val) {
+	for (auto it = entries.begin(); it != entries.end(); ++it) {
+		if (valuesEqual(it->val, val)) return it->key;
 	}
 }
 

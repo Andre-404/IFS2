@@ -44,8 +44,8 @@
 		OP_SET_LOCAL,
 		//Arrays
 		OP_CREATE_ARRAY,
-		OP_GET_ARRAY,
-		OP_SET_ARRAY,
+		OP_GET,
+		OP_SET,
 		//control flow
 		OP_JUMP,
 		OP_JUMP_IF_FALSE,

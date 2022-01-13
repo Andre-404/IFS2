@@ -51,6 +51,9 @@
     <ClCompile Include="switch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="builtInFunctions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="scanner.h">
@@ -90,6 +93,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="switch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="builtInFunction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

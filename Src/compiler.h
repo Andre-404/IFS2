@@ -87,6 +87,7 @@ private:
 
 	//Visitor pattern
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
+	void visitSetExpr(ASTSetExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
 	void visitArrayDeclExpr(ASTArrayDeclExpr* expr);

@@ -5,6 +5,7 @@
 #include "scanner.h"
 
 class ASTAssignmentExpr;
+class ASTSetExpr;
 class ASTBinaryExpr;
 class ASTUnaryExpr;
 class ASTArrayDeclExpr;
@@ -28,11 +29,14 @@ class ASTReturn;
 
 enum class ASTType {
 	ASSINGMENT,
-	AND,
+	SET,
 	OR,
+	AND,
 	BINARY,
 	UNARY,
 	GROUPING,
+	ARRAY,
+	CALL,
 	LITERAL,
 	VAR_DECL,
 	PRINT_STMT,
@@ -45,9 +49,8 @@ enum class ASTType {
 	SWITCH_STMT,
 	CASE,
 	FUNC,
-	CALL,
+	
 	RETURN,
-	ARRAY,
 };
 
 enum class switchType {
@@ -62,6 +65,7 @@ class visitor {
 public:
 	virtual ~visitor() {};
 	virtual void visitAssignmentExpr(ASTAssignmentExpr* expr) = 0;
+	virtual void visitSetExpr(ASTSetExpr* expr) = 0;
 	virtual void visitBinaryExpr(ASTBinaryExpr* expr) = 0;
 	virtual void visitUnaryExpr(ASTUnaryExpr* expr) = 0;
 	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
@@ -104,6 +108,23 @@ public:
 
 	Token getToken() { return name; }
 	ASTNode* getVal() { return value; }
+};
+
+class ASTSetExpr : public ASTNode{
+private:
+	ASTNode* callee;
+	ASTNode* field;
+	Token accessor;
+	ASTNode* value;
+public:
+	ASTSetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, ASTNode* _val);
+	~ASTSetExpr();
+	void accept(visitor* vis);
+	
+	ASTNode* getCallee() { return callee; }
+	ASTNode* getField() { return field; }
+	Token getAccessor() { return accessor; }
+	ASTNode* getValue() { return value; }
 };
 
 class ASTBinaryExpr : public ASTNode {

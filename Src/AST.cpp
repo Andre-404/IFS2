@@ -21,6 +21,29 @@ void ASTAssignmentExpr::accept(visitor* vis) {
 
 #pragma endregion
 
+#pragma region Set expr
+ASTSetExpr::ASTSetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, ASTNode* _val) {
+	type = ASTType::ARRAY;
+	callee = _callee;
+	field = _field;
+	accessor = _accessor;
+	value = _val;
+}
+
+ASTSetExpr::~ASTSetExpr() {
+	delete callee;
+	delete field;
+	delete value;
+}
+
+void ASTSetExpr::accept(visitor* vis) {
+	vis->visitSetExpr(this);
+}
+
+
+#pragma endregion
+
+
 #pragma region Binary expr
 ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
 	op = _op;
@@ -59,6 +82,7 @@ void ASTUnaryExpr::accept(visitor* vis) {
 ASTArrayDeclExpr::ASTArrayDeclExpr(vector<ASTNode*>& _members) {
 	members = _members;
 	size = members.size();
+	type = ASTType::ARRAY;
 }
 ASTArrayDeclExpr::~ASTArrayDeclExpr() {
 	for (ASTNode* member : members) {
@@ -71,7 +95,6 @@ void ASTArrayDeclExpr::accept(visitor* vis) {
 }
 
 #pragma endregion
-
 
 #pragma region Call expr
 ASTCallExpr::ASTCallExpr(ASTNode* _callee, Token _accessor, vector<ASTNode*>& _args) {

@@ -38,7 +38,7 @@ private:
 	Value pop();
 	Value peek(int depth);
 	void resetStack();
-	void runtimeError(const char* format, ...);
+	interpretResult runtimeError(const char* format, ...);
 	void freeObjects();
 	bool callValue(Value callee, int argCount);
 	bool call(objFunc* function, int argCount);

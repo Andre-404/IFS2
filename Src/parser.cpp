@@ -53,10 +53,24 @@ class binaryExpr : public infixParselet {
 class callExpr : public infixParselet {
 	ASTNode* parse(ASTNode* left, Token token) {
 		vector<ASTNode*> args;
-		do{
-			args.push_back(cur->expression(prec));
-		} while (cur->match({ TOKEN_COMMA }));
-		cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
+		if(token.type == TOKEN_LEFT_PAREN) {
+			do {
+				args.push_back(cur->expression());
+			} while (cur->match({ TOKEN_COMMA }));
+			cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
+			return new ASTCallExpr(left, token, args);
+		}
+		else if (token.type == TOKEN_LEFT_BRACKET) {
+			args.push_back(cur->expression());
+			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array/map access.");
+		}
+		else if (token.type == TOKEN_DOT) {
+			args.push_back(cur->expression((int)precedence::PRIMARY));
+		}
+		if (cur->match({ TOKEN_EQUAL })) {
+			ASTNode* val = cur->expression();
+			return new ASTSetExpr(left, args[0], token, val);
+		}
 		return new ASTCallExpr(left, token, args);
 	}
 };
@@ -114,6 +128,7 @@ parser::parser(vector<Token>* _tokens) {
 		addInfix(TOKEN_PERCENTAGE, new binaryExpr, precedence::FACTOR);
 
 		addInfix(TOKEN_LEFT_PAREN, new callExpr, precedence::CALL);
+		addInfix(TOKEN_LEFT_BRACKET, new callExpr, precedence::CALL);
 	#pragma endregion
 
 
@@ -330,8 +345,8 @@ ASTNode* parser::_return() {
 
 ASTNode* parser::expression(int prec) {
 	Token token = advance();
-	if (prefixParselets.count(token.type) <= 0) {
-		error(token, "Expected expression.");
+	if (prefixParselets.count(token.type) == 0) {
+		throw error(token, "Expected expression.");
 	}
 	prefixParselet* prefix = prefixParselets[token.type];
 	ASTNode* left = prefix->parse(token);
@@ -339,6 +354,9 @@ ASTNode* parser::expression(int prec) {
 	while (prec < getPrec()) {
 		token = advance();
 
+		if (infixParselets.count(token.type) == 0) {
+			throw error(token, "Expected expression.");
+		}
 		infixParselet* infix = infixParselets[token.type];
 		left = infix->parse(left, token);
 	}

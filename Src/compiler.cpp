@@ -45,6 +45,18 @@ void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	namedVar(expr->getToken(), true);
 }
 
+void compiler::visitSetExpr(ASTSetExpr* expr) {
+	//different behaviour for '[' and '.'
+	switch (expr->getAccessor().type) {
+	case TOKEN_LEFT_BRACKET: {
+		expr->getCallee()->accept(this);
+		expr->getField()->accept(this);
+		expr->getValue()->accept(this);
+		emitBytes(OP_SET, 0);
+	}
+	}
+}
+
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	expr->getLeft()->accept(this);
 	if (expr->type == ASTType::OR) {
@@ -108,10 +120,21 @@ void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 
 void compiler::visitCallExpr(ASTCallExpr* expr) {
 	expr->getCallee()->accept(this);
+	int argCount = 0;
 	for (ASTNode* arg : expr->getArgs()) {
 		arg->accept(this);
+		argCount++;
 	}
-	emitBytes(OP_CALL, expr->getArgs().size());
+	switch (expr->getAccessor().type) {
+	case TOKEN_LEFT_PAREN:
+		emitBytes(OP_CALL, argCount);
+		break;
+		//these are usually things like array[index] or object.property
+	case TOKEN_LEFT_BRACKET:
+	case TOKEN_DOT:
+		emitByte(OP_GET);
+		break;
+	}
 }
 
 void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {

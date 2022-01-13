@@ -148,6 +148,10 @@ void debugASTPrinter::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 
 }
 
+void debugASTPrinter::visitSetExpr(ASTSetExpr* expr) {
+
+}
+
 #pragma region Disassembly
 
 static int simpleInstruction(string name, int offset) {
@@ -268,6 +272,10 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return byteInstruction("OP CALL", Chunk, offset);
 	case OP_CREATE_ARRAY:
 		return byteInstruction("OP CREATE ARRAY", Chunk, offset);
+	case OP_GET:
+		return simpleInstruction("OP GET", offset);
+	case OP_SET:
+		return byteInstruction("OP SET", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;
