@@ -48,6 +48,7 @@ public:
 	vector<ASTNode*> statements;
 	bool hadError;
 
+	//this is made public so that the parselets can access it
 	ASTNode* expression(int prec);
 	ASTNode* expression();
 	#pragma region Helpers

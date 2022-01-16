@@ -12,7 +12,7 @@
 	namespace global {
 
 	};
-
+	//Only use this if you think the parsing stage is incorrect
 	#define DEBUG_PRINT_AST
 	//WARNING: massivly slows down code execution
 	#define DEBUG_PRINT_CODE

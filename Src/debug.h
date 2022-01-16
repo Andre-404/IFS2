@@ -5,6 +5,8 @@
 #include "chunk.h"
 #include <string_view>
 
+#ifdef DEBUG_PRINT_AST
+
 class debugASTPrinter : public visitor {
 public:
 	debugASTPrinter(vector<ASTNode*> _stmts);
@@ -38,6 +40,8 @@ private:
 	bool inLocal;
 	void buildExpr(std::string_view name, const std::initializer_list<ASTNode*>& exprs);
 };
+
+#endif // DEBUG_PRINT_AST
 
 #pragma region Debug
 int disassembleInstruction(chunk* Chunk, int offset);

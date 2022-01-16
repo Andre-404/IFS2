@@ -52,7 +52,7 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 		expr->getCallee()->accept(this);
 		expr->getField()->accept(this);
 		expr->getValue()->accept(this);
-		emitBytes(OP_SET, 0);
+		emitByte(OP_SET);
 	}
 	}
 }
@@ -125,6 +125,7 @@ void compiler::visitCallExpr(ASTCallExpr* expr) {
 		arg->accept(this);
 		argCount++;
 	}
+	// '(' is a function call, '[' and '.' are access operators
 	switch (expr->getAccessor().type) {
 	case TOKEN_LEFT_PAREN:
 		emitBytes(OP_CALL, argCount);
@@ -190,8 +191,9 @@ void compiler::visitVarDecl(ASTVarDecl* stmt) {
 void compiler::visitFuncDecl(ASTFunc* decl) {
 	uint8_t name = parseVar(decl->getName());
 	markInit();
+	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
+	//is stored in current->enclosing
 	current = new compilerInfo(current, funcType::TYPE_FUNC);
-	//this is executed in child instances of compiler(where type isn't TYPE_SCRIPT), this compiles the actual function
 	//no need for a endScope, since returning from the function discards the entire callstack
 	beginScope();
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
@@ -205,9 +207,15 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	//could get away with using string instead of objString?
 	string str(decl->getName().lexeme);
 	current->func->name = copyString(str);
+	//have to do this here since endFuncDecl() deletes the compilerInfo
+	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
-	emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(func)));
+	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	for (int i = 0; i < func->upvalueCount; i++) {
+		emitByte(upvals[i].isLocal ? 1 : 0);
+		emitByte(upvals[i].index);
+	}
 	defineVar(name);
 }
 
@@ -372,6 +380,7 @@ void compiler::visitReturnStmt(ASTReturn* stmt) {
 	}
 	stmt->getExpr()->accept(this);
 	emitByte(OP_RETURN);
+	current->hasReturn = true;
 }
 
 #pragma region helpers
@@ -467,6 +476,9 @@ void compiler::namedVar(Token token, bool canAssign) {
 	if (arg != -1) {
 		getOp = OP_GET_LOCAL;
 		setOp = OP_SET_LOCAL;
+	}else if ((arg = resolveUpvalue(current, token)) != -1) {
+		getOp = OP_GET_UPVALUE;
+		setOp = OP_SET_UPVALUE;
 	}else {
 		arg = identifierConstant(token);
 		getOp = OP_GET_GLOBAL;
@@ -511,16 +523,24 @@ void compiler::endScope() {
 	current->scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
 	int toPop = 0;
 	while (current->localCount > 0 && current->locals[current->localCount - 1].depth > current->scopeDepth) {
-		toPop++;
+		if(!current->hasCapturedLocals) toPop++;
+		else {
+			if (current->locals[current->localCount - 1].isCaptured) {
+				emitByte(OP_CLOSE_UPVALUE);
+			}
+			else {
+				emitByte(OP_POP);
+			}
+		}
 		current->localCount--;
 	}
 	if(toPop > 0) emitBytes(OP_POPN, toPop);
 }
 
-int compiler::resolveLocal(Token& name) {
+int compiler::resolveLocal(compilerInfo* func, Token& name) {
 	//checks to see if there is a local variable with a provided name, if there is return the index of the stack slot of the var
-	for (int i = current->localCount - 1; i >= 0; i--) {
-		local* _local = &current->locals[i];
+	for (int i = func->localCount - 1; i >= 0; i--) {
+		local* _local = &func->locals[i];
 		string str = string(name.lexeme);
 		if (identifiersEqual(&str, &_local->name)) {
 			if (_local->depth == -1) {
@@ -531,6 +551,45 @@ int compiler::resolveLocal(Token& name) {
 	}
 
 	return -1;
+}
+
+int compiler::resolveLocal(Token& name) {
+	return resolveLocal(current, name);
+}
+
+int compiler::resolveUpvalue(compilerInfo* func, Token& name) {
+	if (func->enclosing == NULL) return -1;
+
+	int local = resolveLocal(func->enclosing, name);
+	if (local != -1) {
+		func->enclosing->locals[local].isCaptured = true;
+		func->hasCapturedLocals = true;
+		return addUpvalue((uint8_t)local, true);
+	}
+
+	int upvalue = resolveUpvalue(func->enclosing, name);
+	if (upvalue != -1) {
+		return addUpvalue((uint8_t)upvalue, false);
+	}
+
+	return -1;
+}
+
+int compiler::addUpvalue(uint8_t index, bool isLocal) {
+	int upvalueCount = current->func->upvalueCount;
+	for (int i = 0; i < upvalueCount; i++) {
+		upvalue* upval = &current->upvalues[i];
+		if (upval->index == index && upval->isLocal == isLocal) {
+			return i;
+		}
+	}
+	if (upvalueCount == UPVAL_MAX) {
+		error("Too many closure variables in function.");
+		return 0;
+	}
+	current->upvalues[upvalueCount].isLocal = isLocal;
+	current->upvalues[upvalueCount].index = index;
+	return current->func->upvalueCount++;
 }
 
 void compiler::markInit() {
@@ -572,10 +631,11 @@ void error(string message) {
 }
 
 objFunc* compiler::endFuncDecl() {
-	emitReturn();
+	if(!current->hasReturn) emitReturn();
 	#ifdef DEBUG_PRINT_CODE
 		current->func->body.disassemble(current->func->name == NULL ? "script" : current->func->name->str);
 	#endif
+	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
 	objFunc* func = current->func;
 	compilerInfo* temp = current->enclosing;
 	delete current;

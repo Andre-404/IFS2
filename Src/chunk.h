@@ -42,6 +42,9 @@
 		OP_SET_GLOBAL,
 		OP_GET_LOCAL,
 		OP_SET_LOCAL,
+		OP_GET_UPVALUE,
+		OP_SET_UPVALUE,
+		OP_CLOSE_UPVALUE,
 		//Arrays
 		OP_CREATE_ARRAY,
 		OP_GET,
@@ -57,7 +60,8 @@
 
 		//Functions
 		OP_CALL,
-		OP_RETURN
+		OP_RETURN,
+		OP_CLOSURE,
 	};
 
 	//disassemble is here, but the functions it calls are in debug.cpp

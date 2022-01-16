@@ -6,6 +6,7 @@
 
 class assignmentExpr : public infixParselet {
 	ASTNode* parse(ASTNode* left, Token token) {
+		//makes it right associative
 		ASTNode* right = cur->expression(prec - 1);
 		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
 			throw cur->error(token, "Left side is not assignable");
@@ -35,6 +36,7 @@ class arrayExpr : public prefixParselet {
 class literalExpr : public prefixParselet {
 	ASTNode* parse(Token token) {
 		if (token.type == TOKEN_LEFT_PAREN) {
+			//grouping can contain a expr of any precedence
 			ASTNode* expr = cur->expression();
 			cur->consume(TOKEN_RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
 			return new ASTGroupingExpr(expr);
@@ -53,22 +55,27 @@ class binaryExpr : public infixParselet {
 class callExpr : public infixParselet {
 	ASTNode* parse(ASTNode* left, Token token) {
 		vector<ASTNode*> args;
-		if(token.type == TOKEN_LEFT_PAREN) {
-			do {
-				args.push_back(cur->expression());
-			} while (cur->match({ TOKEN_COMMA }));
+		if(token.type == TOKEN_LEFT_PAREN) {//function call
+			if (!cur->check(TOKEN_RIGHT_PAREN)) {
+				do {
+					args.push_back(cur->expression());
+				} while (cur->match({ TOKEN_COMMA }));
+			}
 			cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
 			return new ASTCallExpr(left, token, args);
 		}
-		else if (token.type == TOKEN_LEFT_BRACKET) {
+		else if (token.type == TOKEN_LEFT_BRACKET) {//array/map access
 			args.push_back(cur->expression());
 			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array/map access.");
 		}
-		else if (token.type == TOKEN_DOT) {
+		else if (token.type == TOKEN_DOT) {//struct/object access
 			args.push_back(cur->expression((int)precedence::PRIMARY));
 		}
+		//if we have something like arr[0] = 1; we can't parse it with the assignment expr
+		//this handles that case and produces a special set expr
 		if (cur->match({ TOKEN_EQUAL })) {
 			ASTNode* val = cur->expression();
+			//args[0] because there is only every 1 argument inside [ ] when accessing/setting a field
 			return new ASTSetExpr(left, args[0], token, val);
 		}
 		return new ASTCallExpr(left, token, args);
@@ -84,6 +91,7 @@ parser::parser(vector<Token>* _tokens) {
 	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
+
 	#pragma region Parselets
 		//Prefix
 		addPrefix(TOKEN_BANG, new unaryExpr, precedence::NOT);
@@ -131,7 +139,6 @@ parser::parser(vector<Token>* _tokens) {
 		addInfix(TOKEN_LEFT_BRACKET, new callExpr, precedence::CALL);
 	#pragma endregion
 
-
 	while (!isAtEnd()) {
 		try {
 			statements.push_back(declaration());
@@ -173,7 +180,7 @@ ASTNode* parser::varDecl() {
 ASTNode* parser::funcDecl() {
 	Token name = consume(TOKEN_IDENTIFIER, "Expected a function name.");
 	if (scopeDepth > 0) {
-		throw error(name, "Can't declare a function outside of global scope.");
+		//throw error(name, "Can't declare a function outside of global scope.");
 	}
 	consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
 	vector<Token> args;
@@ -345,12 +352,16 @@ ASTNode* parser::_return() {
 
 ASTNode* parser::expression(int prec) {
 	Token token = advance();
+	//check if the token has a prefix function associated with it, if it does, parse with it
 	if (prefixParselets.count(token.type) == 0) {
 		throw error(token, "Expected expression.");
 	}
 	prefixParselet* prefix = prefixParselets[token.type];
 	ASTNode* left = prefix->parse(token);
 
+	//only compiles if the next token has a higher associativity than the current one
+	//eg. 1 + 2 compiles because the base prec is 0, and '+' is 9
+	//while loop handles continous use of ops, eg. 1 + 2 * 3
 	while (prec < getPrec()) {
 		token = advance();
 

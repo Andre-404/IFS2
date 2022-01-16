@@ -5,8 +5,10 @@
 #include "parser.h"
 #include "chunk.h"
 #include "object.h"
+#include <array>
 
 #define LOCAL_MAX 256
+#define UPVAL_MAX 256
 
 enum class funcType {
 	TYPE_FUNC,
@@ -16,6 +18,12 @@ enum class funcType {
 struct local {
 	string name;
 	int depth = -1;
+	bool isCaptured = false;
+};
+
+struct upvalue{
+	uint8_t index;
+	bool isLocal;
 };
 
 struct _break {
@@ -32,6 +40,7 @@ struct compilerInfo {
 	objFunc* func = new objFunc();
 	chunk* code = &func->body;
 	funcType type;
+	bool hasReturn = false;
 
 	int line = 0;
 	//keeps track of every break statement that has been encountered
@@ -40,6 +49,8 @@ struct compilerInfo {
 	local locals[LOCAL_MAX];
 	int localCount = 0;
 	int scopeDepth = 0;
+	std::array<upvalue, UPVAL_MAX> upvalues;
+	bool hasCapturedLocals = false;
 	compilerInfo(compilerInfo* _enclosing, funcType _type);
 };
 
@@ -78,6 +89,9 @@ private:
 	void declareVar(Token& name);
 	void addLocal(Token name);
 	int resolveLocal(Token& name);
+	int resolveLocal(compilerInfo* func, Token& name);
+	int resolveUpvalue(compilerInfo* func, Token& name);
+	int addUpvalue(uint8_t index, bool isLocal);
 	void markInit();
 	void beginScope() { current->scopeDepth++; }
 	void endScope();

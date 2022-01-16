@@ -12,7 +12,7 @@ enum class interpretResult {
 };
 
 struct callFrame {
-	objFunc* function;
+	objClosure* closure;
 	long ip;
 	Value* slots;
 };
@@ -30,6 +30,7 @@ public:
 private:
 	Value stack[STACK_MAX];
 	Value* stackTop;
+	objUpval* openUpvals;
 	callFrame frames[FRAMES_MAX];
 	int frameCount;
 	hashTable globals;
@@ -41,8 +42,10 @@ private:
 	interpretResult runtimeError(const char* format, ...);
 	void freeObjects();
 	bool callValue(Value callee, int argCount);
-	bool call(objFunc* function, int argCount);
+	bool call(objClosure* function, int argCount);
 	void defineNative(string name, NativeFn func, int arity);
+	objUpval* captureUpvalue(Value* local);
+	void closeUpvalues(Value* last);
 };
 
 

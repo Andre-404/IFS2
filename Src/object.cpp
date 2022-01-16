@@ -21,6 +21,12 @@ void printObject(Value value) {
 	case OBJ_NATIVE:
 		std::cout << "<native fn>";
 		break;
+	case OBJ_CLOSURE:
+		printFunction(AS_CLOSURE(value)->func);
+		break;
+	case OBJ_UPVALUE:
+		std::cout << "upvalue";
+		break;
 	case OBJ_ARRAY: {
 		std::cout << "[";
 		vector<Value> vals = AS_ARRAY(value)->values;
@@ -37,8 +43,7 @@ void printObject(Value value) {
 void freeObject(obj* object) {
 	switch (object->type) {
 	case OBJ_STRING: {
-		objString* str = (objString*)object;
-		delete str;
+		delete (objString*)object;
 		break;
 	}
 	case OBJ_FUNC: {
@@ -51,6 +56,14 @@ void freeObject(obj* object) {
 	}
 	case OBJ_ARRAY: {
 		delete ((objArray*)object);
+		break;
+	}
+	case OBJ_CLOSURE: {
+		delete ((objClosure*)object);
+		break;
+	}
+	case OBJ_UPVALUE: {
+		delete ((objUpval*)object);
 		break;
 	}
 	}
@@ -75,9 +88,6 @@ objString::objString(string _str, unsigned long long _hash) {
 	global::objects = this;
 }
 
-objString::~objString() {
-}
-
 //assumes the string hasn't been heap allocated
 objString* copyString(string& str) {
 	unsigned long long hash = hashString(str);
@@ -99,6 +109,7 @@ objString* takeString(string& str) {
 objFunc::objFunc() {
 	name = NULL;
 	arity = 0;
+	upvalueCount = 0;
 	type = OBJ_FUNC;
 	next = global::objects;
 	global::objects = this;
@@ -108,6 +119,24 @@ objNativeFn::objNativeFn(NativeFn _func, int _arity) {
 	func = _func;
 	arity = _arity;
 	type = OBJ_NATIVE;
+	next = global::objects;
+	global::objects = this;
+}
+
+objClosure::objClosure(objFunc* _func) {
+	func = _func;
+	upvals.resize(func->upvalueCount, NULL);
+
+	type = OBJ_CLOSURE;
+	next = global::objects;
+	global::objects = this;
+}
+
+objUpval::objUpval(Value* slot) {
+	location = slot;
+	nextUpval = NULL;
+	closed = NIL_VAL();
+	type = OBJ_UPVALUE;
 	next = global::objects;
 	global::objects = this;
 }

@@ -1,5 +1,8 @@
 #include "debug.h"
 #include "value.h"
+#include "object.h"
+
+#ifdef DEBUG_PRINT_AST 
 
 debugASTPrinter::debugASTPrinter(vector<ASTNode*> _stmts) {
 	str = "";
@@ -59,7 +62,7 @@ void debugASTPrinter::visitVarDecl(ASTVarDecl* stmt) {
 	str.append("variable declaration for '");
 	str.append(stmt->getToken().lexeme);
 	str.append("' = ");
-	stmt->getExpr()->accept(this);
+	if(stmt->getExpr() != NULL) stmt->getExpr()->accept(this);
 	str.append("\n");
 	std::cout << str;
 	str = "";
@@ -151,6 +154,7 @@ void debugASTPrinter::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 void debugASTPrinter::visitSetExpr(ASTSetExpr* expr) {
 
 }
+#endif // DEBUG_PRINT_AST
 
 #pragma region Disassembly
 
@@ -276,6 +280,27 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return simpleInstruction("OP GET", offset);
 	case OP_SET:
 		return byteInstruction("OP SET", Chunk, offset);
+	case OP_CLOSURE: {
+		offset++;
+		uint8_t constant = Chunk->code[offset++];
+		printf("%-16s %4d ", "OP CLOSURE", constant);
+		printValue(Chunk->constants[constant]);
+		printf("\n");
+
+		objFunc* function = AS_FUNCTION(Chunk->constants[constant]);
+		for (int j = 0; j < function->upvalueCount; j++) {
+			int isLocal = Chunk->code[offset++];
+			int index = Chunk->code[offset++];
+			printf("%04d      |                     %s index: %d\n", offset - 2, isLocal ? "local" : "upvalue", index);
+		}
+		return offset;
+	}
+	case OP_GET_UPVALUE:
+		return byteInstruction("OP GET UPVALUE", Chunk, offset);
+	case OP_SET_UPVALUE:
+		return byteInstruction("OP SET UPVALUE", Chunk, offset);
+	case OP_CLOSE_UPVALUE:
+		return simpleInstruction("OP CLOSE UPVALUE", offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

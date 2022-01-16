@@ -4,12 +4,9 @@
 #include "builtInFunction.h"
 #include <stdarg.h>
 
-static Value clockNative(int argCount, Value* args) {
-	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
-}
-
 vm::vm(compiler* current) {
 	frameCount = 0;
+	openUpvals = NULL;
 	resetStack();
 	if (!current->compiled) return;
 	defineNative("clock", clockNative, 0);
@@ -35,7 +32,7 @@ vm::~vm() {
 #pragma region Helpers
 
 uint8_t vm::getOp(long _ip) {
-	return frames[frameCount - 1].function->body.code[_ip];
+	return frames[frameCount - 1].closure->func->body.code[_ip];
 }
 
 void vm::push(Value val) {
@@ -66,7 +63,7 @@ interpretResult vm::runtimeError(const char* format, ...) {
 	//prints callstack
 	for (int i = frameCount - 1; i >= 0; i--) {
 		callFrame* frame = &frames[i];
-		objFunc* function = frame->function;
+		objFunc* function = frame->closure->func;
 		size_t instruction = frame->ip - 1;
 		fprintf(stderr, "[line %d] in ", function->body.lines[instruction]);
 		std::cout << (function->name == NULL ? "script" : function->name->str) << "()\n";
@@ -79,13 +76,15 @@ static bool isFalsey(Value value) {
 	return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
-//concats 2 string objects and uses that to make a new string on the heap
+//concats 2 string objects and uses that to make a new objString
 void vm::concatenate() {
-	objString* b = AS_STRING(pop());
-	objString* a = AS_STRING(pop());
+	objString* b = AS_STRING(peek(0));
+	objString* a = AS_STRING(peek(1));
 	
 	string str = string(a->str + b->str);
 	objString* result = takeString(str);
+	pop();
+	pop();
 	push(OBJ_VAL(result));
 }
 
@@ -101,8 +100,8 @@ void vm::freeObjects() {
 bool vm::callValue(Value callee, int argCount) {
 	if (IS_OBJ(callee)) {
 		switch (OBJ_TYPE(callee)) {
-		case OBJ_FUNC:
-			return call(AS_FUNCTION(callee), argCount);
+		case OBJ_CLOSURE:
+			return call(AS_CLOSURE(callee), argCount);
 		case OBJ_NATIVE: {
 			int arity = AS_NATIVE(callee)->arity;
 			if (argCount != arity) {
@@ -111,10 +110,11 @@ bool vm::callValue(Value callee, int argCount) {
 			}
 			NativeFn native = AS_NATIVE(callee)->func;
 			Value result = NIL_VAL();
+			//native functions throw strings when a error has occured
 			try {
 				result = native(argCount, stackTop - argCount);
 			}catch (const char* str) {
-				const char* name = globals.getKey(callee)->str.c_str();
+				const char* name = globals.getKey(callee)->str.c_str();//gets the name of the native func
 				runtimeError("Error in %s: %s", name, str);
 				return false;
 			}
@@ -131,9 +131,9 @@ bool vm::callValue(Value callee, int argCount) {
 	return false;
 }
 
-bool vm::call(objFunc* function, int argCount) {
-	if (argCount != function->arity) {
-		runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+bool vm::call(objClosure* closure, int argCount) {
+	if (argCount != closure->func->arity) {
+		runtimeError("Expected %d arguments but got %d.", closure->func->arity, argCount);
 		return false;
 	}
 
@@ -143,7 +143,7 @@ bool vm::call(objFunc* function, int argCount) {
 	}
 
 	callFrame* frame = &frames[frameCount++];
-	frame->function = function;
+	frame->closure = closure;
 	frame->ip = 0;
 	frame->slots = stackTop - argCount - 1;
 	return true;
@@ -157,6 +157,41 @@ void vm::defineNative(string name, NativeFn func, int arity) {
 	pop();
 	pop();
 }
+
+objUpval* vm::captureUpvalue(Value* local) {
+	objUpval* prevUpvalue = NULL;
+	objUpval* upval = openUpvals;
+	while (upval != NULL && upval->location > local) {
+		prevUpvalue = upval;
+		upval = upval->nextUpval;
+	}
+
+	if (upval != NULL && upval->location == local) {
+		return upval;
+	}
+
+	objUpval* createdUpval = new objUpval(local);
+	createdUpval->next = upval;
+
+	if (prevUpvalue == NULL) {
+		openUpvals = createdUpval;
+	}
+	else {
+		prevUpvalue->next = createdUpval;
+	}
+
+	return createdUpval;
+}
+
+void vm::closeUpvalues(Value* last) {
+	while (openUpvals != NULL &&
+		openUpvals->location >= last) {
+		objUpval* upval = openUpvals;
+		upval->closed = *upval->location;
+		upval->location = &upval->closed;
+		openUpvals = upval->nextUpval;
+	}
+}
 #pragma endregion
 
 
@@ -164,8 +199,11 @@ void vm::defineNative(string name, NativeFn func, int arity) {
 interpretResult vm::interpret(objFunc* func) {
 	//create a new function(implicit one for the whole code), and put it on the call stack
 	if (func == NULL) return interpretResult::INTERPRETER_RUNTIME_ERROR;
-	push(OBJ_VAL(func));
-	call(func, 0);
+	push(OBJ_VAL(func));//doing this because of GC
+	objClosure* closure = new objClosure(func);
+	pop();
+	push(OBJ_VAL(closure));
+	call(closure, 0);
 
 	return run();
 }
@@ -174,7 +212,7 @@ interpretResult vm::run() {
 	callFrame* frame = &frames[frameCount - 1];
 	#pragma region Macros
 	#define READ_BYTE() (getOp(frame->ip++))
-	#define READ_CONSTANT() (frames[frameCount - 1].function->body.constants[READ_BYTE()])
+	#define READ_CONSTANT() (frames[frameCount - 1].closure->func->body.constants[READ_BYTE()])
 	#define READ_STRING() AS_STRING(READ_CONSTANT())
 	#define BINARY_OP(valueType, op) \
 		do { \
@@ -214,7 +252,7 @@ interpretResult vm::run() {
 			std::cout << "] ";
 		}
 		std::cout << "\n";
-		disassembleInstruction(&frame->function->body, frames[frameCount - 1].ip);
+		disassembleInstruction(&frame->closure->func->body, frames[frameCount - 1].ip);
 		#endif
 
 		uint8_t instruction;
@@ -344,6 +382,21 @@ interpretResult vm::run() {
 			frame->slots[slot] = peek(0);
 			break;
 		}
+
+		case OP_GET_UPVALUE: {
+			uint8_t slot = READ_BYTE();
+			push(*frame->closure->upvals[slot]->location);
+			break;
+		}
+		case OP_SET_UPVALUE: {
+			uint8_t slot = READ_BYTE();
+			*frame->closure->upvals[slot]->location = peek(0);
+			break;
+		}
+		case OP_CLOSE_UPVALUE:
+			closeUpvalues(stackTop - 1);
+			pop();
+			break;
 		#pragma endregion
 
 		#pragma region Control flow
@@ -386,7 +439,7 @@ interpretResult vm::run() {
 		case OP_SWITCH: {
 			if (IS_STRING(peek(0)) || IS_NUMBER(peek(0))) {
 				int pos = READ_BYTE();
-				switchTable& _table = frames[frameCount - 1].function->body.switchTables[pos];
+				switchTable& _table = frames[frameCount - 1].closure->func->body.switchTables[pos];
 				//default jump exists for every switch, and if it's not user defined it jumps to the end of switch
 				switch (_table.type) {
 				case switchType::NUM: {
@@ -448,6 +501,7 @@ interpretResult vm::run() {
 		}
 		case OP_RETURN: {
 			Value result = pop();
+			closeUpvalues(frame->slots);
 			frameCount--;
 			//if we're returning from the implicit funcition
 			if (frameCount == 0) {
@@ -459,6 +513,21 @@ interpretResult vm::run() {
 			push(result);
 			//if the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
+			break;
+		}
+		case OP_CLOSURE: {
+			objFunc* func = AS_FUNCTION(READ_CONSTANT());
+			objClosure* closure = new objClosure(func);
+			push(OBJ_VAL(closure));
+			for (int i = 0; i < closure->upvals.size(); i++) {
+				uint8_t isLocal = READ_BYTE();
+				uint8_t index = READ_BYTE();
+				if (isLocal) {
+					closure->upvals[i] = captureUpvalue(frame->slots + index);
+				}else {
+					closure->upvals[i] = frame->closure->upvals[index];
+				}
+			}
 			break;
 		}
 		#pragma endregion
@@ -483,19 +552,20 @@ interpretResult vm::run() {
 		}
 
 		case OP_GET: {
+			//structs and objects get their own OP_GET_DOT operator
 			Value index = pop();
 			Value callee = pop();
 			if (!IS_OBJ(callee))
-				runtimeError("Expected a compund type, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
-			obj* object = AS_OBJ(callee);
-			switch (object->type) {
+				runtimeError("Expected a array or map, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
-				if (index.type != VAL_NUM) return runtimeError("Index must be a number.");
+				if (!IS_NUMBER(index)) return runtimeError("Index must be a number.");
 				double ind = AS_NUMBER(index);
 				if ((int)ind != ind) return runtimeError("Expected interger, got float.");
-				if (ind < 0 || ind >((objArray*)object)->values.size() - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (int)ind, ((objArray*)object)->values.size() - 1);
-				push(((objArray*)object)->values[AS_NUMBER(index)]);
+				if (ind < 0 || ind > AS_ARRAY(callee)->values.size() - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (int)ind, AS_ARRAY(callee)->values.size() - 1);
+
+				push(AS_ARRAY(callee)->values[ind]);
 				break;
 			}
 			}
@@ -503,29 +573,30 @@ interpretResult vm::run() {
 		}
 
 		case OP_SET: {
-			switch (READ_BYTE()) {
-			case 0: {
-				Value val = peek(0);
-				Value field = peek(1);
-				Value callee = peek(2);
-				if (!IS_OBJ(callee))
-					runtimeError("Expected a compund type, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
-				switch (AS_OBJ(callee)->type) {
-				case OBJ_ARRAY: {
-					objArray* arr = (objArray*)AS_OBJ(callee);
-					if (!IS_NUMBER(field)) return runtimeError("Index has to be a number");
-					double index = AS_NUMBER(field);
-					if (index != (int)index) return runtimeError("Index has to be a integer.");
-					if (index < 0 || index >arr->values.size() - 1)
-						return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values.size() - 1);
-					arr->values[index] = val;
-					}
+			//this is for handling arrays and maps, objects and structs get their own OP_SET_DOT operator
+			Value val = peek(0);
+			Value field = peek(1);
+			Value callee = peek(2);
+			if (!IS_OBJ(callee))
+				runtimeError("Expected a array or map, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			switch (AS_OBJ(callee)->type) {
+			case OBJ_ARRAY: {
+				objArray* arr = AS_ARRAY(callee);
+
+				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number");
+				double index = AS_NUMBER(field);
+				if (index != (int)index) return runtimeError("Index has to be a integer.");
+				if (index < 0 || index >arr->values.size() - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values.size() - 1);
+
+				arr->values[index] = val;
 				}
-				pop();
-				pop();
-				break;
 			}
-			}
+			//we want only the value to remain on the stack, since set is a assignment expr
+			pop();
+			pop();
+			pop();
+			push(val);
 			break;
 		}
 		#pragma endregion
@@ -540,4 +611,5 @@ interpretResult vm::run() {
 	#undef BINARY_OP
 	#undef INT_BINARY_OP
 	#undef READ_STRING
+	#undef READ_SHORT
 }
