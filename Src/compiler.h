@@ -7,6 +7,7 @@
 #include "object.h"
 #include <array>
 
+
 #define LOCAL_MAX 256
 #define UPVAL_MAX 256
 
@@ -37,8 +38,8 @@ struct compilerInfo {
 	//for closures
 	compilerInfo* enclosing;
 	//function that's currently being compiled
-	objFunc* func = new objFunc();
-	chunk* code = &func->body;
+	objFunc* func;
+	chunk* code;
 	funcType type;
 	bool hasReturn = false;
 

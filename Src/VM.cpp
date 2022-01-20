@@ -4,9 +4,10 @@
 #include "builtInFunction.h"
 #include <stdarg.h>
 
+using namespace global;
+
 vm::vm(compiler* current) {
 	frameCount = 0;
-	openUpvals = NULL;
 	resetStack();
 	if (!current->compiled) return;
 	defineNative("clock", clockNative, 0);
@@ -22,11 +23,14 @@ vm::vm(compiler* current) {
 
 	objFunc* func = current->endFuncDecl();
 	delete current;
+	global::gc.ready(this);
 	interpret(func);
 }
 
 vm::~vm() {
-	freeObjects();
+	global::gc.clear();
+	global::gc.~GC();
+	global::internedStrings.~hashTable();
 }
 
 #pragma region Helpers
@@ -89,12 +93,7 @@ void vm::concatenate() {
 }
 
 void vm::freeObjects() {
-	obj* object = global::objects;
-	while (object != NULL) {
-		obj* next = object->next;
-		freeObject(object);
-		object = next;
-	}
+	global::gc.clear();
 }
 
 bool vm::callValue(Value callee, int argCount) {
@@ -152,44 +151,35 @@ bool vm::call(objClosure* closure, int argCount) {
 
 void vm::defineNative(string name, NativeFn func, int arity) {
 	push(OBJ_VAL(copyString(name)));
-	push(OBJ_VAL(new objNativeFn(func, arity)));
+	push(OBJ_VAL(gc.allocObj(objNativeFn(func, arity))));
 	globals.set(AS_STRING(stack[0]), stack[1]);
 	pop();
 	pop();
 }
 
 objUpval* vm::captureUpvalue(Value* local) {
-	objUpval* prevUpvalue = NULL;
-	objUpval* upval = openUpvals;
-	while (upval != NULL && upval->location > local) {
-		prevUpvalue = upval;
-		upval = upval->nextUpval;
+	int i;
+	for (i = openUpvals.size() - 1; i >= 0; i--) {
+		if (openUpvals[i]->location >= local) {
+			if (openUpvals[i]->location == local) return openUpvals[i];
+		}
+		else break;
 	}
-
-	if (upval != NULL && upval->location == local) {
-		return upval;
-	}
-
-	objUpval* createdUpval = new objUpval(local);
-	createdUpval->next = upval;
-
-	if (prevUpvalue == NULL) {
-		openUpvals = createdUpval;
-	}
-	else {
-		prevUpvalue->next = createdUpval;
-	}
+	objUpval* createdUpval = gc.allocObj(objUpval(local));
 
 	return createdUpval;
 }
 
 void vm::closeUpvalues(Value* last) {
-	while (openUpvals != NULL &&
-		openUpvals->location >= last) {
-		objUpval* upval = openUpvals;
-		upval->closed = *upval->location;
-		upval->location = &upval->closed;
-		openUpvals = upval->nextUpval;
+	objUpval* upval;
+	for (int i = openUpvals.size() - 1; i >= 0; i--) {
+		upval = openUpvals[i];
+		if (upval->location >= last) {
+			upval->closed = *upval->location;
+			upval->location = &upval->closed;
+			upval->isOpen = false;
+		}
+		else break;
 	}
 }
 #pragma endregion
@@ -200,7 +190,8 @@ interpretResult vm::interpret(objFunc* func) {
 	//create a new function(implicit one for the whole code), and put it on the call stack
 	if (func == NULL) return interpretResult::INTERPRETER_RUNTIME_ERROR;
 	push(OBJ_VAL(func));//doing this because of GC
-	objClosure* closure = new objClosure(func);
+
+	objClosure* closure = gc.allocObj(objClosure(func));
 	pop();
 	push(OBJ_VAL(closure));
 	call(closure, 0);
@@ -517,7 +508,7 @@ interpretResult vm::run() {
 		}
 		case OP_CLOSURE: {
 			objFunc* func = AS_FUNCTION(READ_CONSTANT());
-			objClosure* closure = new objClosure(func);
+			objClosure* closure = gc.allocObj(objClosure(func));
 			push(OBJ_VAL(closure));
 			for (int i = 0; i < closure->upvals.size(); i++) {
 				uint8_t isLocal = READ_BYTE();
@@ -527,6 +518,8 @@ interpretResult vm::run() {
 				}else {
 					closure->upvals[i] = frame->closure->upvals[index];
 				}
+				//this serves to satisfy the GC, since we can't have any cached pointers when we collect
+				closure = AS_CLOSURE(peek(0));
 			}
 			break;
 		}
@@ -541,7 +534,7 @@ interpretResult vm::run() {
 				vals.push_back(peek(size - i - 1));
 				i++;
 			}
-			objArray* arr = new objArray(vals);
+			objArray* arr = gc.allocObj(objArray(vals));
 			i = 0;
 			while (i < size) {
 				pop();

@@ -27,13 +27,13 @@ public:
 	uint8_t getOp(long _ip);
 	interpretResult interpret(objFunc* _chunk);
 	interpretResult run();
-private:
 	Value stack[STACK_MAX];
 	Value* stackTop;
-	objUpval* openUpvals;
+	vector<objUpval*> openUpvals;
 	callFrame frames[FRAMES_MAX];
 	int frameCount;
 	hashTable globals;
+private:
 	void concatenate();
 	void push(Value val);
 	Value pop();

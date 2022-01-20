@@ -11,7 +11,9 @@ class assignmentExpr : public infixParselet {
 		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
 			throw cur->error(token, "Left side is not assignable");
 		}
-		return new ASTAssignmentExpr(((ASTLiteralExpr*)left)->getToken(), right);
+		ASTAssignmentExpr* expr = new ASTAssignmentExpr(((ASTLiteralExpr*)left)->getToken(), right);
+		delete left;
+		return expr;
 	}
 };
 

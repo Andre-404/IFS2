@@ -1,0 +1,317 @@
+#include "memory.h"
+#include "namespaces.h"
+
+GC::GC() {
+	collecting = false;
+	isReady = false;
+	threshold = 1024;
+	VM = NULL;
+	heap = new char[HEAP_START_SIZE];
+	heapTop = heap;
+	allocated = 0;
+	sinceLastClear = allocated;
+}
+
+size_t getSizeOfObj(obj* ptr) {
+	switch (ptr->type) {
+	case OBJ_ARRAY: return sizeof(objArray); break;
+	case OBJ_CLOSURE: return sizeof(objClosure); break;
+	case OBJ_FUNC: return sizeof(objFunc); break;
+	case OBJ_NATIVE: return sizeof(objNativeFn); break;
+	case OBJ_STRING: return sizeof(objString); break;
+	case OBJ_UPVALUE: return sizeof(objUpval); break;
+
+	default:
+		std::cout << "Couldn't convert obj" << "\n";
+		exit(1);
+	}
+}
+
+void GC::clear() {
+	char* it = heap;
+
+	while (it < heapTop) {
+		obj* temp = (obj*)it;
+		size_t size = getSizeOfObj(temp);
+		deleteObj(temp);
+		it += size;
+
+	}
+	delete[] heap;
+	heap = nullptr;
+	heapTop = nullptr;
+}
+
+void GC::ready(vm* _VM) {
+	VM = _VM;
+	isReady = true;
+}
+
+void GC::collect(obj* onStack) {
+	if (collecting || VM == NULL) return;
+	collecting = true;
+	long delta = allocated - sinceLastClear;
+	size_t heapSize = heapTop - heap;
+	double percentage = heapSize / HEAP_START_SIZE;
+	if (delta < threshold && percentage < 0.75) {
+		collecting = false;
+		return;
+	}
+	stack.push_back(onStack);
+	mark();
+	computeAddress();
+	updatePtrs(onStack);
+	compact();
+	sinceLastClear = allocated;
+	collecting = false;
+}
+
+void GC::markVal(Value& val) {
+	if (val.type == VAL_OBJ) markObj(AS_OBJ(val));
+}
+
+void setMarked(obj* ptr) {
+	ptr->moveTo = ptr;
+}
+
+void GC::traceObj(obj* object) {
+	if (!object) return;
+	switch (object->type) {
+	case OBJ_FUNC: {
+		objFunc* func = (objFunc*)object;
+		stack.push_back(func->name);
+		for (Value val : func->body.constants) {
+			markVal(val);
+		}
+		setMarked(func);
+		break;
+	}
+	case OBJ_ARRAY: {
+		objArray* arr = (objArray*)object;
+		setMarked(arr);
+		for (Value val : arr->values) {
+			markVal(val);
+		}
+		break;
+	}
+	case OBJ_CLOSURE: {
+		objClosure* closure = (objClosure*)object;
+		stack.push_back(closure->func);
+		for (objUpval* upval : closure->upvals) {
+			stack.push_back(upval);
+		}
+		setMarked(closure);
+		break;
+	}
+	case OBJ_UPVALUE: setMarked(object); markVal(((objUpval*)object)->closed);  break;
+	case OBJ_NATIVE:
+	case OBJ_STRING: setMarked(object); break;
+	}
+}
+
+void GC::markObj(obj* ptr) {
+	if (!ptr) return;
+	if (ptr->type == OBJ_NATIVE || ptr->type == OBJ_STRING) {
+		setMarked(ptr);
+		return;
+	}
+	stack.push_back(ptr);
+	
+}
+
+
+void GC::markTable(hashTable& table) {
+	for (int i = 0; i < table.capacity; i++) {
+		entry* _entry = &table.entries[i];
+		if (_entry->key) {
+			markObj(_entry->key);
+			markVal(_entry->val);
+		}
+	}
+}
+
+void GC::markRoots() {
+	if (VM != NULL) {
+		for (Value* val = VM->stack; val < VM->stackTop; val++) {
+			markVal(*val);
+		}
+		markTable(VM->globals);
+		for (int i = 0; i < VM->frameCount; i++) {
+			markObj(VM->frames[i].closure);
+		}
+		for (int i = 0; i < VM->openUpvals.size(); i++) {
+			markObj(VM->openUpvals[i]);
+		}
+	}
+}
+
+void GC::mark() {
+	markRoots();
+	while (stack.size() != 0) {
+		obj* ptr = stack.back();
+		stack.pop_back();
+		traceObj(ptr);
+	}
+}
+
+//have to do this because of upval->location
+void GC::moveObj(void* to, obj* from) {
+	switch (from->type) {
+	case OBJ_ARRAY:		moveData(to, (objArray*)from); break;
+	case OBJ_STRING:	moveData(to, (objString*)from); break;
+	case OBJ_CLOSURE:	moveData(to, (objClosure*)from); break;
+	case OBJ_FUNC:		moveData(to, (objFunc*)from); break;
+	case OBJ_NATIVE:	moveData(to, (objNativeFn*)from); break;
+	case OBJ_UPVALUE:	moveData(to, (objUpval*)from); break;
+	}
+	if (from->type == OBJ_UPVALUE) {
+		objUpval* upval = (objUpval*)from;
+		if (!upval->isOpen) upval->location = &upval->closed;
+	}
+}
+
+bool forwardAddress(obj* ptr) {
+	return ptr->moveTo != nullptr;
+}
+
+void GC::computeAddress() {
+	char* to = heap;
+	char* from = heap;
+
+	while (from < heapTop) {
+		obj* temp = (obj*)from;
+		if (forwardAddress((obj*)from)) {
+			temp->moveTo = (obj*)to;
+			to += getSizeOfObj(temp);
+		}
+		from += getSizeOfObj(temp);
+
+	}
+}
+
+void updateVal(Value* val) {
+	if (val->type == VAL_OBJ) val->as.object = val->as.object->moveTo;
+}
+
+void updateTable(hashTable* table) {
+	for (int i = 0; i < table->capacity; i++) {
+		entry* _entry = &table->entries[i];
+		if (_entry->key) {
+			if (_entry->key->moveTo == nullptr) {
+				table->del(_entry->key);
+			}
+			else {
+				_entry->key = (objString*)_entry->key->moveTo;
+				updateVal(&_entry->val);
+			}
+		}
+	}
+}
+
+void updateObjectPtrs(obj* object) {
+	switch (object->type) {
+	case OBJ_FUNC: {
+		objFunc* func = (objFunc*)object;
+		if(func->name != nullptr) func->name = (objString*)func->name->moveTo;
+		int size = func->body.constants.size();
+		for (int i = 0; i < size; i++) {
+			updateVal(&func->body.constants[i]);
+		}
+		break;
+	}
+	case OBJ_CLOSURE: {
+		objClosure* closure = (objClosure*)object;
+		closure->func = (objFunc*)closure->func->moveTo;
+		long size = closure->upvals.size();
+		for (int i = 0; i < size; i++) {
+			closure->upvals[i] = (objUpval*)closure->upvals[i]->moveTo;
+		}
+		break;
+	}
+	case OBJ_ARRAY: {
+		objArray* arr = (objArray*)object;
+		size_t size = arr->values.size();
+		for (size_t i = 0; i < size; i++) {
+			updateVal(&arr->values[i]);
+		}
+		break;
+	}
+	case OBJ_UPVALUE: {
+		objUpval* upval = (objUpval*)object;
+		if (!upval->isOpen) {
+			updateVal(&upval->closed);
+		}
+		break;
+	}
+	case OBJ_STRING:
+	case OBJ_NATIVE:
+		break;
+	}
+}
+
+void GC::updatePtrs(obj* onStack) {
+	updateRootPtrs();
+	updateObjectPtrs(onStack);
+	updateHeapPtrs();
+}
+
+void GC::updateRootPtrs() {
+	if (VM != NULL) {
+		for (Value* val = VM->stack; val < VM->stackTop; val++) {
+			updateVal(val);
+		}
+		updateTable(&VM->globals);
+		updateTable(&global::internedStrings);
+		for (int i = 0; i < VM->frameCount; i++) {
+			VM->frames[i].closure = (objClosure*)VM->frames[i].closure->moveTo;
+		}
+		for (int i = 0; i < VM->openUpvals.size(); i++) {
+			VM->openUpvals[i] = (objUpval*)VM->openUpvals[i]->moveTo;
+		}
+	}
+}
+
+void GC::updateHeapPtrs() {
+	char* current = heap;
+
+	while (current < heapTop) {
+		obj* temp = (obj*)current;
+		if (forwardAddress(temp)) {
+			updateObjectPtrs(temp);
+		}
+		current += getSizeOfObj(temp);
+
+	}
+}
+
+void GC::compact() {
+	char* from = heap;
+	char* newTop = heap;
+	while (from < heapTop) {
+		obj* curObject = (obj*)from;
+		size_t sizeOfObj = getSizeOfObj(curObject);
+		char* nextObj = from + sizeOfObj;
+		if (forwardAddress(curObject)) {
+			char* to = (char*)curObject->moveTo;
+			curObject->moveTo = nullptr;
+			if(from != to) moveObj(to, curObject);
+			newTop = to + sizeOfObj;
+		}else {
+			allocated -= sizeOfObj;
+			deleteObj(curObject);
+		}
+		from = nextObj;
+	}
+	heapTop = newTop;
+}
+
+void GC::deleteObj(obj* ptr) {
+	switch (ptr->type) {
+	case OBJ_ARRAY:		destruct((objArray*)ptr); break;
+	case OBJ_STRING:	destruct((objString*)ptr); break;
+	case OBJ_CLOSURE:	destruct((objClosure*)ptr); break;
+	case OBJ_FUNC:		destruct((objFunc*)ptr); break;
+	case OBJ_NATIVE:	destruct((objNativeFn*)ptr); break;
+	case OBJ_UPVALUE:	destruct((objUpval*)ptr); break;
+	}
+}

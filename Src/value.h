@@ -4,7 +4,6 @@
 #include "common.h"
 
 class obj;
-class objString;
 
 enum valueType {
 	VAL_NUM,
@@ -13,13 +12,15 @@ enum valueType {
 	VAL_OBJ
 };
 
+union valUnion {
+	double num;
+	bool boolean;
+	obj* object;
+};
+
 struct Value {
 	valueType type;
-	union {
-		double num;
-		bool boolean;
-		obj* object;
-	}as;
+	valUnion as;
 };
 
 #define IS_BOOL(value)    ((value).type == VAL_BOOL)

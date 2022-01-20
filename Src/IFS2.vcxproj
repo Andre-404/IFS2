@@ -26,6 +26,7 @@
     <ClCompile Include="debug.cpp" />
     <ClCompile Include="hashTable.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="memory.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="parser.cpp" />
     <ClCompile Include="scanner.cpp" />
@@ -41,6 +42,7 @@
     <ClInclude Include="compiler.h" />
     <ClInclude Include="debug.h" />
     <ClInclude Include="hashTable.h" />
+    <ClInclude Include="memory.h" />
     <ClInclude Include="namespaces.h" />
     <ClInclude Include="object.h" />
     <ClInclude Include="parser.h" />

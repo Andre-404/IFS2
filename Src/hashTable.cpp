@@ -8,6 +8,7 @@ hashTable::hashTable() {
 
 bool hashTable::set(objString* key, Value val) {
 	//adjust array size based on load factor, array size should be power of 2 for best performance
+	key->moveTo = key;
 	if (count + 1 >= capacity*TABLE_LOAD_FACTOR) {
 		//arbitrary value, should be tested and changed
 		resize(((capacity) < 8 ? 8 : (capacity) * 2));
@@ -18,6 +19,7 @@ bool hashTable::set(objString* key, Value val) {
 
 	_entry->key = key;
 	_entry->val = val;
+	key->moveTo = nullptr;
 	return isNewKey;
 }
 
@@ -103,10 +105,11 @@ objString* hashTable::getKey(Value val) {
 	for (auto it = entries.begin(); it != entries.end(); ++it) {
 		if (valuesEqual(it->val, val)) return it->key;
 	}
+	return nullptr;
 }
 
 objString* findInternedString(hashTable* table, string& str, unsigned long long hash) {
-	if (table->count == 0) return NULL;
+	if (table->count == 0) return nullptr;
 
 	unsigned long long index = hash % table->capacity;
 	int length = str.length();
@@ -114,7 +117,7 @@ objString* findInternedString(hashTable* table, string& str, unsigned long long 
 		entry* _entry = &table->entries[index];
 		if (_entry->key == NULL) {
 			// Stop if we find an empty non-tombstone entry.
-			if (IS_NIL(_entry->val)) return NULL;
+			if (IS_NIL(_entry->val)) return nullptr;
 		}
 		else if (_entry->key->hash == hash && _entry->key->str.length() == length && _entry->key->str.compare(str) == 0) {
 			// We found it.

@@ -4,12 +4,15 @@
 #include "debug.h"
 #endif
 
+using namespace global;
 
 compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing(_enclosing), type(_type) {
 	//first slot is claimed for function name
 	local* _local = &locals[localCount++];
 	_local->depth = 0;
 	_local->name = "";
+	func = gc.allocObj(objFunc());
+	code = &func->body;
 }
 
 
@@ -633,7 +636,7 @@ void error(string message) {
 objFunc* compiler::endFuncDecl() {
 	if(!current->hasReturn) emitReturn();
 	#ifdef DEBUG_PRINT_CODE
-		current->func->body.disassemble(current->func->name == NULL ? "script" : current->func->name->str);
+		current->func->body.disassemble(current->func->name == nullptr ? "script" : current->func->name->str);
 	#endif
 	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
 	objFunc* func = current->func;

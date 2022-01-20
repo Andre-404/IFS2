@@ -1,9 +1,10 @@
 #include "object.h"
 #include "namespaces.h"
 
+using namespace global;
 
 void printFunction(objFunc* func) {
-	if (func->name == NULL) {
+	if (!func->name) {
 		printf("<script>");
 		return;
 	}
@@ -38,7 +39,6 @@ void printObject(Value value) {
 	}
 	}
 }
-
 //heap allocated objects that are a part of objs are deallocated in it's destructor function
 void freeObject(obj* object) {
 	switch (object->type) {
@@ -55,7 +55,10 @@ void freeObject(obj* object) {
 		break;
 	}
 	case OBJ_ARRAY: {
-		delete ((objArray*)object);
+		objArray* ob = (objArray*)object;
+		ob->values.clear();
+		std::cout << "Deleted array: " << ob << "\n";
+		delete ob;
 		break;
 	}
 	case OBJ_CLOSURE: {
@@ -83,67 +86,59 @@ objString::objString(string _str, unsigned long long _hash) {
 	type = OBJ_STRING;
 	str = _str;
 	hash = _hash;
-	global::internedStrings.set(this, NIL_VAL());
-	next = global::objects;
-	global::objects = this;
+	moveTo = nullptr;
 }
 
 //assumes the string hasn't been heap allocated
 objString* copyString(string& str) {
 	unsigned long long hash = hashString(str);
 	objString* interned = findInternedString(&global::internedStrings, str, hash);
-	if (interned != NULL) return interned;
-	return new objString(str, hash);
+	if (interned != nullptr) return interned;
+	return gc.allocObj(objString(str, hash));
 }
 
 //assumes string is heap allocated
 objString* takeString(string& str) {
 	unsigned long long hash = hashString(str);
 	objString* interned = findInternedString(&global::internedStrings, str, hash);
-	if (interned != NULL) {
+	if (interned != nullptr) {
 		return interned;
 	}
-	return new objString(str, hash);
+	return gc.allocObj(objString(str, hash));
 }
 
 objFunc::objFunc() {
-	name = NULL;
 	arity = 0;
 	upvalueCount = 0;
 	type = OBJ_FUNC;
-	next = global::objects;
-	global::objects = this;
+	moveTo = nullptr;
+	name = nullptr;
 }
 
 objNativeFn::objNativeFn(NativeFn _func, int _arity) {
 	func = _func;
 	arity = _arity;
 	type = OBJ_NATIVE;
-	next = global::objects;
-	global::objects = this;
+	moveTo = nullptr;
 }
 
 objClosure::objClosure(objFunc* _func) {
 	func = _func;
 	upvals.resize(func->upvalueCount, NULL);
-
 	type = OBJ_CLOSURE;
-	next = global::objects;
-	global::objects = this;
+	moveTo = nullptr;
 }
 
 objUpval::objUpval(Value* slot) {
-	location = slot;
-	nextUpval = NULL;
+	location = slot;//this will have to be updated when moving objUpval
 	closed = NIL_VAL();
+	isOpen = true;
 	type = OBJ_UPVALUE;
-	next = global::objects;
-	global::objects = this;
+	moveTo = nullptr;
 }
 
 objArray::objArray(vector<Value> vals) {
 	values = vals;
 	type = OBJ_ARRAY;
-	next = global::objects;
-	global::objects = this;
+	moveTo = nullptr;
 }

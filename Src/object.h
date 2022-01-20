@@ -19,8 +19,8 @@ If a object has some heap allocated stuff inside of it, delete it inside the des
 */
 class obj{
 public:
- ObjType type;
- obj* next;
+obj* moveTo;
+ObjType type;
 };
 
 class objString : public obj {
@@ -61,12 +61,12 @@ public:
 	vector<objUpval*> upvals;
 	objClosure(objFunc* _func);
 };
-
+//Value ptr will get updated manually 
 class objUpval : public obj {
 public:
 	Value* location;
-	objUpval* nextUpval;
 	Value closed;
+	bool isOpen;
 	objUpval(Value* _location);
 };
 
@@ -94,5 +94,7 @@ objString* takeString(string& str);
 
 void printObject(Value value);
 void freeObject(obj* object);
+
+
 
 #endif // !__IFS_OBJECT

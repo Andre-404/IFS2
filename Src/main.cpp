@@ -6,6 +6,7 @@
 #include "VM.h"
 #include "compiler.h"
 #include "namespaces.h"
+#include "memory.h"
 
 using std::cout;
 using std::cin;
@@ -13,7 +14,7 @@ using std::cin;
 //init the variables of global namespace
 long long global::memoryUsage = 0;
 hashTable global::internedStrings = hashTable();
-obj* global::objects = NULL;
+GC global::gc = GC();
 
 //possibly need more checks and/or throwing errors
 void* operator new(size_t size) {
@@ -72,7 +73,6 @@ int main() {
 		vm* newVm = new vm(comp);
 		delete newVm;
 	}
-	global::internedStrings = hashTable();
 
 	cin.get();
 	return 0;
