@@ -21,6 +21,7 @@ typedef unsigned long long uHash;
 
 
 void* __allocObj(size_t size);
+
 class obj{
 public:
 obj* moveTo;
@@ -38,6 +39,8 @@ void operator delete(void* memoryBlock) {
 }
 };
 
+//Headers
+
 class objString : public obj {
 public:
 	char* str;
@@ -46,6 +49,29 @@ public:
 	objString(char* _str, uInt _length,uHash _hash);
 	bool compare(char* toCompare, uInt _length);
 };
+
+
+class objVectorBase : public obj {
+public:
+	void* arr;
+	int sizeOfType;
+	int length;
+};
+
+
+template<typename T>
+class objVector : public objVectorBase {
+public:
+	T* arr;
+	objVector(T* _arr, int _length) {
+		arr = _arr;
+		sizeOfType = sizeof(T);
+		length = _length;
+	}
+};
+
+
+//Actualy objects
 
 class objArray : public obj {
 public:
@@ -87,6 +113,7 @@ public:
 	objUpval(Value* _location);
 };
 
+
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 
 static inline bool isObjType(Value value, ObjType type) {
@@ -108,6 +135,14 @@ static inline bool isObjType(Value value, ObjType type) {
 
 objString* copyString(char* str, uInt length);
 objString* takeString(char* str, uInt length);
+
+template<typename T>
+objVector<T>* createVector(uInt length) {
+	char* ptr = (char*)__allocObj(sizeof(objVector<T>) + (sizeof(T) * length));
+	objVector<T>* vec = new(ptr) objVector<T>(nullptr);
+	vec->arr = new(ptr + sizeof(objVector<T>)) T[length];
+	return vec;
+}
 
 void printObject(Value value);
 void freeObject(obj* object);

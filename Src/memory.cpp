@@ -44,8 +44,10 @@ void* GC::allocRaw(size_t size, bool shouldCollect) {
 	if (shouldCollect) collect();
 	//if we're still missing space, we reallocate the entire heap
 	double percentage = (double)(allocated + size) / (double)heapSize;
-	if (percentage > HEAP_MAX) {
+	//we use a while loop here in case the new heap size still isn't enough
+	while (percentage > HEAP_MAX) {
 		reallocate();
+		percentage = (double)(allocated + size) / (double)heapSize;
 	}
 	void* temp = heapTop;
 	heapTop += size;
@@ -405,7 +407,7 @@ void GC::moveObj(void* to, obj* from) {
 		objString* str = (objString*)to;
 		//length + 1 here is for the null terminator
 		moveRaw((char*)to + sizeof(objString), (char*)from + sizeof(objString), ((objString*)from)->length + 1);
-		
+		objVector* ptr;
 		break;
 	}
 	case OBJ_UPVALUE: {
