@@ -1,5 +1,6 @@
 #include "switch.h"
 
+
 using std::vector;
 
 //based on the type we create either a hash map or array on the heap(to save space), and leave the other as null
@@ -69,9 +70,9 @@ void switchTable::addToTable(string str, long ip) {
 	table->insert(std::make_pair(str, ip));
 }
 
-long switchTable::getJump(string& key) {
-	if (table->find(key) == table->end()) return -1;
-	return table->at(key);
+long switchTable::getJump(string& str) {
+	if (table->find(str) == table->end()) return -1;
+	return table->at(str);
 }
 
 long switchTable::getJump(int key) {

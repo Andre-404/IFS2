@@ -6,7 +6,6 @@
 #include "object.h"
 
 
-
 struct entry {
 	objString* key;
 	Value val;
@@ -28,7 +27,7 @@ private:
 	entry* findEntry(std::vector<entry> &_entries, objString* _key);
 };
 
-objString* findInternedString(hashTable* table, string& str, unsigned long long hash);
+objString* findInternedString(hashTable* table, char* str, uInt length, uHash hash);
 
 
 #endif // !__IFS_HASH_TABLE

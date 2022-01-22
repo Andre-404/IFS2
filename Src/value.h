@@ -21,6 +21,10 @@ union valUnion {
 struct Value {
 	valueType type;
 	valUnion as;
+	Value() {
+		type = VAL_NIL;
+		as.num = 0;
+	}
 };
 
 #define IS_BOOL(value)    ((value).type == VAL_BOOL)

@@ -23,7 +23,6 @@ vm::vm(compiler* current) {
 
 	objFunc* func = current->endFuncDecl();
 	delete current;
-	global::gc.ready(this);
 	interpret(func);
 }
 
@@ -85,8 +84,12 @@ void vm::concatenate() {
 	objString* b = AS_STRING(peek(0));
 	objString* a = AS_STRING(peek(1));
 	
-	string str = string(a->str + b->str);
-	objString* result = takeString(str);
+	uInt newLen = a->length + b->length;
+	char* temp = new char[newLen + 1];
+	memcpy(temp, a->str, a->length);
+	memcpy(temp + a->length, b->str, b->length);
+	temp[newLen] = '\0';
+	objString* result = takeString(temp, newLen);
 	pop();
 	pop();
 	push(OBJ_VAL(result));
@@ -113,7 +116,7 @@ bool vm::callValue(Value callee, int argCount) {
 			try {
 				result = native(argCount, stackTop - argCount);
 			}catch (const char* str) {
-				const char* name = globals.getKey(callee)->str.c_str();//gets the name of the native func
+				const char* name = globals.getKey(callee)->str;//gets the name of the native func
 				runtimeError("Error in %s: %s", name, str);
 				return false;
 			}
@@ -150,8 +153,8 @@ bool vm::call(objClosure* closure, int argCount) {
 }
 
 void vm::defineNative(string name, NativeFn func, int arity) {
-	push(OBJ_VAL(copyString(name)));
-	push(OBJ_VAL(gc.allocObj(objNativeFn(func, arity))));
+	push(OBJ_VAL(copyString((char*)name.c_str(), name.length())));
+	push(OBJ_VAL(new objNativeFn(func, arity)));
 	globals.set(AS_STRING(stack[0]), stack[1]);
 	pop();
 	pop();
@@ -165,7 +168,7 @@ objUpval* vm::captureUpvalue(Value* local) {
 		}
 		else break;
 	}
-	objUpval* createdUpval = gc.allocObj(objUpval(local));
+	objUpval* createdUpval = new objUpval(local);
 
 	return createdUpval;
 }
@@ -190,12 +193,12 @@ interpretResult vm::interpret(objFunc* func) {
 	//create a new function(implicit one for the whole code), and put it on the call stack
 	if (func == NULL) return interpretResult::INTERPRETER_RUNTIME_ERROR;
 	push(OBJ_VAL(func));//doing this because of GC
-
-	objClosure* closure = gc.allocObj(objClosure(func));
+	//to avoid cached pointers
+	objClosure* closure = new objClosure(AS_FUNCTION(peek(0)));
 	pop();
 	push(OBJ_VAL(closure));
 	call(closure, 0);
-
+	global::gc.ready(this);
 	return run();
 }
 
@@ -349,7 +352,7 @@ interpretResult vm::run() {
 			objString* name = READ_STRING();
 			Value value;
 			if (!globals.get(name, &value)){
-				return runtimeError("Undefined variable '%s'.", name->str.c_str());
+				return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			push(value);
 			break;
@@ -359,7 +362,7 @@ interpretResult vm::run() {
 			objString* name = READ_STRING();
 			if (globals.set(name, peek(0))) {
 				globals.del(name);
-				return runtimeError("Undefined variable '%s'.", name->str.c_str());
+				return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			break;
 		}
@@ -449,7 +452,9 @@ interpretResult vm::run() {
 				case switchType::STRING: {
 					if (IS_STRING(peek(0))) {
 						objString* str = AS_STRING(pop());
-						long jumpLength = _table.getJump(str->str);
+						string key;
+						key.assign(str->str, str->length + 1);
+						long jumpLength = _table.getJump(key);
 						if (jumpLength != -1) {
 							frame->ip += jumpLength;
 							break;
@@ -461,8 +466,10 @@ interpretResult vm::run() {
 				case switchType::MIXED: {
 					string str;
 					//this can be either a number or a string, so we need more checks
-					if (IS_STRING(peek(0))) str = AS_STRING(pop())->str;
-					else str = std::to_string((int)AS_NUMBER(pop()));
+					if (IS_STRING(peek(0))) {
+						objString* key = AS_STRING(pop());
+						str.assign(key->str, key->length + 1);
+					}else str = std::to_string((int)AS_NUMBER(pop()));
 					long jumpLength = _table.getJump(str);
 					if (jumpLength != -1) {
 						frame->ip += jumpLength;
@@ -507,8 +514,8 @@ interpretResult vm::run() {
 			break;
 		}
 		case OP_CLOSURE: {
-			objFunc* func = AS_FUNCTION(READ_CONSTANT());
-			objClosure* closure = gc.allocObj(objClosure(func));
+			//doing this to avoid cached pointers
+			objClosure* closure = new objClosure(AS_FUNCTION(READ_CONSTANT()));
 			push(OBJ_VAL(closure));
 			for (int i = 0; i < closure->upvals.size(); i++) {
 				uint8_t isLocal = READ_BYTE();
@@ -534,7 +541,7 @@ interpretResult vm::run() {
 				vals.push_back(peek(size - i - 1));
 				i++;
 			}
-			objArray* arr = gc.allocObj(objArray(vals));
+			objArray* arr = new objArray(vals);
 			i = 0;
 			while (i < size) {
 				pop();

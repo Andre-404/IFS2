@@ -1,5 +1,8 @@
 #include "hashTable.h"
-#define TABLE_LOAD_FACTOR 0.5//arbitrary, test and see what's best
+#define TABLE_LOAD_FACTOR 0.75//arbitrary, test and see what's best
+
+#define TOMBSTONE (objString*)0x000001
+
 
 hashTable::hashTable() {
 	capacity = 0;
@@ -14,8 +17,8 @@ bool hashTable::set(objString* key, Value val) {
 		resize(((capacity) < 8 ? 8 : (capacity) * 2));
 	}
 	entry* _entry = findEntry(entries, key);
-	bool isNewKey = _entry->key == NULL;
-	if (isNewKey && IS_NIL(_entry->val)) count++;
+	bool isNewKey = _entry->key == nullptr || _entry->key == TOMBSTONE;
+	if (isNewKey && _entry->key == nullptr) count++;
 
 	_entry->key = key;
 	_entry->val = val;
@@ -23,45 +26,42 @@ bool hashTable::set(objString* key, Value val) {
 	return isNewKey;
 }
 
+
 bool hashTable::get(objString* key, Value* val) {
 	if (count == 0) return false;
 
 	entry* _entry = findEntry(entries, key);
-	if (_entry->key == NULL) return false;//failed to find key
+	if (_entry->key == nullptr || _entry->key == TOMBSTONE) return false;//failed to find key
 
 	*val = _entry->val;
 	return true;
 }
+
 
 bool hashTable::del(objString* key) {
 	if (count == 0) return false;
 
 	// Find the entry.
 	entry* _entry = findEntry(entries, key);
-	if (_entry->key == NULL) return false;
+	if (_entry->key == nullptr || _entry->key == TOMBSTONE) return false;
 
 	// Place a tombstone in the entry.
-	_entry->key = NULL;
-	_entry->val = BOOL_VAL(true);
+	_entry->key = TOMBSTONE;
+	_entry->val = NIL_VAL();
 	return true;
 }
 
-
 entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
-	unsigned long long index = key->hash % _entries.size();
-	entry* tombstone = NULL;
+	uHash index = key->hash % _entries.size();
+	entry* tombstone = nullptr;
 	//loop until we either find the key we're looking for, or a open slot
 	while(true) {
 		entry* _entry = &_entries[index];
-		if (_entry->key == NULL) {
-			if (IS_NIL(_entry->val)) {
-				// Empty entry.
-				return tombstone != NULL ? tombstone : _entry;
-			}
-			else {
-				// We found a tombstone.
-				if (tombstone == NULL) tombstone = _entry;
-			}
+		if (_entry->key == nullptr) {//empty entry
+			return tombstone != nullptr ? tombstone : _entry;
+		}
+		else if (_entry->key == TOMBSTONE) {//we found a tombstone entry
+			if (tombstone == nullptr) tombstone = _entry;
 		}
 		else if (_entry->key == key) {
 			// We found the key.
@@ -75,12 +75,12 @@ entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
 void hashTable::resize(int _capacity) {
 	//create new array and fill it with NULL
 	std::vector<entry> newEntries;
-	newEntries.resize(_capacity, { NULL, NIL_VAL()});
+	newEntries.resize(_capacity, { nullptr, Value()});
 	count = 0;
 	//copy over the entries of the old array into the new one, avoid tombstones and recalculate the index
 	for (int i = 0; i < capacity; i++) {
 		entry* _entry = &entries[i];
-		if (_entry->key == NULL) continue;
+		if (_entry->key == nullptr || _entry->key == TOMBSTONE) continue;
 
 		entry* dest = findEntry(newEntries, _entry->key);
 		dest->key = _entry->key;
@@ -92,10 +92,11 @@ void hashTable::resize(int _capacity) {
 	capacity = _capacity;
 }
 
+
 void hashTable::tableAddAll(hashTable* src) {
 	for (int i = 0; i < src->capacity; i++) {
 		entry* _entry = &src->entries[i];
-		if (_entry->key != NULL) {
+		if (_entry->key != nullptr && _entry->key != TOMBSTONE) {
 			set(_entry->key, _entry->val);
 		}
 	}
@@ -108,18 +109,18 @@ objString* hashTable::getKey(Value val) {
 	return nullptr;
 }
 
-objString* findInternedString(hashTable* table, string& str, unsigned long long hash) {
+
+objString* findInternedString(hashTable* table, char* str, uInt length, uHash hash) {
 	if (table->count == 0) return nullptr;
 
-	unsigned long long index = hash % table->capacity;
-	int length = str.length();
+	uHash index = hash % table->capacity;
 	while(true) {
 		entry* _entry = &table->entries[index];
-		if (_entry->key == NULL) {
+		if (_entry->key == nullptr) {
 			// Stop if we find an empty non-tombstone entry.
-			if (IS_NIL(_entry->val)) return nullptr;
+			return nullptr;
 		}
-		else if (_entry->key->hash == hash && _entry->key->str.length() == length && _entry->key->str.compare(str) == 0) {
+		else if (_entry->key != TOMBSTONE && _entry->key->hash == hash && _entry->key->length == length && _entry->key->compare(str, length)) {
 			// We found it.
 			return _entry->key;
 		}

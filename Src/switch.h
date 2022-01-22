@@ -5,6 +5,7 @@
 #include "AST.h"
 #include <unordered_map>
 
+
 //this is for the when we have a switch full of numbers
 struct switchPairNum {
 	int key;
@@ -24,7 +25,7 @@ struct switchTable {
 	void addToArr(int key, long ip);
 	void addToTable(string str, long ip);
 	long getJump(int key);
-	long getJump(string& key);
+	long getJump(string& str);
 };
 
 

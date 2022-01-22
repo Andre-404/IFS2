@@ -11,13 +11,13 @@ Value nativeArrayCreate(int argCount, Value* args) {
 	vector<Value> vals;
 	double size = AS_NUMBER(*args);
 	vals.resize(size, NIL_VAL());
-	objArray* arr = gc.allocObj(objArray(vals));
+	objArray* arr = new objArray(vals);
 	return OBJ_VAL(arr);
 }
 Value nativeArrayCopy(int argCount, Value* args) {
 	if(!IS_ARRAY(*args))throw "Expected array for array argument.";
 	vector<Value> vals = AS_ARRAY(*args)->values;
-	return OBJ_VAL(gc.allocObj(objArray(vals)));
+	return OBJ_VAL(new objArray(vals));
 }
 Value nativeArrayResize(int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw "Expected array for array argument.";

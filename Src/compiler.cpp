@@ -11,7 +11,7 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 	local* _local = &locals[localCount++];
 	_local->depth = 0;
 	_local->name = "";
-	func = gc.allocObj(objFunc());
+	func = new objFunc();
 	code = &func->body;
 }
 
@@ -162,7 +162,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 		string _temp(token.lexeme);//converts string_view to string
 		_temp.erase(0, 1);
 		_temp.erase(_temp.size() - 1, 1);
-		emitConstant(OBJ_VAL(copyString(_temp)));
+		emitConstant(OBJ_VAL(copyString((char*)_temp.c_str(), _temp.length())));
 		break;
 	}
 
@@ -209,7 +209,7 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	current->func->arity = decl->getArgs().size();
 	//could get away with using string instead of objString?
 	string str(decl->getName().lexeme);
-	current->func->name = copyString(str);
+	current->func->name = copyString((char*)str.c_str(), str.length());
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
@@ -460,7 +460,7 @@ bool identifiersEqual(string* a, string* b) {
 
 uint8_t compiler::identifierConstant(Token name) {
 	string temp(name.lexeme);
-	return makeConstant(OBJ_VAL(copyString(temp)));
+	return makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
 }
 
 void compiler::defineVar(uint8_t name) {

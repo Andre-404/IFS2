@@ -14,20 +14,35 @@ enum ObjType {
 };
 
 typedef Value(*NativeFn)(int argCount, Value* args);
-/*
-If a object has some heap allocated stuff inside of it, delete it inside the destructor, not inside freeObject
-*/
+typedef unsigned int uInt;
+typedef unsigned long long uHash;
+
+
+void* __allocObj(size_t size);
 class obj{
 public:
 obj* moveTo;
 ObjType type;
+//this reroutes the new operator to take memory which the GC gives out
+//this is useful because in case a collection, it happens before the current object is even initalized
+void *operator new(size_t size) {
+	return __allocObj(size);
+}
+void* operator new(size_t size, void* to) {
+	return to;
+}
+void operator delete(void* memoryBlock) {
+	//empty
+}
 };
 
 class objString : public obj {
 public:
-	string str;
-	unsigned long long hash;
-	objString(string _str, unsigned long long _hash);
+	char* str;
+	uInt length;
+	uHash hash;
+	objString(char* _str, uInt _length,uHash _hash);
+	bool compare(char* toCompare, uInt _length);
 };
 
 class objArray : public obj {
@@ -89,12 +104,11 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_ARRAY(value)		   (((objArray*)AS_OBJ(value)))
 #define AS_CLOSURE(value)	   (((objClosure*)AS_OBJ(value)))
 
-objString* copyString(string& str);
-objString* takeString(string& str);
+objString* copyString(char* str, uInt length);
+objString* takeString(char* str, uInt length);
 
 void printObject(Value value);
 void freeObject(obj* object);
-
 
 
 #endif // !__IFS_OBJECT

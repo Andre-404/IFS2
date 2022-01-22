@@ -72,39 +72,59 @@ void freeObject(obj* object) {
 	}
 }
 
-static unsigned long long hashString(string& str) {
-	long long hash = 14695981039346656037u;
-	int length = str.size();
+static uHash hashString(char* str, uInt length) {
+	uHash hash = 14695981039346656037u;
 	for (int i = 0; i < length; i++) {
-		hash ^= (uint8_t)str.at(i);
+		hash ^= (uint8_t)str[i];
 		hash *= 1099511628211;
 	}
 	return hash;
 }
 
-objString::objString(string _str, unsigned long long _hash) {
+objString::objString(char* _str, uInt _length, uHash _hash) {
 	type = OBJ_STRING;
-	str = _str;
+	length = _length;
 	hash = _hash;
+	str = _str;
 	moveTo = nullptr;
+	global::internedStrings.set(this, NIL_VAL());
+}
+
+bool objString::compare(char* toCompare, uInt _length) {
+	if (length != _length) return false;
+	if (str == nullptr) return false;
+	for (int i = 0; i < _length; i++) {
+		if (toCompare[i] != str[i]) return false;
+	}
+	return true;
 }
 
 //assumes the string hasn't been heap allocated
-objString* copyString(string& str) {
-	unsigned long long hash = hashString(str);
-	objString* interned = findInternedString(&global::internedStrings, str, hash);
+objString* copyString(char* str, uInt length) {
+	uHash hash = hashString(str, length);
+	objString* interned = findInternedString(&global::internedStrings, str, length, hash);
 	if (interned != nullptr) return interned;
-	return gc.allocObj(objString(str, hash));
+	//we do this because on the heap a string obj is always followed by the char pointer for the string
+	//first, alloc enough memory for both the header and the string(length + 1 for null terminator)
+	char* temp = (char*)gc.allocRaw(sizeof(objString) + length + 1, true);
+	//first we init the header, the char* pointer we pass is where the string will be stored(just past the header)
+	objString* onHeap = new(temp) objString(temp + sizeof(objString), length, hash);
+	//copy the string contents
+	memcpy(temp + sizeof(objString), str, length + 1);
+	return onHeap;
 }
 
-//assumes string is heap allocated
-objString* takeString(string& str) {
-	unsigned long long hash = hashString(str);
-	objString* interned = findInternedString(&global::internedStrings, str, hash);
-	if (interned != nullptr) {
-		return interned;
-	}
-	return gc.allocObj(objString(str, hash));
+//works on the same basis as copyString, but it assumed that "str" has been heap allocated, so it frees it
+objString* takeString(char* str, uInt length) {
+	uHash hash = hashString(str, length);
+	objString* interned = findInternedString(&global::internedStrings, str, length, hash);
+	if (interned != nullptr) return interned;
+	//we do this because on the heap a string obj is always followed by the char pointer for the string
+	char* temp = (char*)gc.allocRaw(sizeof(objString) + length + 1, true);
+	objString* onHeap = new(temp) objString(temp + sizeof(objString), length, hash);
+	memcpy(temp + sizeof(objString), str, length + 1);
+	delete str;
+	return onHeap;
 }
 
 objFunc::objFunc() {
@@ -141,4 +161,9 @@ objArray::objArray(vector<Value> vals) {
 	values = vals;
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
+}
+
+//this is how we get the pointer operator new wants
+void* __allocObj(size_t size) {
+	return gc.allocRaw(size, true);
 }

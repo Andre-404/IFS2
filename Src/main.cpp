@@ -12,27 +12,8 @@ using std::cout;
 using std::cin;
 
 //init the variables of global namespace
-long long global::memoryUsage = 0;
 hashTable global::internedStrings = hashTable();
 GC global::gc = GC();
-
-//possibly need more checks and/or throwing errors
-void* operator new(size_t size) {
-	global::memoryUsage += size;
-	void* ptr = malloc(size);
-	if (ptr == NULL) {
-		cout << "Couldn't allocate necessary memory, exiting...";
-		exit(64);
-	}
-	return ptr;
-}
-
-void operator delete(void* memoryBlock, size_t size) {
-	global::memoryUsage -= size;
-
-	free(memoryBlock);
-}
-
 
 
 string readFile(string path) {

@@ -4,38 +4,35 @@
 #include "common.h"
 #include "VM.h"
 
-#define HEAP_START_SIZE (1024*1024*128)
+#define HEAP_START_SIZE (2048)
+#define HEAP_MIN 0.5
+#define HEAP_MAX 0.8
 
 class GC {
 public:
-	void collect(obj* onStack);
+	void collect(size_t nextAlloc);
 	GC();
 	void ready(vm* VM);
 	bool isReady;
-	//have to do this here because templates.....
-	template<typename T>
-	T* allocObj(T val) {
-		collect(&val);
-		T* temp = new(heapTop) T(val);
-		if ((heapTop + sizeof(T)) - heap >= HEAP_START_SIZE) {
-			std::cout << "Overflow" << "\n";
-			exit(64);
-		}
-		heapTop += sizeof(T);
-		allocated += sizeof(T);
-		if (temp->type == OBJ_STRING) global::internedStrings.set((objString*)temp, NIL_VAL());
-		return temp;
-	}
+	void* allocRaw(size_t size, bool shouldCollect);
 	void clear();
 private:
+	//keeping track of memory allocated since last clear, as well as the point after which a allocation should occur
 	long sinceLastClear;
 	long threshold;
 	vm* VM;
+	//heap -> current heap memory block
+	//heapTop -> the next free pointer on the heap(NOT the top of the actual memory block)
+	//oldHeap -> used when resizing the heap, objects from oldHeap get copied to the current heap, and then oldHeap is dealloced
 	char* heap;
 	char* heapTop;
+	char* oldHeap;
 	size_t allocated;
+	//size of the current heap memory block
+	size_t heapSize;
 
 	bool collecting;
+	//used to prevent deep recursion
 	std::vector<obj*> stack;
 
 	void mark();
@@ -47,26 +44,16 @@ private:
 
 	void computeAddress();
 
-	void updatePtrs(obj* onStack);
+	void updatePtrs();
 	void updateRootPtrs();
 	void updateHeapPtrs();
 
 	void compact();
 
 	void moveObj(void* to, obj* from);
-	void deleteObj(obj* ptr);
+	void moveRaw(void* to, void* from, size_t size);
 
-	template<typename T> void moveData(void* to, T* from) {
-		T temp = *from;
-		from->~T();
-		new(to) T(temp);
-	}
-	template<typename T> void destruct(T* ptr) {
-		ptr->~T();
-	}
-
+	void destructObj(obj* ptr);
 };
-
-#define GET_OBJ(type, val) (*((type*)val))
 
 #endif // !__IFS_MEMORY
