@@ -3,15 +3,24 @@
 
 GC::GC() {
 	collecting = false;
-	isReady = false;
-	threshold = 512;
-	VM = NULL;
+	threshold = COLLECTION_THRESHOLD;
+	allocated = 0;
+	sinceLastClear = allocated;
+
 	heap = new char[HEAP_START_SIZE];
 	heapTop = heap;
 	oldHeap = nullptr;
-	allocated = 0;
 	heapSize = HEAP_START_SIZE;
-	sinceLastClear = allocated;
+	
+
+	VM = nullptr;
+	compiling = nullptr;
+
+	//debug stuff
+	#ifdef DEBUG_GC
+	nCollections = 0;
+	nReallocations = 0;
+	#endif // DEBUG_GC
 }
 
 //these 2 template function are used for actually moving the objects in memory
@@ -29,9 +38,15 @@ void destruct(T* ptr) {
 }
 
 //we call this in the overwritten new operator of obj
-//it should also be used for allocating header + raw data(strings, arrays)
+//it should also be used explicitly for allocating header + raw data(strings, arrays)
 void* GC::allocRaw(size_t size, bool shouldCollect) {
-	if (shouldCollect) collect(size);
+	//we first collect, hoping to free up some space on the heap
+	if (shouldCollect) collect();
+	//if we're still missing space, we reallocate the entire heap
+	double percentage = (double)(allocated + size) / (double)heapSize;
+	if (percentage > HEAP_MAX) {
+		reallocate();
+	}
 	void* temp = heapTop;
 	heapTop += size;
 	allocated += size;
@@ -55,60 +70,65 @@ size_t getSizeOfObj(obj* ptr) {
 	}
 }
 
-//deallocts the entire heap
-void GC::clear() {
-	char* it = heap;
-
-	while (it < heapTop) {
-		obj* temp = (obj*)it;
-		size_t size = getSizeOfObj(temp);
-		destructObj(temp);
-		it += size;
-
-	}
-	delete[] heap;
-	heap = nullptr;
-	heapTop = nullptr;
-	oldHeap = nullptr;
-}
-
-//the GC won't collect any objects before this is called, could maybe switch it to work with VM and a compiler?
-void GC::ready(vm* _VM) {
-	VM = _VM;
-	isReady = true;
-}
-
-void GC::collect(size_t nextAlloc) {
-	if (collecting || VM == NULL) return;
+void GC::collect() {
+	if (collecting || (VM == nullptr && compiling == nullptr)) return;
 	collecting = true;
-	//we must account for the next alloc that's about to happen when determining whether or not to resize the heap
-	long delta = allocated - sinceLastClear + nextAlloc;
-	size_t topOfHeap = heapTop - heap + nextAlloc;
+	//we only collect if we've allocated a sufficient amount of memory since last clear,
+	//and the heap is more than HEAP_MIN full
+	long delta = allocated - sinceLastClear;
+	size_t topOfHeap = heapTop - heap;
 	double percentage = (double)topOfHeap / (double)heapSize;
-	if (delta < threshold && percentage < HEAP_MIN) {
+	//the HEAP_MAX check here is a exeption, if the heap is more than HEAP_MAX full, we want to collect no matter the delta
+	//we do this hoping to free up more space to the next allocation
+	if (delta < threshold && percentage < HEAP_MAX) {
+		collecting = false;
+		return;
+	}else if(percentage < HEAP_MIN) {
 		collecting = false;
 		return;
 	}
 	oldHeap = heap;
-	//if we're indeed resizing the heap, we combine it with the compacting(to avoid multiple passes)
-	bool hasReallocated = false;
-	if (percentage > HEAP_MAX) {
-		heapSize = heapSize * 2;//heap size is always a power of 2, maybe change this?
-		heap = new char[heapSize];
-		hasReallocated = true;
-	}
 	mark();
 	//calculate the address of each marked object after compaction
-	computeAddress();
+	computeAddress(false);
 	//update pointers both in the roots and in the heap objects themselves,
 	//special care needs to be taken to ensure that there are no cached pointers prior to a collection happening
 	updatePtrs();
-	//sliding objects in memory(or copying them to a new buffer if we're resizing the heap)
+	//sliding objects in memory, the heap memory buffer "to" is the same as "from"
 	compact();
-	if(hasReallocated) delete[] oldHeap;
+	oldHeap = nullptr;
 	sinceLastClear = allocated;
 	collecting = false;
+
+	//debug stuff
+	#ifdef DEBUG_GC
+	nCollections ++;
+	#endif // DEBUG_GC
 }
+
+void GC::reallocate() {
+	if (collecting || (VM == nullptr && compiling == nullptr)) return;
+	collecting = true;
+	oldHeap = heap;
+	heapSize = heapSize * 2;//heap size is always a power of 2, maybe change this?
+	heap = new char[heapSize];
+	//calculate the address of each marked object after reallocation
+	computeAddress(true);
+	//update pointers both in the roots and in the heap objects themselves,
+	//special care needs to be taken to ensure that there are no cached pointers prior to a collection happening
+	updatePtrs();
+	//copying object to a new memory buffer
+	compact();
+	delete[] oldHeap;
+	oldHeap = nullptr;
+	sinceLastClear = allocated;
+	collecting = false;
+	//debug stuff
+	#ifdef DEBUG_GC
+	nReallocations++;
+	#endif // DEBUG_GC
+}
+
 
 void GC::markVal(Value& val) {
 	if (val.type == VAL_OBJ) markObj(AS_OBJ(val));
@@ -140,7 +160,7 @@ void GC::markTable(hashTable& table) {
 }
 
 void GC::markRoots() {
-	if (VM != NULL) {
+	if (VM != nullptr) {
 		for (Value* val = VM->stack; val < VM->stackTop; val++) {
 			markVal(*val);
 		}
@@ -150,6 +170,13 @@ void GC::markRoots() {
 		}
 		for (int i = 0; i < VM->openUpvals.size(); i++) {
 			markObj(VM->openUpvals[i]);
+		}
+	}
+	if (compiling != nullptr) {
+		compilerInfo* cur = compiling->current;
+		while (cur != nullptr) {
+			markObj(cur->func);
+			cur = cur->enclosing;
 		}
 	}
 }
@@ -205,7 +232,7 @@ bool forwardAddress(obj* ptr) {
 	return ptr->moveTo != nullptr;
 }
 
-void GC::computeAddress() {
+void GC::computeAddress(bool isReallocating) {
 	//we scan the heap linearly, for each marked object(those whose moveTo field isn't null), we calculate a new(compacted) position
 	//"to" can point either to start of the same memory, or to a entirely new buffer
 	char* to = heap;
@@ -213,7 +240,7 @@ void GC::computeAddress() {
 
 	while (from < heapTop) {
 		obj* temp = (obj*)from;
-		if (forwardAddress((obj*)from)) {
+		if (isReallocating || forwardAddress((obj*)from)) {
 			temp->moveTo = (obj*)to;
 			//move the compacted position pointer
 			to += getSizeOfObj(temp);
@@ -299,19 +326,27 @@ void GC::updatePtrs() {
 }
 
 void GC::updateRootPtrs() {
-	if (VM != NULL) {
+	//we update the interned strings, but don't mark them, that's because the strings in this hash map are "weak" pointers
+	//if no reference to a string exists, there's no point in keeping it in memory
+	updateTable(&global::internedStrings);
+	if (VM != nullptr) {
 		for (Value* val = VM->stack; val < VM->stackTop; val++) {
 			updateVal(val);
 		}
 		updateTable(&VM->globals);
-		//we update the interned strings, but don't mark them, that's because the strings in this hash map are "weak" pointers
-		//if no reference to a string exists, there's no point in keeping it in memory
-		updateTable(&global::internedStrings);
 		for (int i = 0; i < VM->frameCount; i++) {
 			VM->frames[i].closure = (objClosure*)VM->frames[i].closure->moveTo;
 		}
 		for (int i = 0; i < VM->openUpvals.size(); i++) {
 			VM->openUpvals[i] = (objUpval*)VM->openUpvals[i]->moveTo;
+		}
+	}
+	if (compiling != nullptr) {
+		compilerInfo* cur = compiling->current;
+		while (cur != nullptr) {
+			cur->func = (objFunc*)cur->func->moveTo;
+			cur->code = &cur->func->body;
+			cur = cur->enclosing;
 		}
 	}
 }
@@ -402,4 +437,33 @@ void GC::destructObj(obj* ptr) {
 	case OBJ_NATIVE:	destruct((objNativeFn*)ptr); break;
 	case OBJ_UPVALUE:	destruct((objUpval*)ptr); break;
 	}
+}
+
+
+//helpers
+
+//deallocts the entire heap
+void GC::clear() {
+	char* it = heap;
+
+	//we need to explicitly call the destructor for each object to handle things like STL containers
+	while (it < heapTop) {
+		obj* temp = (obj*)it;
+		size_t size = getSizeOfObj(temp);
+		destructObj(temp);
+		it += size;
+
+	}
+
+	delete[] heap;
+	heap = nullptr;
+	heapTop = nullptr;
+	oldHeap = nullptr;
+	//debug stuff
+	#ifdef DEBUG_GC
+	std::cout << "GC ran " << nCollections << " times\n";
+	std::cout << "GC realloacted the heap " << nReallocations << " times\n";
+	std::cout << "Final size of heap: " << heapSize << "\n";
+	#endif // DEBUG_GC
+	
 }

@@ -19,7 +19,8 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 compiler::compiler(parser* _parser, funcType _type) {
 	Parser = _parser;
 	compiled = true;
-	current = new compilerInfo(NULL, funcType::TYPE_SCRIPT);
+	global::gc.compiling = this;
+	current = new compilerInfo(nullptr, funcType::TYPE_SCRIPT);
 	//Don't compile if we had a parse error
 	if (Parser->hadError) {
 		//Do nothing
@@ -625,7 +626,7 @@ void compiler::patchBreak() {
 #pragma endregion
 
 chunk* compiler::getChunk() {
-	return current->code;
+	return &current->func->body;
 }
 
 void error(string message) {

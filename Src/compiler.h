@@ -57,15 +57,14 @@ struct compilerInfo {
 
 class compiler : public visitor {
 public:
+	//compiler only ever emits the code for a single function, top level code is considered a function
+	compilerInfo* current;
 	bool compiled;
 	compiler(parser* Parser, funcType _type);//for compiling top level code
 	~compiler();
 	chunk* getChunk();
 	objFunc* endFuncDecl();
 private:
-	//compiler only ever emits the code for a single function, top level code is considered a function
-	compilerInfo* current;
-
 	parser* Parser;
 
 	#pragma region Helpers

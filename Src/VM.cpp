@@ -10,6 +10,9 @@ vm::vm(compiler* current) {
 	frameCount = 0;
 	resetStack();
 	if (!current->compiled) return;
+	//we do this here because defineNative() mutates the globals field,
+	//and if a collection happens we need to update all pointers in globals
+	global::gc.VM = this;
 	defineNative("clock", clockNative, 0);
 
 	defineNative("arrayCreate", nativeArrayCreate, 1);
@@ -23,6 +26,8 @@ vm::vm(compiler* current) {
 
 	objFunc* func = current->endFuncDecl();
 	delete current;
+	//every function will be accessible from the VM from now on, so there's no point in marking and tracing the compiler
+	global::gc.compiling = nullptr;
 	interpret(func);
 }
 
@@ -79,12 +84,13 @@ static bool isFalsey(Value value) {
 	return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
-//concats 2 string objects and uses that to make a new objString
+//concats 2 strings by allocating a new char* buffer using new and uses that to make a new objString
 void vm::concatenate() {
 	objString* b = AS_STRING(peek(0));
 	objString* a = AS_STRING(peek(1));
 	
 	uInt newLen = a->length + b->length;
+	//this pointer is deleted by takeString, possible optimization is to avoid this all together and alloc directly to heap
 	char* temp = new char[newLen + 1];
 	memcpy(temp, a->str, a->length);
 	memcpy(temp + a->length, b->str, b->length);
@@ -193,12 +199,11 @@ interpretResult vm::interpret(objFunc* func) {
 	//create a new function(implicit one for the whole code), and put it on the call stack
 	if (func == NULL) return interpretResult::INTERPRETER_RUNTIME_ERROR;
 	push(OBJ_VAL(func));//doing this because of GC
-	//to avoid cached pointers
+	//we use peek to avoid cached pointers
 	objClosure* closure = new objClosure(AS_FUNCTION(peek(0)));
 	pop();
 	push(OBJ_VAL(closure));
 	call(closure, 0);
-	global::gc.ready(this);
 	return run();
 }
 

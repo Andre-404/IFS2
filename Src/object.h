@@ -13,7 +13,9 @@ enum ObjType {
 	OBJ_UPVALUE,
 };
 
+//pointer to a native function
 typedef Value(*NativeFn)(int argCount, Value* args);
+//used for strings
 typedef unsigned int uInt;
 typedef unsigned long long uHash;
 

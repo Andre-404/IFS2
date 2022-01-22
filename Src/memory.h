@@ -3,24 +3,27 @@
 
 #include "common.h"
 #include "VM.h"
+#include "compiler.h"
 
-#define HEAP_START_SIZE (2048)
-#define HEAP_MIN 0.5
+//handpicked values, need adjusting
+#define HEAP_START_SIZE (1024)
+#define HEAP_MIN 0.6
 #define HEAP_MAX 0.8
+#define COLLECTION_THRESHOLD 1024
 
 class GC {
 public:
-	void collect(size_t nextAlloc);
 	GC();
-	void ready(vm* VM);
-	bool isReady;
+	vm* VM;
+	compiler* compiling;
 	void* allocRaw(size_t size, bool shouldCollect);
 	void clear();
 private:
 	//keeping track of memory allocated since last clear, as well as the point after which a allocation should occur
 	long sinceLastClear;
 	long threshold;
-	vm* VM;
+
+	
 	//heap -> current heap memory block
 	//heapTop -> the next free pointer on the heap(NOT the top of the actual memory block)
 	//oldHeap -> used when resizing the heap, objects from oldHeap get copied to the current heap, and then oldHeap is dealloced
@@ -35,6 +38,16 @@ private:
 	//used to prevent deep recursion
 	std::vector<obj*> stack;
 
+	//debug stuff
+	#ifdef DEBUG_GC
+	size_t nCollections;
+	size_t nReallocations;
+	#endif // DEBUG_GC
+
+
+	void reallocate();
+	void collect();
+
 	void mark();
 	void markObj(obj* ptr);
 	void markVal(Value& val);
@@ -42,7 +55,7 @@ private:
 	void markRoots();
 	void traceObj(obj* ptr);
 
-	void computeAddress();
+	void computeAddress(bool isReallocating);
 
 	void updatePtrs();
 	void updateRootPtrs();

@@ -31,6 +31,7 @@ Value nativeArrayResize(int argCount, Value* args) {
 
 Value nativeArrayPush(int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
+	if (valuesEqual(*args, *(args + 1))) throw "Can't push a reference to self";
 	AS_ARRAY(*args)->values.push_back(*(args + 1));
 	
 	return NIL_VAL();
