@@ -18,7 +18,8 @@ Value nativeArrayDelete(int argCount, Value* args);
 Value nativeArrayLength(int argCount, Value* args);
 #pragma endregion
 
-Value clockNative(int argCount, Value* args);
+Value nativeClock(int argCount, Value* args);
+Value nativeFloor(int argCount, Value* args);
 
 Value nativeFloor(int argCount, Value* args);
 
