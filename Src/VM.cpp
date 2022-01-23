@@ -13,7 +13,7 @@ vm::vm(compiler* current) {
 	//we do this here because defineNative() mutates the globals field,
 	//and if a collection happens we need to update all pointers in globals
 	global::gc.VM = this;
-	defineNative("clock", clockNative, 0);
+	defineNative("clock", nativeClock, 0);
 	defineNative("floor", nativeFloor, 1);
 
 	defineNative("arrayCreate", nativeArrayCreate, 1);
