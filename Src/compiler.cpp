@@ -63,7 +63,7 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	expr->getLeft()->accept(this);
-	if (expr->type == ASTType::OR) {
+	if (expr->getToken().type == TOKEN_OR) {
 		//if the left side is true, we know that the whole expression will eval to true
 		int jump = emitJump(OP_JUMP_IF_TRUE);
 		//if now we pop the left side and eval the right side, right side result becomes the result of the whole expression
@@ -71,7 +71,7 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 		expr->getRight()->accept(this);
 		patchJump(jump);
 		return;
-	}else if (expr->type == ASTType::AND) {
+	}else if (expr->getToken().type == TOKEN_AND) {
 		//at this point we have the left side of the expression on the stack, and if it's false we skip to the end
 		//since we know the whole expression will evaluate to false
 		int jump = emitJump(OP_JUMP_IF_FALSE);
