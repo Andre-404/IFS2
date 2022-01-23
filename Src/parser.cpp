@@ -27,9 +27,11 @@ class unaryExpr : public prefixParselet {
 class arrayExpr : public prefixParselet {
 	ASTNode* parse(Token token) {
 		vector<ASTNode*> members;
-		do {
-			members.push_back(cur->expression());
-		} while (cur->match({ TOKEN_COMMA }));
+		if (!(cur->peek().type == TOKEN_RIGHT_BRACKET)) {
+			do {
+				members.push_back(cur->expression());
+			} while (cur->match({ TOKEN_COMMA }));
+		}
 		cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
 		return new ASTArrayDeclExpr(members);
 	}
