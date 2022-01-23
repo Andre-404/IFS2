@@ -76,6 +76,11 @@ Value nativeArrayLength(int argCount, Value* args) {
 
 #pragma endregion
 
-Value clockNative(int argCount, Value* args) {
+Value nativeClock(int argCount, Value* args) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+Value nativeFloor(int argCount, Value* args) {
+	if (!IS_NUMBER(*args)) throw "Expected number for number argument";
+	return NUMBER_VAL(floor(AS_NUMBER(*args)));
 }
