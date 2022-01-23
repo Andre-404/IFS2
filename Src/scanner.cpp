@@ -127,6 +127,8 @@ void scanner::skipWhitespace() {
 				else if (peekNext() == '*') {
 					advance();
 					while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) advance();
+					advance();
+					advance();
 				}
 				else {
 					return;
