@@ -95,3 +95,16 @@ Value nativeFloor(int argCount, Value* args) {
 	double d = AS_NUMBER(*args);
 	return NUMBER_VAL(floor(d));
 }
+
+Value nativeRandomRange(int argCount, Value* args) {
+	if (!IS_NUMBER(*args) || !IS_NUMBER(*(args + 1))) throw "Expected a number.";
+	return NUMBER_VAL(std::uniform_int_distribution<int>(AS_NUMBER(*args), AS_NUMBER(*(args + 1)))(rng));
+}
+
+Value nativeSetRandomSeed(int argCount, Value* args) {
+	if (!IS_NUMBER(*args)) throw "Expected a number.";
+	double seed = AS_NUMBER(*args);
+	if (seed == -1) rng = std::mt19937(std::chrono::steady_clock::now().time_since_epoch().count());
+	else rng = std::mt19937(seed);
+	return NIL_VAL();
+}

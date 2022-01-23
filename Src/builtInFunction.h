@@ -20,5 +20,7 @@ Value nativeArrayLength(int argCount, Value* args);
 
 Value nativeClock(int argCount, Value* args);
 Value nativeFloor(int argCount, Value* args);
+Value nativeRandomRange(int argCount, Value* args);
+Value nativeSetRandomSeed(int argCount, Value* args);
 
 #endif // __IFS_BUILTIN

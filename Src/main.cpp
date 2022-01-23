@@ -14,6 +14,7 @@ using std::cin;
 //init the variables of global namespace
 hashTable global::internedStrings = hashTable();
 GC global::gc = GC();
+std::mt19937 global::rng(0);
 
 
 string readFile(string path) {

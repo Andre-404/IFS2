@@ -126,7 +126,10 @@ void scanner::skipWhitespace() {
 				}
 				else if (peekNext() == '*') {
 					advance();
-					while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) advance();
+					while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
+						if (peek() == '\n') line++;
+						advance();
+					}
 					if (!isAtEnd()) {
 						advance();
 						advance();

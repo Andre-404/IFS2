@@ -15,6 +15,8 @@ vm::vm(compiler* current) {
 	global::gc.VM = this;
 	defineNative("clock", nativeClock, 0);
 	defineNative("floor", nativeFloor, 1);
+	defineNative("randomRange", nativeRandomRange, 2);
+	defineNative("setRandomSeed", nativeSetRandomSeed, 1);
 
 	defineNative("arrayCreate", nativeArrayCreate, 1);
 	defineNative("arrayResize", nativeArrayResize, 2);
