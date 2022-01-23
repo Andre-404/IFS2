@@ -407,7 +407,6 @@ void GC::moveObj(void* to, obj* from) {
 		objString* str = (objString*)to;
 		//length + 1 here is for the null terminator
 		moveRaw((char*)to + sizeof(objString), (char*)from + sizeof(objString), ((objString*)from)->length + 1);
-		objVector* ptr;
 		break;
 	}
 	case OBJ_UPVALUE: {

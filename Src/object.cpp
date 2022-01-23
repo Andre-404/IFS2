@@ -161,7 +161,6 @@ objArray::objArray(vector<Value> vals) {
 	values = vals;
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
-	vec = createVector<Value>(20);
 }
 
 //this is how we get the pointer operator new wants

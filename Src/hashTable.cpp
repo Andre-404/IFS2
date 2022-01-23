@@ -68,7 +68,7 @@ entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
 			return _entry;
 		}
 		//make sure to loop back to the start of the array if we exceed the array length
-		index = (index + 1) % capacity;
+		index = (index + 1) % _entries.size();
 	}
 }
 
