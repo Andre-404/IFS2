@@ -14,6 +14,7 @@ vm::vm(compiler* current) {
 	//and if a collection happens we need to update all pointers in globals
 	global::gc.VM = this;
 	defineNative("clock", clockNative, 0);
+	defineNative("floor", nativeFloor, 1);
 
 	defineNative("arrayCreate", nativeArrayCreate, 1);
 	defineNative("arrayResize", nativeArrayResize, 2);
@@ -546,12 +547,15 @@ interpretResult vm::run() {
 		case OP_CREATE_ARRAY: {
 			int size = READ_BYTE();
 			int i = 0;
-			vector<Value> vals;
+			objArrayHeader* header = createArr(size);
 			while (i < size) {
-				vals.push_back(peek(size - i - 1));
+				header->arr[i] = peek(size - i - 1);
+				header->count++;
 				i++;
 			}
-			objArray* arr = new objArray(vals);
+			push(OBJ_VAL(header));
+			objArray* arr = new objArray(AS_ARRHEADER(peek(0)));
+			pop();
 			i = 0;
 			while (i < size) {
 				pop();
@@ -572,10 +576,11 @@ interpretResult vm::run() {
 				if (!IS_NUMBER(index)) return runtimeError("Index must be a number.");
 				double ind = AS_NUMBER(index);
 				if ((int)ind != ind) return runtimeError("Expected interger, got float.");
-				if (ind < 0 || ind > AS_ARRAY(callee)->values.size() - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (int)ind, AS_ARRAY(callee)->values.size() - 1);
+				objArray* arr = AS_ARRAY(callee);
+				if (ind < 0 || ind > AS_ARRAY(callee)->values->count - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (int)ind, AS_ARRAY(callee)->values->count - 1);
 
-				push(AS_ARRAY(callee)->values[ind]);
+				push(AS_ARRAY(callee)->values->arr[(int)ind]);
 				break;
 			}
 			}
@@ -596,10 +601,10 @@ interpretResult vm::run() {
 				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number");
 				double index = AS_NUMBER(field);
 				if (index != (int)index) return runtimeError("Index has to be a integer.");
-				if (index < 0 || index >arr->values.size() - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values.size() - 1);
+				if (index < 0 || index > arr->values->count - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values->count - 1);
 
-				arr->values[index] = val;
+				arr->values->arr[(int)index] = val;
 				}
 			}
 			//we want only the value to remain on the stack, since set is a assignment expr

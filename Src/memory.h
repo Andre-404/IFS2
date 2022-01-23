@@ -9,7 +9,7 @@
 #define HEAP_START_SIZE (1024)
 #define HEAP_MIN 0.6
 #define HEAP_MAX 0.8
-#define COLLECTION_THRESHOLD 1024
+#define COLLECTION_THRESHOLD 16384  
 
 class GC {
 public:

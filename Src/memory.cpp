@@ -65,7 +65,10 @@ size_t getSizeOfObj(obj* ptr) {
 	case OBJ_STRING: 
 		return sizeof(objString) + ((objString*)ptr)->length + 1; break;
 	case OBJ_UPVALUE: return sizeof(objUpval); break;
-
+	case OBJ_ARR_HEADER: {
+		objArrayHeader* header = (objArrayHeader*)ptr;
+		return sizeof(objArrayHeader) + (header->capacity * sizeof(Value));
+	}
 	default:
 		std::cout << "Couldn't convert obj" << "\n";
 		exit(1);
@@ -208,9 +211,7 @@ void GC::traceObj(obj* object) {
 	case OBJ_ARRAY: {
 		objArray* arr = (objArray*)object;
 		setMarked(arr);
-		for (Value val : arr->values) {
-			markVal(val);
-		}
+		stack.push_back(arr->values);
 		break;
 	}
 	case OBJ_CLOSURE: {
@@ -223,6 +224,14 @@ void GC::traceObj(obj* object) {
 		break;
 	}
 	case OBJ_UPVALUE: setMarked(object); markVal(((objUpval*)object)->closed);  break;
+	case OBJ_ARR_HEADER: {
+		objArrayHeader* header = (objArrayHeader*)object;
+		for (int i = 0; i < header->count; i++) {
+			markVal(header->arr[i]);
+		}
+		setMarked(object);
+		break;
+	}
 	case OBJ_NATIVE:
 	case OBJ_STRING: setMarked(object); break;
 	}
@@ -298,10 +307,7 @@ void updateObjectPtrs(obj* object) {
 	}
 	case OBJ_ARRAY: {
 		objArray* arr = (objArray*)object;
-		size_t size = arr->values.size();
-		for (size_t i = 0; i < size; i++) {
-			updateVal(&arr->values[i]);
-		}
+		arr->values = (objArrayHeader*)arr->values->moveTo;
 		break;
 	}
 	case OBJ_UPVALUE: {
@@ -315,6 +321,15 @@ void updateObjectPtrs(obj* object) {
 		objString* str = (objString*)object;
 		//make sure to update the pointer to the char* string, it's always going to be located right after the header
 		str->str = (char*)str->moveTo + sizeof(objString);
+		break;
+	}
+	case OBJ_ARR_HEADER: {
+		objArrayHeader* header = (objArrayHeader*)object;
+		size_t size = header->count;
+		for (size_t i = 0; i < size; i++) {
+			updateVal(&header->arr[i]);
+		}
+		//header->arr = (Value*)(((char*)header->moveTo) + sizeof(Value));
 		break;
 	}
 	case OBJ_NATIVE:
@@ -421,6 +436,20 @@ void GC::moveObj(void* to, obj* from) {
 	case OBJ_CLOSURE:	moveData(to, (objClosure*)from); break;
 	case OBJ_FUNC:		moveData(to, (objFunc*)from); break;
 	case OBJ_NATIVE:	moveData(to, (objNativeFn*)from); break;
+	case OBJ_ARR_HEADER: {
+		size_t count = ((objArrayHeader*)from)->count;
+		size_t capacity = ((objArrayHeader*)from)->capacity;
+		moveData(to, (objArrayHeader*)from);
+		objArrayHeader* newHeader = (objArrayHeader*)to;
+		newHeader->arr = new((Value*)(((char*)newHeader) + sizeof(objArrayHeader))) Value[capacity];
+		Value* fromArr = ((Value*)(((char*)from + sizeof(objArrayHeader))));
+		for (int i = 0; i < count; i++) {
+			moveData(&newHeader->arr[i], &fromArr[i]);
+		}
+		//memmove((char*)newHeader->arr, (char*)fromArr, count * sizeof(Value));
+		//int a = 0;
+		break;
+	}
 	}
 }
 

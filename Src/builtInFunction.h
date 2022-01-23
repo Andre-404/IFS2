@@ -20,4 +20,6 @@ Value nativeArrayLength(int argCount, Value* args);
 
 Value clockNative(int argCount, Value* args);
 
+Value nativeFloor(int argCount, Value* args);
+
 #endif // __IFS_BUILTIN

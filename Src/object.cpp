@@ -30,12 +30,15 @@ void printObject(Value value) {
 		break;
 	case OBJ_ARRAY: {
 		std::cout << "[";
-		vector<Value> vals = AS_ARRAY(value)->values;
-		for (int i = 0; i < vals.size(); i++) {
-			printValue(vals[i]);
-			if(i != vals.size() - 1) std::cout << ", ";
+		objArrayHeader* vals = AS_ARRAY(value)->values;
+		for (int i = 0; i < vals->count; i++) {
+			printValue(vals->arr[i]);
+			if(i != vals->count - 1) std::cout << ", ";
 		}
 		std::cout << "]";
+	}
+	case OBJ_ARR_HEADER: {
+		break;//this is never directly inside a value
 	}
 	}
 }
@@ -56,7 +59,6 @@ void freeObject(obj* object) {
 	}
 	case OBJ_ARRAY: {
 		objArray* ob = (objArray*)object;
-		ob->values.clear();
 		std::cout << "Deleted array: " << ob << "\n";
 		delete ob;
 		break;
@@ -88,6 +90,14 @@ objString::objString(char* _str, uInt _length, uHash _hash) {
 	str = _str;
 	moveTo = nullptr;
 	global::internedStrings.set(this, NIL_VAL());
+}
+
+objArrayHeader::objArrayHeader(Value* _arr, uInt _capacity) {
+	arr = _arr;
+	count = 0;
+	capacity = _capacity;
+	moveTo = nullptr;
+	type = OBJ_ARR_HEADER;
 }
 
 bool objString::compare(char* toCompare, uInt _length) {
@@ -157,11 +167,20 @@ objUpval::objUpval(Value* slot) {
 	moveTo = nullptr;
 }
 
-objArray::objArray(vector<Value> vals) {
+objArray::objArray(objArrayHeader* vals) {
 	values = vals;
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
 }
+
+
+objArrayHeader* createArr(size_t size) {
+	size_t capacity = pow(2, ceil(log2(size < 16 ? 16 : size)));
+	char* ptr = (char*)__allocObj(sizeof(objArrayHeader) + (capacity * sizeof(Value)));
+	Value* arr = new(ptr + sizeof(objArrayHeader)) Value[capacity];
+	return new(ptr) objArrayHeader(arr, capacity);
+}
+
 
 //this is how we get the pointer operator new wants
 void* __allocObj(size_t size) {

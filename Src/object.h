@@ -11,6 +11,7 @@ enum ObjType {
 	OBJ_ARRAY,
 	OBJ_CLOSURE,
 	OBJ_UPVALUE,
+	OBJ_ARR_HEADER,
 };
 
 //pointer to a native function
@@ -51,32 +52,20 @@ public:
 };
 
 
-class objVectorBase : public obj {
+class objArrayHeader : public obj {
 public:
-	void* arr;
-	int sizeOfType;
-	int length;
+	Value* arr;
+	uInt capacity;
+	uInt count;
+	objArrayHeader(Value* _arr, uInt _capacity);
 };
-
-
-template<typename T>
-class objVector : public objVectorBase {
-public:
-	T* arr;
-	objVector(T* _arr, int _length) {
-		arr = _arr;
-		sizeOfType = sizeof(T);
-		length = _length;
-	}
-};
-
 
 //Actualy objects
 
 class objArray : public obj {
 public:
-	vector<Value> values;
-	objArray(vector<Value> vals);
+	objArrayHeader* values;
+	objArray(objArrayHeader* vals);
 };
 
 class objFunc : public obj {
@@ -125,6 +114,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define IS_NATIVE(value)       isObjType(value, OBJ_NATIVE)
 #define IS_ARRAY(value)		   isObjType(value, OBJ_ARRAY)
 #define IS_CLOSURE(value)	   isObjType(value, OBJ_CLOSURE)
+#define IS_ARR_HEADER(value)   isObjType(value, OBJ_ARR_HEADER)
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -132,17 +122,12 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_NATIVE(value) 	   (((objNativeFn*)AS_OBJ(value)))
 #define AS_ARRAY(value)		   (((objArray*)AS_OBJ(value)))
 #define AS_CLOSURE(value)	   (((objClosure*)AS_OBJ(value)))
+#define AS_ARRHEADER(value)   (((objArrayHeader*)AS_OBJ(value)))
 
 objString* copyString(char* str, uInt length);
 objString* takeString(char* str, uInt length);
 
-template<typename T>
-objVector<T>* createVector(uInt length) {
-	char* ptr = (char*)__allocObj(sizeof(objVector<T>) + (sizeof(T) * length));
-	objVector<T>* vec = new(ptr) objVector<T>(nullptr);
-	vec->arr = new(ptr + sizeof(objVector<T>)) T[length];
-	return vec;
-}
+objArrayHeader* createArr(size_t size = 16);
 
 void printObject(Value value);
 void freeObject(obj* object);
