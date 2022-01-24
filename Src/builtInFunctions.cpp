@@ -9,15 +9,14 @@ using namespace global;
 Value nativeArrayCreate(int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw "Expected number for size argument.";
 	double size = AS_NUMBER(*args);
-	objArrayHeader* vals = createArr(size);
-	objArray* arr = new objArray(vals);
+	objArray* arr = createArr(size);
 	return OBJ_VAL(arr);
 }
 Value nativeArrayCopy(int argCount, Value* args) {
 	if(!IS_ARRAY(*args))throw "Expected array for array argument.";
-	objArrayHeader* vals = createArr(AS_ARRAY(*args)->values->capacity);
-	memmove(vals->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
-	return OBJ_VAL(new objArray(vals));
+	objArray* arr = createArr(AS_ARRAY(*args)->values->capacity);
+	memmove(arr->values->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
+	return OBJ_VAL(arr);
 }
 Value nativeArrayResize(int argCount, Value* args) {
 	/*if (!IS_ARRAY(*args))throw "Expected array for array argument.";
@@ -35,7 +34,7 @@ Value nativeArrayPush(int argCount, Value* args) {
 	size_t count = AS_ARRAY(*args)->values->count;
 	size_t capacity = AS_ARRAY(*args)->values->capacity;
 	if ((count + 1) >= capacity) {
-		objArrayHeader* temp = createArr(capacity * 2);
+		objArrayHeader* temp = createArrHeader(capacity * 2);
 		memcpy(temp->arr, AS_ARRAY(*args)->values->arr, temp->capacity * sizeof(Value));
 		temp->count = count;
 		AS_ARRAY(*args)->values = temp;

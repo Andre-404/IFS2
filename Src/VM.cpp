@@ -549,15 +549,12 @@ interpretResult vm::run() {
 		case OP_CREATE_ARRAY: {
 			int size = READ_BYTE();
 			int i = 0;
-			objArrayHeader* header = createArr(size);
+			objArray* arr = createArr(size);
 			while (i < size) {
-				header->arr[i] = peek(size - i - 1);
-				header->count++;
+				arr->values->arr[i] = peek(size - i - 1);
+				arr->values->count++;
 				i++;
 			}
-			push(OBJ_VAL(header));
-			objArray* arr = new objArray(AS_ARRHEADER(peek(0)));
-			pop();
 			i = 0;
 			while (i < size) {
 				pop();
@@ -579,10 +576,10 @@ interpretResult vm::run() {
 				double ind = AS_NUMBER(index);
 				if ((int)ind != ind) return runtimeError("Expected interger, got float.");
 				objArray* arr = AS_ARRAY(callee);
-				if (ind < 0 || ind > AS_ARRAY(callee)->values->count - 1)
+				if (ind < 0 || ind > arr->values->count - 1)
 					return runtimeError("Index %d outside of range [0, %d].", (int)ind, AS_ARRAY(callee)->values->count - 1);
 
-				push(AS_ARRAY(callee)->values->arr[(int)ind]);
+				push(arr->values->arr[(int)ind]);
 				break;
 			}
 			}

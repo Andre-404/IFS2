@@ -52,7 +52,8 @@ bool hashTable::del(objString* key) {
 }
 
 entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
-	uHash index = key->hash % _entries.size();
+	size_t bitMask = _entries.size() - 1 ;
+	uHash index = key->hash & bitMask;
 	entry* tombstone = nullptr;
 	//loop until we either find the key we're looking for, or a open slot
 	while(true) {
@@ -68,7 +69,7 @@ entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
 			return _entry;
 		}
 		//make sure to loop back to the start of the array if we exceed the array length
-		index = (index + 1) % _entries.size();
+		index = (index + 1) & bitMask;
 	}
 }
 
@@ -112,8 +113,8 @@ objString* hashTable::getKey(Value val) {
 
 objString* findInternedString(hashTable* table, char* str, uInt length, uHash hash) {
 	if (table->count == 0) return nullptr;
-
-	uHash index = hash % table->capacity;
+	size_t bitMask = table->capacity - 1;
+	uHash index = hash & bitMask;
 	while(true) {
 		entry* _entry = &table->entries[index];
 		if (_entry->key == nullptr) {
@@ -125,6 +126,6 @@ objString* findInternedString(hashTable* table, char* str, uInt length, uHash ha
 			return _entry->key;
 		}
 		//make sure to loop back to the start of the array if we exceed the array length
-		index = (index + 1) % table->capacity;
+		index = (index + 1) & bitMask;
 	}
 }

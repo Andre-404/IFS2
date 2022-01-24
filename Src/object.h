@@ -127,7 +127,8 @@ static inline bool isObjType(Value value, ObjType type) {
 objString* copyString(char* str, uInt length);
 objString* takeString(char* str, uInt length);
 
-objArrayHeader* createArr(size_t size = 16);
+objArray* createArr(size_t size = 16);
+objArrayHeader* createArrHeader(size_t size = 16);
 
 void printObject(Value value);
 void freeObject(obj* object);

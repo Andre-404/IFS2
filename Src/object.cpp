@@ -174,7 +174,15 @@ objArray::objArray(objArrayHeader* vals) {
 }
 
 
-objArrayHeader* createArr(size_t size) {
+objArray* createArr(size_t size) {
+	size_t capacity = pow(2, ceil(log2(size < 16 ? 16 : size)));
+	char* ptr = (char*)__allocObj(sizeof(objArray) + sizeof(objArrayHeader) + (capacity * sizeof(Value)));
+	Value* arr = new(ptr + sizeof(objArray) + sizeof(objArrayHeader)) Value[capacity];
+	objArrayHeader* header = new(ptr + sizeof(objArray)) objArrayHeader(arr, capacity);
+	return new(ptr) objArray(header);
+}
+
+objArrayHeader* createArrHeader(size_t size) {
 	size_t capacity = pow(2, ceil(log2(size < 16 ? 16 : size)));
 	char* ptr = (char*)__allocObj(sizeof(objArrayHeader) + (capacity * sizeof(Value)));
 	Value* arr = new(ptr + sizeof(objArrayHeader)) Value[capacity];

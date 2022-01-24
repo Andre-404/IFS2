@@ -7,8 +7,7 @@
 
 //handpicked values, need adjusting
 #define HEAP_START_SIZE (1024)
-#define HEAP_MIN 0.6
-#define HEAP_MAX 0.8
+#define HEAP_MAX 1
 #define COLLECTION_THRESHOLD 16384  
 
 class GC {
@@ -21,7 +20,6 @@ public:
 private:
 	//keeping track of memory allocated since last clear, as well as the point after which a allocation should occur
 	long sinceLastClear;
-	long threshold;
 
 	
 	//heap -> current heap memory block
@@ -45,7 +43,7 @@ private:
 	#endif // DEBUG_GC
 
 
-	void reallocate();
+	void reallocate(size_t size);
 	void collect();
 
 	void mark();

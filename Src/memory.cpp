@@ -1,9 +1,9 @@
 #include "memory.h"
 #include "namespaces.h"
+#include <immintrin.h>
 
 GC::GC() {
 	collecting = false;
-	threshold = COLLECTION_THRESHOLD;
 	allocated = 0;
 	sinceLastClear = allocated;
 
@@ -40,14 +40,17 @@ void destruct(T* ptr) {
 //we call this in the overwritten new operator of obj
 //it should also be used explicitly for allocating header + raw data(strings, arrays)
 void* GC::allocRaw(size_t size, bool shouldCollect) {
-	//we first collect, hoping to free up some space on the heap
-	if (shouldCollect) collect();
-	//if we're still missing space, we reallocate the entire heap
 	double percentage = (double)(allocated + size) / (double)heapSize;
+	if (percentage > HEAP_MAX) {
+		//we first collect, hoping to free up some space on the heap
+		collect();
+	}
+	percentage = (double)(allocated + size) / (double)heapSize;
+	//if we're still missing space, we reallocate the entire heap
 	//we use a while loop here in case the new heap size still isn't enough
-	while (percentage > HEAP_MAX) {
-		reallocate();
-		percentage = (double)(allocated + size) / (double)heapSize;
+	if(percentage > HEAP_MAX) {
+		size_t newHeapSize = (1ll << (64 - _lzcnt_u64(allocated + size - 1)));
+		reallocate(newHeapSize);
 	}
 	void* temp = heapTop;
 	heapTop += size;
@@ -78,20 +81,6 @@ size_t getSizeOfObj(obj* ptr) {
 void GC::collect() {
 	if (collecting || (VM == nullptr && compiling == nullptr)) return;
 	collecting = true;
-	//we only collect if we've allocated a sufficient amount of memory since last clear,
-	//and the heap is more than HEAP_MIN full
-	long delta = allocated - sinceLastClear;
-	size_t topOfHeap = heapTop - heap;
-	double percentage = (double)topOfHeap / (double)heapSize;
-	//the HEAP_MAX check here is a exeption, if the heap is more than HEAP_MAX full, we want to collect no matter the delta
-	//we do this hoping to free up more space to the next allocation
-	if (delta < threshold && percentage < HEAP_MAX) {
-		collecting = false;
-		return;
-	}else if(percentage < HEAP_MIN) {
-		collecting = false;
-		return;
-	}
 	oldHeap = heap;
 	mark();
 	//calculate the address of each marked object after compaction
@@ -111,11 +100,11 @@ void GC::collect() {
 	#endif // DEBUG_GC
 }
 
-void GC::reallocate() {
+void GC::reallocate(size_t size) {
 	if (collecting || (VM == nullptr && compiling == nullptr)) return;
 	collecting = true;
 	oldHeap = heap;
-	heapSize = heapSize * 2;//heap size is always a power of 2, maybe change this?
+	heapSize = size;//heap size is always a power of 2, maybe change this?
 	heap = new char[heapSize];
 	//calculate the address of each marked object after reallocation
 	computeAddress(true);
@@ -441,13 +430,9 @@ void GC::moveObj(void* to, obj* from) {
 		size_t capacity = ((objArrayHeader*)from)->capacity;
 		moveData(to, (objArrayHeader*)from);
 		objArrayHeader* newHeader = (objArrayHeader*)to;
-		newHeader->arr = new((Value*)(((char*)newHeader) + sizeof(objArrayHeader))) Value[capacity];
+		newHeader->arr = (Value*)(((char*)newHeader) + sizeof(objArrayHeader));
 		Value* fromArr = ((Value*)(((char*)from + sizeof(objArrayHeader))));
-		for (int i = 0; i < count; i++) {
-			moveData(&newHeader->arr[i], &fromArr[i]);
-		}
-		//memmove((char*)newHeader->arr, (char*)fromArr, count * sizeof(Value));
-		//int a = 0;
+		memmove((char*)newHeader->arr, (char*)fromArr, capacity * sizeof(Value));
 		break;
 	}
 	}
