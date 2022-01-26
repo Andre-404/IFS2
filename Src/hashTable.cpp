@@ -1,4 +1,5 @@
 #include "hashTable.h"
+#include "object.h"
 #define TABLE_LOAD_FACTOR 0.75//arbitrary, test and see what's best
 
 #define TOMBSTONE (objString*)0x000001

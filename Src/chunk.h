@@ -45,6 +45,10 @@
 		OP_GET_UPVALUE,
 		OP_SET_UPVALUE,
 		OP_CLOSE_UPVALUE,
+		OP_INCREMENT_PRE,
+		OP_DECREMENT_PRE,
+		OP_INCREMENT_POST,
+		OP_DECREMENT_POST,
 		//Arrays
 		OP_CREATE_ARRAY,
 		OP_GET,
@@ -62,6 +66,11 @@
 		OP_CALL,
 		OP_RETURN,
 		OP_CLOSURE,
+
+		//OOP
+		OP_CLASS,
+		OP_GET_PROPERTY,
+		OP_SET_PROPERTY,
 	};
 
 	//disassemble is here, but the functions it calls are in debug.cpp

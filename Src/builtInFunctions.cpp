@@ -19,12 +19,16 @@ Value nativeArrayCopy(int argCount, Value* args) {
 	return OBJ_VAL(arr);
 }
 Value nativeArrayResize(int argCount, Value* args) {
-	/*if (!IS_ARRAY(*args))throw "Expected array for array argument.";
+	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
 	if (!IS_NUMBER(*(args + 1))) throw "Expected number for size argument.";
-
-	vector<Value>& vals = AS_ARRAY(*args)->values;
-	double size = AS_NUMBER(*(args + 1));
-	vals.resize(size, NIL_VAL());*/
+	size_t count = AS_ARRAY(*args)->values->count;
+	size_t capacity = AS_ARRAY(*args)->values->capacity;
+	size_t newSize = AS_NUMBER(*(args + 1));
+	objArrayHeader* temp = createArrHeader(newSize);
+	memcpy(temp->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
+	temp->count = newSize;
+	AS_ARRAY(*args)->values = temp;
+	objArray* arr = AS_ARRAY(*args);
 	return NIL_VAL();
 }
 
@@ -35,7 +39,7 @@ Value nativeArrayPush(int argCount, Value* args) {
 	size_t capacity = AS_ARRAY(*args)->values->capacity;
 	if ((count + 1) >= capacity) {
 		objArrayHeader* temp = createArrHeader(capacity * 2);
-		memcpy(temp->arr, AS_ARRAY(*args)->values->arr, temp->capacity * sizeof(Value));
+		memcpy(temp->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
 		temp->count = count;
 		AS_ARRAY(*args)->values = temp;
 	}
@@ -52,29 +56,46 @@ Value nativeArrayPop(int argCount, Value* args) {
 	vals->count--;
 	return popped;
 }
+
 Value nativeArrayInsert(int argCount, Value* args) {
-	/*if (!IS_ARRAY(*args))throw "Expected array for array argument.";
+	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
 	if (!IS_NUMBER(*(args + 1))) throw "Expected number for position argument.";
 	
-	vector<Value>& vals = AS_ARRAY(*args)->values;
-	auto it = vals.begin();
+	size_t count = AS_ARRAY(*args)->values->count;
+	size_t capacity = AS_ARRAY(*args)->values->capacity;
+	if ((count + 1) >= capacity) {
+		objArrayHeader* temp = createArrHeader(capacity * 2);
+		memcpy(temp->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
+		temp->count = count;
+		AS_ARRAY(*args)->values = temp;
+	}
+	objArrayHeader* vals = AS_ARRAY(*args)->values;
 	int i = AS_NUMBER(*(args + 1));
-	if (i < 0 || i > vals.size() - 1) throw "Index out of range";
-	vals.insert(it + i, *(args + 2));
-	*/
+	if (i < 0 || i > vals->count) throw "Index out of range";
+	if (i != vals->count) {
+		memmove(&vals->arr[i + 1], &vals->arr[i], (vals->count - i) * sizeof(Value));
+		vals->arr[i] = *(args + 2);
+	}
+	else {
+		vals->arr[i] = *(args + 2);
+	}
+	vals->count++;
 	return NIL_VAL();
 }
+
 Value nativeArrayDelete(int argCount, Value* args) {
-	/*if (!IS_ARRAY(*args)) throw "Expected array for array argument.";
+	if (!IS_ARRAY(*args)) throw "Expected array for array argument.";
 	if (!IS_NUMBER(*(args + 1))) throw "Expected number for position argument.";
 
-	vector<Value>& vals = AS_ARRAY(*args)->values;
-	auto it = vals.begin();
+	objArrayHeader* vals = AS_ARRAY(*args)->values;
 	int i = AS_NUMBER(*(args + 1));
-	if (i < 0 || i > vals.size() - 1) throw "Index out of range";
-	vals.erase(it + i);
-	*/
-	return NIL_VAL();
+	if (i < 0 || i > vals->count - 1) throw "Index out of range";
+	Value val = vals->arr[i];
+	if (i != vals->count - 1) {
+		memmove(&vals->arr[i], &vals->arr[i + 1], (vals->count - (i + 1))*sizeof(Value));
+	}
+	vals->count--;
+	return val;
 }
 
 Value nativeArrayLength(int argCount, Value* args) {

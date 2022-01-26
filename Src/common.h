@@ -9,6 +9,10 @@
 
 	using std::string;
 
+	//used for strings
+	typedef unsigned int uInt;
+	typedef unsigned long long uHash;
+
 	namespace global {
 		
 	};

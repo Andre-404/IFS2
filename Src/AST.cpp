@@ -131,6 +131,25 @@ void ASTGroupingExpr::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Unary var altering expr
+ASTUnaryVarAlterExpr::ASTUnaryVarAlterExpr(ASTNode* _callee, ASTNode* _field, Token _op, bool _isPrefix) {
+	callee = _callee;
+	field = _field;
+	op = _op;
+	isPrefix = _isPrefix;
+	type = ASTType::VAR_ALTER;
+}
+
+void ASTUnaryVarAlterExpr::accept(visitor* vis) {
+	vis->visitUnaryVarAlterExpr(this);
+}
+ASTUnaryVarAlterExpr::~ASTUnaryVarAlterExpr() {
+	delete callee;
+	if (field != nullptr) delete field;
+}
+#pragma endregion
+
+
 #pragma region Literal expr
 ASTLiteralExpr::ASTLiteralExpr(Token _token) {
 	token = _token;
@@ -175,6 +194,17 @@ ASTFunc::~ASTFunc() {
 
 void ASTFunc::accept(visitor* vis) {
 	vis->visitFuncDecl(this);
+}
+#pragma endregion
+
+#pragma region Class decl
+ASTClass::ASTClass(Token _name) {
+	name = _name;
+	type = ASTType::CLASS;
+}
+
+void ASTClass::accept(visitor* vis) {
+	vis->visitClassDecl(this);
 }
 #pragma endregion
 
@@ -356,6 +386,7 @@ void ASTReturn::accept(visitor* vis) {
 	vis->visitReturnStmt(this);
 }
 #pragma endregion
+
 
 
 

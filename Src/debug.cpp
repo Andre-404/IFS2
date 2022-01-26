@@ -301,6 +301,12 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return byteInstruction("OP SET UPVALUE", Chunk, offset);
 	case OP_CLOSE_UPVALUE:
 		return simpleInstruction("OP CLOSE UPVALUE", offset);
+	case OP_CLASS:
+		return constantInstruction("OP CLASS", Chunk, offset);
+	case OP_GET_PROPERTY:
+		return constantInstruction("OP GET PROPERTY", Chunk, offset);
+	case OP_SET_PROPERTY:
+		return constantInstruction("OP SET PROPERTY", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

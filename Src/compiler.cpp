@@ -57,6 +57,15 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 		expr->getField()->accept(this);
 		expr->getValue()->accept(this);
 		emitByte(OP_SET);
+		break;
+	}
+	//this is a optimization for when the identifier is already there
+	case TOKEN_DOT: {
+		expr->getCallee()->accept(this);
+		expr->getValue()->accept(this);
+		int name = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
+		emitBytes(OP_SET_PROPERTY, name);
+		break;
 	}
 	}
 }
@@ -124,26 +133,81 @@ void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 
 void compiler::visitCallExpr(ASTCallExpr* expr) {
 	expr->getCallee()->accept(this);
-	int argCount = 0;
-	for (ASTNode* arg : expr->getArgs()) {
-		arg->accept(this);
-		argCount++;
-	}
 	// '(' is a function call, '[' and '.' are access operators
 	switch (expr->getAccessor().type) {
-	case TOKEN_LEFT_PAREN:
+	case TOKEN_LEFT_PAREN: {
+		int argCount = 0;
+		for (ASTNode* arg : expr->getArgs()) {
+			arg->accept(this);
+			argCount++;
+		}
 		emitBytes(OP_CALL, argCount);
 		break;
+	}
 		//these are usually things like array[index] or object.property
-	case TOKEN_LEFT_BRACKET:
-	case TOKEN_DOT:
+	case TOKEN_LEFT_BRACKET: {
+		expr->getArgs()[0]->accept(this);
 		emitByte(OP_GET);
+		break;
+	}
+	case TOKEN_DOT:
+		int name = identifierConstant(((ASTLiteralExpr*)expr->getArgs()[0])->getToken());
+		emitBytes(OP_GET_PROPERTY, name);
 		break;
 	}
 }
 
 void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {
 	expr->getExpr()->accept(this);
+}
+
+void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
+	//if 'field' field is null then this is a variable incrementing, if it's not null, then this is a field incrementing
+	if (expr->getField() == nullptr) {
+		Token varName = ((ASTLiteralExpr*)expr->getCallee())->getToken();
+		namedVar(varName, false);
+		int type = -1;
+		int arg = resolveLocal(varName);
+		if (arg != -1) {
+			type = 0;
+		}else if ((arg = resolveUpvalue(current, varName)) != -1) {
+			type = 1;
+		}else {
+			arg = identifierConstant(varName);
+			type = 2;
+		}
+
+		if (expr->getIsPrefix()) {
+			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_PRE);
+			else emitByte(OP_DECREMENT_PRE);
+		}
+		else {
+			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_POST);
+			else emitByte(OP_DECREMENT_POST);
+		}
+		emitBytes(type, arg);
+	}
+	else {
+		//if this a dot call, we parse it differently than '[' access
+		int constant = -1;
+		if (expr->getOp().type == TOKEN_LEFT_BRACKET) expr->getField()->accept(this);
+		else constant = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
+		//we parse the callee last so that it's on top of the stack when we hit this
+		expr->getCallee()->accept(this);
+
+		if (expr->getIsPrefix()) {
+			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_PRE);
+			else emitByte(OP_DECREMENT_PRE);
+		}
+		else {
+			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_POST);
+			else emitByte(OP_DECREMENT_POST);
+		}
+		//emitting type bytes for different access operator('.' or '[')
+		//3 means it's a '[' access, 4 means it's a '.' access
+		if(constant == -1) emitByte(3);
+		else emitBytes(4, constant);
+	}
 }
 
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
@@ -176,12 +240,12 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 
 
 
-void compiler::visitVarDecl(ASTVarDecl* stmt) {
+void compiler::visitVarDecl(ASTVarDecl* decl) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
-	current->line = stmt->getToken().line;
-	uint8_t global = parseVar(stmt->getToken());
+	current->line = decl->getToken().line;
+	uint8_t global = parseVar(decl->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
-	ASTNode* expr = stmt->getExpr();
+	ASTNode* expr = decl->getExpr();
 	if (expr == NULL) {
 		emitByte(OP_NIL);
 	}else{
@@ -221,6 +285,16 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 		emitByte(upvals[i].index);
 	}
 	defineVar(name);
+}
+
+void compiler::visitClassDecl(ASTClass* decl) {
+	Token className = decl->getName();
+	current->line = className.line;
+	int constant = identifierConstant(className);
+	declareVar(className);
+
+	emitBytes(OP_CLASS, constant);
+	defineVar(constant);
 }
 
 

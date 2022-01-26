@@ -6,6 +6,8 @@
 
 using namespace global;
 
+#define RUNTIME_ERROR interpretResult::INTERPRETER_RUNTIME_ERROR;
+
 vm::vm(compiler* current) {
 	frameCount = 0;
 	resetStack();
@@ -80,11 +82,11 @@ interpretResult vm::runtimeError(const char* format, ...) {
 		std::cout << (function->name == NULL ? "script" : function->name->str) << "()\n";
 	}
 	resetStack();
-	return interpretResult::INTERPRETER_RUNTIME_ERROR;
+	return RUNTIME_ERROR;
 }
 
 static bool isFalsey(Value value) {
-	return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+	return ((IS_BOOL(value) && !AS_BOOL(value)) || IS_NIL(value));
 }
 
 //concats 2 strings by allocating a new char* buffer using new and uses that to make a new objString
@@ -134,6 +136,11 @@ bool vm::callValue(Value callee, int argCount) {
 			push(result);
 			return true;
 		}
+		case OBJ_CLASS: {
+			objClass* klass = AS_CLASS(callee);
+			stackTop[-argCount - 1] = OBJ_VAL(new objInstance(klass));
+			return true;
+		}
 		default:
 			break; // Non-callable object type.
 		}
@@ -170,8 +177,7 @@ void vm::defineNative(string name, NativeFn func, int arity) {
 }
 
 objUpval* vm::captureUpvalue(Value* local) {
-	int i;
-	for (i = openUpvals.size() - 1; i >= 0; i--) {
+	for (int i = openUpvals.size() - 1; i >= 0; i--) {
 		if (openUpvals[i]->location >= local) {
 			if (openUpvals[i]->location == local) return openUpvals[i];
 		}
@@ -193,6 +199,122 @@ void vm::closeUpvalues(Value* last) {
 		}
 		else break;
 	}
+}
+
+bool vm::setVal(int type, int arg, Value val) {
+	switch (type) {
+	case 0: {
+		frames[frameCount - 1].slots[arg] = val;
+		return true;
+		break;
+	}
+	case 1: {
+		*(frames[frameCount - 1].closure->upvals[arg]->location) = val;
+		return true;
+		break;
+	}
+	case 2: {
+		objString* name = AS_STRING(frames[frameCount - 1].closure->func->body.constants[arg]);
+		if (globals.set(name, val)) {
+			globals.del(name);
+			runtimeError("Undefined variable '%s'.", name->str);
+			return false;
+		}
+		break;
+	}
+	}
+	return false;
+}
+
+bool vm::incrementField(int type, bool isPrefix, bool positive) {
+	//Get's the object whose field we're try to retrieve
+	Value callee = pop();
+	if (!IS_OBJ(callee)) {
+		runtimeError("Expected a array or struct.");
+		return false;
+	}
+	switch (AS_OBJ(callee)->type) {
+	case OBJ_ARRAY: {
+
+		Value field = pop();
+		if (!IS_NUMBER(field)) {
+			runtimeError("Expected a number for array index.");
+			return false;
+		}
+		double index = AS_NUMBER(field);
+		if ((int)index != index) {
+			runtimeError("Index must be integer.");
+			return false;
+		}
+		objArray* arr = AS_ARRAY(callee);
+
+		Value val = arr->values->arr[(int)index];
+		
+		if (!IS_NUMBER(val)) {
+			runtimeError("Cannot increment a value that's not a number");
+			return false;
+		}
+		//if it's a prefix increment(or decrement) like '++a' we first increment the value and then push it
+		//for postfix incrementing(like 'a++') we do the opposite
+		//the positive var is to determine if we're incrementing or decrementing
+		if (isPrefix) {
+			val.as.num += 1 * ((positive * 2) - 1);
+			push(val);
+		}else {
+			push(val);
+			val.as.num += 1 * ((positive * 2) - 1);
+		}
+
+		arr->values->arr[(int)index] = val;
+		break;
+	}
+	case OBJ_INSTANCE: {
+		objString* str;
+		//the 'type' passed is to determine whether the field of a struct is on the stack(as a string constant), or in the constant table
+		if (type == 3) {
+			Value temp = pop();
+			if (!IS_STRING(temp)) {
+				runtimeError("Expected a field name.");
+				return false;
+			}
+			str = AS_STRING(temp);
+		}
+		else {
+			//doing this because we don't have macros
+			str = AS_STRING(frames[frameCount - 1].closure->func->body.constants[getOp(frames[frameCount - 1].ip++)]);
+		}
+		objInstance* instance = AS_INSTANCE(callee);
+
+		Value val;
+
+		if (!instance->table.get(str, &val)) {
+			runtimeError("Attempting to access a field that isn't set.");
+			return false;
+		}
+		if (!IS_NUMBER(val)) {
+			runtimeError("Cannot increment a value that's not a number");
+			return false;
+		}
+		//if it's a prefix increment(or decrement) like '++a' we first increment the value and then push it
+		//for postfix incrementing(like 'a++') we do the opposite
+		//the positive var is to determine if we're incrementing or decrementing
+		if (isPrefix) {
+			val.as.num += 1 * ((positive * 2) - 1);
+			push(val);
+		}
+		else {
+			push(val);
+			val.as.num += 1 * ((positive * 2) - 1);
+		}
+
+		instance->table.set(str, val);
+		break;
+	}
+	default: 
+		runtimeError("Expected a array or struct.");
+		return false;
+	}
+	return true;
 }
 #pragma endregion
 
@@ -219,8 +341,7 @@ interpretResult vm::run() {
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			runtimeError("Operands must be numbers."); \
-			return interpretResult::INTERPRETER_RUNTIME_ERROR; \
+			return runtimeError("Operands must be numbers."); \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -404,6 +525,70 @@ interpretResult vm::run() {
 			closeUpvalues(stackTop - 1);
 			pop();
 			break;
+		case OP_INCREMENT_PRE: {
+			int type = READ_BYTE();
+			//if 'type' is above 2 it means we have a field incrementing operation
+			if (type > 2) {
+				if (!incrementField(type, true, true)) return RUNTIME_ERROR;
+				break;
+			}
+			//otherwise we have a normal variable incrementation
+			int arg = READ_BYTE();
+			Value val = pop();
+			if (val.type != VAL_NUM) runtimeError("Cannot increment a value that's not a number");
+			val.as.num++;
+			if (!setVal(type, arg, val)) {
+				return RUNTIME_ERROR;
+			}
+			push(val);
+			break;
+		}
+		case OP_INCREMENT_POST: {
+			int type = READ_BYTE();
+			if (type > 2) {
+				if (!incrementField(type, false, true)) return RUNTIME_ERROR;
+				break;
+			}
+			int arg = READ_BYTE();
+			Value val = peek(0);
+			if (val.type != VAL_NUM) runtimeError("Cannot increment a value that's not a number");
+			val.as.num++;
+			if (!setVal(type, arg, val)) {
+				return RUNTIME_ERROR;
+			}
+			break;
+		}
+		case OP_DECREMENT_PRE: {
+			int type = READ_BYTE();
+			if (type > 2) {
+				if (!incrementField(type, true, false)) return RUNTIME_ERROR;
+				break;
+			}
+			int arg = READ_BYTE();
+			Value val = pop();
+			if (val.type != VAL_NUM) runtimeError("Cannot decrement a value that's not a number");
+			val.as.num--;
+			if (!setVal(type, arg, val)) {
+				return RUNTIME_ERROR;
+			}
+			push(val);
+			break;
+		}
+		case OP_DECREMENT_POST: {
+			int type = READ_BYTE();
+			if (type > 2) {
+				if (!incrementField(type, false, false)) return RUNTIME_ERROR;
+				break;
+			}
+			int arg = READ_BYTE();
+			Value val = peek(0);
+			if (val.type != VAL_NUM) runtimeError("Cannot decrement a value that's not a number");
+			val.as.num--;
+			if (!setVal(type, arg, val)) {
+				return RUNTIME_ERROR;
+			}
+			break;
+		}
 		#pragma endregion
 
 		#pragma region Control flow
@@ -504,7 +689,7 @@ interpretResult vm::run() {
 			//how many values are on the stack right now
 			int argCount = READ_BYTE();
 			if (!callValue(peek(argCount), argCount)) {
-				return interpretResult::INTERPRETER_RUNTIME_ERROR;
+				return RUNTIME_ERROR;
 			}
 			//if the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
@@ -565,34 +750,52 @@ interpretResult vm::run() {
 		}
 
 		case OP_GET: {
-			//structs and objects get their own OP_GET_DOT operator
-			Value index = pop();
+			//structs and objects also get their own OP_GET_PROPERTY operator for access using '.'
+			Value field = pop();
 			Value callee = pop();
 			if (!IS_OBJ(callee))
 				runtimeError("Expected a array or map, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
-				if (!IS_NUMBER(index)) return runtimeError("Index must be a number.");
-				double ind = AS_NUMBER(index);
-				if ((int)ind != ind) return runtimeError("Expected interger, got float.");
+				if (!IS_NUMBER(field)) return runtimeError("Index must be a number.");
+				double index = AS_NUMBER(field);
+				if ((int)index != index) return runtimeError("Expected interger, got float.");
 				objArray* arr = AS_ARRAY(callee);
-				if (ind < 0 || ind > arr->values->count - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (int)ind, AS_ARRAY(callee)->values->count - 1);
+				if (index < 0 || index > arr->values->count - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (int)index, AS_ARRAY(callee)->values->count - 1);
 
-				push(arr->values->arr[(int)ind]);
+				push(arr->values->arr[(int)index]);
 				break;
 			}
+			case OBJ_INSTANCE: {
+				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
+				
+				objInstance* instance = AS_INSTANCE(callee);
+				objString* name = AS_STRING(field);
+				Value value;
+				if (instance->table.get(name, &value)) {
+					push(value);
+					break;
+				}
+				push(NIL_VAL());
+				break;
+			}
+			default:
+				return runtimeError("Expected a array or struct.");
 			}
 			break;
 		}
 
 		case OP_SET: {
-			//this is for handling arrays and maps, objects and structs get their own OP_SET_DOT operator
+			//structs and objects also get their own OP_SET_PROPERTY operator for setting using '.'
 			Value val = peek(0);
 			Value field = peek(1);
 			Value callee = peek(2);
+
 			if (!IS_OBJ(callee))
-				runtimeError("Expected a array or map, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+				runtimeError("Expected a array or struct, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
 				objArray* arr = AS_ARRAY(callee);
@@ -604,7 +807,18 @@ interpretResult vm::run() {
 					return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values->count - 1);
 
 				arr->values->arr[(int)index] = val;
+				break;
 				}
+			case OBJ_INSTANCE: {
+				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
+				objInstance* instance = AS_INSTANCE(callee);
+				objString* str = AS_STRING(field);
+
+				instance->table.set(str, val);
+				break;
+			}
+			default:
+				return runtimeError("Expected a array or struct.");
 			}
 			//we want only the value to remain on the stack, since set is a assignment expr
 			pop();
@@ -613,10 +827,46 @@ interpretResult vm::run() {
 			push(val);
 			break;
 		}
+
+		case OP_CLASS:
+			push(OBJ_VAL(new objClass(READ_STRING())));
+			break;
+
+		case OP_GET_PROPERTY: {
+			if (!IS_INSTANCE(peek(0))) {
+				runtimeError("Only instances have properties.");
+				return RUNTIME_ERROR;
+			}
+
+			objInstance* instance = AS_INSTANCE(peek(0));
+			objString* name = READ_STRING();
+
+			Value value;
+			if (instance->table.get(name, &value)) {
+				pop(); // Instance.
+				push(value);
+				break;
+			}
+			push(NIL_VAL());
+			break;
+		}
+
+		case OP_SET_PROPERTY: {
+			if (!IS_INSTANCE(peek(1))) {
+				runtimeError("Only instances have fields.");
+				return RUNTIME_ERROR;
+			}
+
+			objInstance* instance = AS_INSTANCE(peek(1));
+			instance->table.set(READ_STRING(), peek(0));
+
+			Value value = pop();
+			pop();
+			push(value);
+			break;
+		}
+
 		#pragma endregion
-
-
-		
 		}
 	}
 

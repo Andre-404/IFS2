@@ -3,7 +3,9 @@
 #define __IFS_HASH_TABLE
 
 #include "common.h"
-#include "object.h"
+#include "value.h"
+
+class objString;
 
 
 struct entry {

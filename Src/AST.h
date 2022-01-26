@@ -11,10 +11,12 @@ class ASTUnaryExpr;
 class ASTArrayDeclExpr;
 class ASTCallExpr;
 class ASTGroupingExpr;
+class ASTUnaryVarAlterExpr;
 class ASTLiteralExpr;
 
 class ASTVarDecl;
 class ASTFunc;
+class ASTClass;
 
 class ASTPrintStmt;
 class ASTExprStmt;
@@ -36,6 +38,8 @@ enum class ASTType {
 	UNARY,
 	GROUPING,
 	ARRAY,
+	VAR_ALTER,
+	FIELD_ALTER,
 	CALL,
 	LITERAL,
 	VAR_DECL,
@@ -49,6 +53,7 @@ enum class ASTType {
 	SWITCH_STMT,
 	CASE,
 	FUNC,
+	CLASS,
 	
 	RETURN,
 };
@@ -68,13 +73,15 @@ public:
 	virtual void visitSetExpr(ASTSetExpr* expr) = 0;
 	virtual void visitBinaryExpr(ASTBinaryExpr* expr) = 0;
 	virtual void visitUnaryExpr(ASTUnaryExpr* expr) = 0;
-	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
+	virtual void visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) = 0;
 	virtual void visitCallExpr(ASTCallExpr* expr) = 0;
 	virtual void visitGroupingExpr(ASTGroupingExpr* expr) = 0;
+	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
 	virtual void visitLiteralExpr(ASTLiteralExpr* expr) = 0;
 
-	virtual void visitVarDecl(ASTVarDecl* stmt) = 0;
+	virtual void visitVarDecl(ASTVarDecl* decl) = 0;
 	virtual void visitFuncDecl(ASTFunc* decl) = 0;
+	virtual void visitClassDecl(ASTClass* decl) = 0;
 
 	virtual void visitPrintStmt(ASTPrintStmt* stmt) = 0;
 	virtual void visitExprStmt(ASTExprStmt* stmt) = 0;
@@ -190,6 +197,23 @@ public:
 	void accept(visitor* vis);
 
 	ASTNode* getExpr() { return expr; }
+};
+
+class ASTUnaryVarAlterExpr : public ASTNode {
+private:
+	ASTNode* callee;
+	ASTNode* field;
+	Token op;
+	bool isPrefix;
+public:
+	ASTUnaryVarAlterExpr(ASTNode* _callee, ASTNode* _field, Token _op, bool _isPrefix);
+	~ASTUnaryVarAlterExpr();
+	void accept(visitor* vis);
+
+	ASTNode* getCallee() { return callee; }
+	ASTNode* getField() { return field; }
+	Token getOp() { return op; }
+	bool getIsPrefix() { return isPrefix; }
 };
 
 class ASTLiteralExpr : public ASTNode {
@@ -356,6 +380,15 @@ public:
 	~ASTReturn();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return expr; }
+};
+
+class ASTClass : public ASTNode {
+private:
+	Token name;
+public:
+	ASTClass(Token _name);
+	void accept(visitor* vis);
+	Token getName() { return name; }
 };
 #pragma endregion
 

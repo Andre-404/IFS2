@@ -1,5 +1,6 @@
 #include "object.h"
 #include "namespaces.h"
+#include <immintrin.h>
 
 using namespace global;
 
@@ -36,10 +37,15 @@ void printObject(Value value) {
 			if(i != vals->count - 1) std::cout << ", ";
 		}
 		std::cout << "]";
+		break;
 	}
-	case OBJ_ARR_HEADER: {
-		break;//this is never directly inside a value
-	}
+	case OBJ_CLASS:
+		std::cout << AS_CLASS(value)->name->str;
+		break;
+	case OBJ_INSTANCE:
+		std::cout << AS_INSTANCE(value)->klass->name->str<<" instance";
+		break;
+	case OBJ_ARR_HEADER: break;//this is never directly inside a value
 	}
 }
 //heap allocated objects that are a part of objs are deallocated in it's destructor function
@@ -173,6 +179,19 @@ objArray::objArray(objArrayHeader* vals) {
 	moveTo = nullptr;
 }
 
+objClass::objClass(objString* _name) {
+	name = _name;
+	type = OBJ_CLASS;
+	moveTo = nullptr;
+}
+
+objInstance::objInstance(objClass* _klass) {
+	klass = _klass;
+	moveTo = nullptr;
+	type = OBJ_INSTANCE;
+	table = hashTable();
+}
+
 
 objArray* createArr(size_t size) {
 	size_t capacity = pow(2, ceil(log2(size < 16 ? 16 : size)));
@@ -183,7 +202,7 @@ objArray* createArr(size_t size) {
 }
 
 objArrayHeader* createArrHeader(size_t size) {
-	size_t capacity = pow(2, ceil(log2(size < 16 ? 16 : size)));
+	size_t capacity = (1ll << (64 - _lzcnt_u64(size)));
 	char* ptr = (char*)__allocObj(sizeof(objArrayHeader) + (capacity * sizeof(Value)));
 	Value* arr = new(ptr + sizeof(objArrayHeader)) Value[capacity];
 	return new(ptr) objArrayHeader(arr, capacity);

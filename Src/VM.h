@@ -46,6 +46,8 @@ private:
 	void defineNative(string name, NativeFn func, int arity);
 	objUpval* captureUpvalue(Value* local);
 	void closeUpvalues(Value* last);
+	bool setVal(int type, int arg, Value val);
+	bool incrementField(int type, bool isPrefix, bool positive);
 };
 
 

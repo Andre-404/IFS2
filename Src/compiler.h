@@ -105,12 +105,15 @@ private:
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
 	void visitArrayDeclExpr(ASTArrayDeclExpr* expr);
-	void visitCallExpr(ASTCallExpr* expr);
-	void visitLiteralExpr(ASTLiteralExpr* expr);
 	void visitUnaryExpr(ASTUnaryExpr* expr);
+	void visitCallExpr(ASTCallExpr* expr);
+	void visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr);
+	void visitLiteralExpr(ASTLiteralExpr* expr);
+	
 
-	void visitVarDecl(ASTVarDecl* stmt);
+	void visitVarDecl(ASTVarDecl* decl);
 	void visitFuncDecl(ASTFunc* decl);
+	void visitClassDecl(ASTClass* decl);
 
 	void visitPrintStmt(ASTPrintStmt* stmt);
 	void visitExprStmt(ASTExprStmt* stmt);

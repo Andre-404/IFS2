@@ -5,7 +5,7 @@
 #pragma region Parselets
 
 class assignmentExpr : public infixParselet {
-	ASTNode* parse(ASTNode* left, Token token) {
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		//makes it right associative
 		ASTNode* right = cur->expression(prec - 1);
 		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
@@ -49,15 +49,48 @@ class literalExpr : public prefixParselet {
 	}
 };
 
+class unaryVarAlterPrefix : public prefixParselet {
+	ASTNode* parse(Token op) {
+		ASTNode* var = cur->expression(prec);
+		ASTUnaryVarAlterExpr* expr = nullptr;
+		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
+			expr = new ASTUnaryVarAlterExpr(var, nullptr, op, true);
+		}
+		else if (var->type == ASTType::CALL) {
+			ASTCallExpr* call = (ASTCallExpr*)var;
+			//if the accessor token type is a left paren, then this is a function call, and not a get expression, so we throw a error
+			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a non l-value.");
+			expr = new ASTUnaryVarAlterExpr(call->getCallee(), call->getArgs()[0], op, true);
+		}
+		return expr;
+	}
+};
+
+class unaryVarAlterPostfix : public infixParselet {
+	ASTNode* parse(ASTNode* var, Token op, int surroundingPrec) {
+		ASTUnaryVarAlterExpr* expr = nullptr;
+		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
+			expr = new ASTUnaryVarAlterExpr(var, nullptr, op, false);
+		}
+		else if (var->type == ASTType::CALL) {
+			ASTCallExpr* call = (ASTCallExpr*)var;
+			//if the accessor token type is a left paren, then this is a function call, and not a get expression, so we throw a error
+			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a non l-value.");
+			expr = new ASTUnaryVarAlterExpr(call->getCallee(), call->getArgs()[0], op, false);
+		}
+		return expr;
+	}
+};
+
 class binaryExpr : public infixParselet {
-	ASTNode* parse(ASTNode* left, Token token) {
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		ASTNode* right = cur->expression(prec);
 		return new ASTBinaryExpr(left, token, right);
 	}
 };
 
 class callExpr : public infixParselet {
-	ASTNode* parse(ASTNode* left, Token token) {
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		vector<ASTNode*> args;
 		if(token.type == TOKEN_LEFT_PAREN) {//function call
 			if (!cur->check(TOKEN_RIGHT_PAREN)) {
@@ -68,16 +101,18 @@ class callExpr : public infixParselet {
 			cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
 			return new ASTCallExpr(left, token, args);
 		}
-		else if (token.type == TOKEN_LEFT_BRACKET) {//array/map access
+		else if (token.type == TOKEN_LEFT_BRACKET) {//array/struct with string access
 			args.push_back(cur->expression());
 			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array/map access.");
 		}
 		else if (token.type == TOKEN_DOT) {//struct/object access
-			args.push_back(cur->expression((int)precedence::PRIMARY));
+			Token field = cur->consume(TOKEN_IDENTIFIER, "Expected a field identifier.");
+			args.push_back(new ASTLiteralExpr(field));
 		}
 		//if we have something like arr[0] = 1; we can't parse it with the assignment expr
 		//this handles that case and produces a special set expr
-		if (cur->match({ TOKEN_EQUAL })) {
+		//we also check the precedence level of the surrounding expression, so "a + b.c = 3" doesn't get parsed
+		if (surroundingPrec <= (int)precedence::ASSIGNMENT && cur->match({ TOKEN_EQUAL })) {
 			ASTNode* val = cur->expression();
 			//args[0] because there is only every 1 argument inside [ ] when accessing/setting a field
 			return new ASTSetExpr(left, args[0], token, val);
@@ -101,6 +136,9 @@ parser::parser(vector<Token>* _tokens) {
 		addPrefix(TOKEN_BANG, new unaryExpr, precedence::NOT);
 		addPrefix(TOKEN_MINUS, new unaryExpr, precedence::NOT);
 		addPrefix(TOKEN_TILDA, new unaryExpr, precedence::NOT);
+
+		addPrefix(TOKEN_INCREMENT, new unaryVarAlterPrefix, precedence::ALTER);
+		addPrefix(TOKEN_DECREMENT, new unaryVarAlterPrefix, precedence::ALTER);
 
 		addPrefix(TOKEN_IDENTIFIER, new literalExpr, precedence::PRIMARY);
 		addPrefix(TOKEN_STRING, new literalExpr, precedence::PRIMARY);
@@ -141,6 +179,12 @@ parser::parser(vector<Token>* _tokens) {
 
 		addInfix(TOKEN_LEFT_PAREN, new callExpr, precedence::CALL);
 		addInfix(TOKEN_LEFT_BRACKET, new callExpr, precedence::CALL);
+		addInfix(TOKEN_DOT, new callExpr, precedence::CALL);
+
+		//Postfix
+		//postfix and mixfix operators get parsed with the infix parselets
+		addInfix(TOKEN_INCREMENT, new unaryVarAlterPostfix, precedence::ALTER);
+		addInfix(TOKEN_DECREMENT, new unaryVarAlterPostfix, precedence::ALTER);
 	#pragma endregion
 
 	while (!isAtEnd()) {
@@ -152,7 +196,7 @@ parser::parser(vector<Token>* _tokens) {
 		}
 	}
 	#ifdef DEBUG_PRINT_AST
-		debugASTPrinter printer(statements);
+		//debugASTPrinter printer(statements);
 	#endif // DEBUG_PRINT_AST
 }
 
@@ -167,6 +211,7 @@ parser::~parser() {
 #pragma region Statements and declarations
 ASTNode* parser::declaration() {
 	if (match({ TOKEN_VAR })) return varDecl();
+	else if (match({ TOKEN_CLASS })) return classDecl();
 	else if (match({ TOKEN_FUNC })) return funcDecl();
 	return statement();
 }
@@ -203,6 +248,13 @@ ASTNode* parser::funcDecl() {
 	consume(TOKEN_LEFT_BRACE, "Expect '{' after arguments.");
 	ASTNode* body = blockStmt();
 	return new ASTFunc(name, args, arity, body);
+}
+
+ASTNode* parser::classDecl() {
+	Token name = consume(TOKEN_IDENTIFIER, "Expected a class name.");
+	consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+	consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+	return new ASTClass(name);
 }
 
 ASTNode* parser::statement() {
@@ -368,12 +420,11 @@ ASTNode* parser::expression(int prec) {
 	//while loop handles continous use of ops, eg. 1 + 2 * 3
 	while (prec < getPrec()) {
 		token = advance();
-
 		if (infixParselets.count(token.type) == 0) {
 			throw error(token, "Expected expression.");
 		}
 		infixParselet* infix = infixParselets[token.type];
-		left = infix->parse(left, token);
+		left = infix->parse(left, token, prec);
 	}
 	return left;
 }
@@ -487,6 +538,7 @@ void parser::addInfix(TokenType type, infixParselet* parselet, precedence prec) 
 	parselet->prec = (int)prec;
 	infixParselets.insert_or_assign(type, parselet);
 }
+
 
 int parser::getPrec() {
 	Token token = peek();

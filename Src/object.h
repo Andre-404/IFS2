@@ -3,6 +3,7 @@
 #include "common.h"
 #include "value.h"
 #include "chunk.h"
+#include "hashTable.h"
 
 enum ObjType {
 	OBJ_STRING,
@@ -12,13 +13,12 @@ enum ObjType {
 	OBJ_CLOSURE,
 	OBJ_UPVALUE,
 	OBJ_ARR_HEADER,
+	OBJ_CLASS,
+	OBJ_INSTANCE,
 };
 
 //pointer to a native function
 typedef Value(*NativeFn)(int argCount, Value* args);
-//used for strings
-typedef unsigned int uInt;
-typedef unsigned long long uHash;
 
 
 void* __allocObj(size_t size);
@@ -102,6 +102,19 @@ public:
 	objUpval(Value* _location);
 };
 
+class objClass : public obj {
+public:
+	objString* name;
+	objClass(objString* _name);
+};
+
+class objInstance : public obj {
+public:
+	objClass* klass;
+	hashTable table;
+	objInstance(objClass* _klass);
+};
+
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 
@@ -115,6 +128,8 @@ static inline bool isObjType(Value value, ObjType type) {
 #define IS_ARRAY(value)		   isObjType(value, OBJ_ARRAY)
 #define IS_CLOSURE(value)	   isObjType(value, OBJ_CLOSURE)
 #define IS_ARR_HEADER(value)   isObjType(value, OBJ_ARR_HEADER)
+#define IS_CLASS(value)        isObjType(value, OBJ_CLASS)
+#define IS_INSTANCE(value)     isObjType(value, OBJ_INSTANCE)
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -122,7 +137,9 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_NATIVE(value) 	   (((objNativeFn*)AS_OBJ(value)))
 #define AS_ARRAY(value)		   (((objArray*)AS_OBJ(value)))
 #define AS_CLOSURE(value)	   (((objClosure*)AS_OBJ(value)))
-#define AS_ARRHEADER(value)   (((objArrayHeader*)AS_OBJ(value)))
+#define AS_ARRHEADER(value)    (((objArrayHeader*)AS_OBJ(value)))
+#define AS_CLASS(value)        ((objClass*)AS_OBJ(value))
+#define AS_INSTANCE(value)     ((objInstance*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
 objString* takeString(char* str, uInt length);

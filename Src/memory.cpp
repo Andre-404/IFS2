@@ -72,6 +72,8 @@ size_t getSizeOfObj(obj* ptr) {
 		objArrayHeader* header = (objArrayHeader*)ptr;
 		return sizeof(objArrayHeader) + (header->capacity * sizeof(Value));
 	}
+	case OBJ_CLASS: return sizeof(objClass); break;
+	case OBJ_INSTANCE: return sizeof(objInstance); break;
 	default:
 		std::cout << "Couldn't convert obj" << "\n";
 		exit(1);
@@ -215,10 +217,21 @@ void GC::traceObj(obj* object) {
 	case OBJ_UPVALUE: setMarked(object); markVal(((objUpval*)object)->closed);  break;
 	case OBJ_ARR_HEADER: {
 		objArrayHeader* header = (objArrayHeader*)object;
-		for (int i = 0; i < header->count; i++) {
+		for (size_t i = 0; i < header->count; i++) {
 			markVal(header->arr[i]);
 		}
 		setMarked(object);
+		break;
+	}
+	case OBJ_CLASS: {
+		(((objClass*)object)->name)->moveTo = object;
+		setMarked(object);
+		break;
+	}
+	case OBJ_INSTANCE: {
+		objInstance* inst = (objInstance*)object;
+		setMarked(inst);
+		markTable(inst->table);
 		break;
 	}
 	case OBJ_NATIVE:
@@ -319,6 +332,16 @@ void updateObjectPtrs(obj* object) {
 			updateVal(&header->arr[i]);
 		}
 		//header->arr = (Value*)(((char*)header->moveTo) + sizeof(Value));
+		break;
+	}
+	case OBJ_CLASS:{
+		objClass* klass = (objClass*)object;
+		klass->name = (objString*)klass->name->moveTo;
+		break;
+	}
+	case OBJ_INSTANCE: {
+		objInstance* inst = (objInstance*)object;
+		inst->klass = (objClass*)inst->klass->moveTo;
 		break;
 	}
 	case OBJ_NATIVE:
@@ -435,6 +458,8 @@ void GC::moveObj(void* to, obj* from) {
 		memmove((char*)newHeader->arr, (char*)fromArr, capacity * sizeof(Value));
 		break;
 	}
+	case OBJ_CLASS: moveData(to, (objClass*)from); break;
+	case OBJ_INSTANCE: moveData(to, (objInstance*)from); break;
 	}
 }
 
@@ -451,6 +476,8 @@ void GC::destructObj(obj* ptr) {
 	case OBJ_FUNC:		destruct((objFunc*)ptr); break;
 	case OBJ_NATIVE:	destruct((objNativeFn*)ptr); break;
 	case OBJ_UPVALUE:	destruct((objUpval*)ptr); break;
+	case OBJ_CLASS:		destruct((objClass*)ptr); break;
+	case OBJ_INSTANCE:	destruct((objInstance*)ptr); break;
 	}
 }
 

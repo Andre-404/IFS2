@@ -23,6 +23,7 @@ enum class precedence {
 	SUM,
 	FACTOR,
 	NOT,
+	ALTER,
 	CALL,
 	PRIMARY
 };
@@ -36,7 +37,7 @@ public:
 
 class infixParselet {
 public:
-	virtual ASTNode* parse(ASTNode* left, Token token) = 0;
+	virtual ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) = 0;
 	parser* cur;
 	int prec;
 };
@@ -94,6 +95,7 @@ private:
 	ASTNode* declaration();
 	ASTNode* varDecl();
 	ASTNode* funcDecl();
+	ASTNode* classDecl();
 	ASTNode* statement();
 
 	ASTNode* printStmt();
