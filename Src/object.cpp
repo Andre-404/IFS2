@@ -179,7 +179,7 @@ objNativeFn::objNativeFn(NativeFn _func, int _arity) {
 
 objClosure::objClosure(objFunc* _func) {
 	func = _func;
-	upvals.resize(func->upvalueCount, NULL);
+	upvals.resize(func->upvalueCount, nullptr);
 	type = OBJ_CLOSURE;
 	moveTo = nullptr;
 }

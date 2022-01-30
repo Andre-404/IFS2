@@ -74,6 +74,9 @@
 		OP_CREATE_STRUCT,
 		OP_METHOD,
 		OP_INVOKE,
+		OP_INHERIT,
+		OP_GET_SUPER,
+		OP_SUPER_INVOKE,
 	};
 
 	//disassemble is here, but the functions it calls are in debug.cpp

@@ -37,6 +37,11 @@
 		TokenType type;
 		std::string_view lexeme;
 		int line;
+		Token() {
+			line = -1;
+			lexeme = "";
+			type = TOKEN_LEFT_PAREN;
+		}
 	};
 
 	class scanner {

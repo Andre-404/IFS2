@@ -50,6 +50,9 @@ compiler::~compiler() {
 
 void error(string message);
 
+bool identifiersEqual(std::string_view a, std::string_view b);
+
+
 void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	expr->getVal()->accept(this);//compile the right side of the expression
 	namedVar(expr->getToken(), true);
@@ -74,6 +77,19 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 		break;
 	}
 	}
+}
+
+void compiler::visitConditionalExpr(ASTConditionalExpr* expr) {
+	//compile condition and emit a jump over then branch if the condition is false
+	expr->getCondition()->accept(this);
+	int thenJump = emitJump(OP_JUMP_IF_FALSE_POP);
+	expr->getThenBranch()->accept(this);
+	//prevents fallthrough to else branch
+	int elseJump = emitJump(OP_JUMP);
+	patchJump(thenJump);
+	//no need to check if a else branch exists since it's required by the conditional statement
+	expr->getElseBranch()->accept(this);
+	patchJump(elseJump);
 }
 
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
@@ -230,6 +246,20 @@ void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
 	for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
 }
 
+void compiler::visitSuperExpr(ASTSuperExpr* expr) {
+	int name = identifierConstant(expr->getName());
+	if (currentClass == nullptr) {
+		error("Can't use 'super' outside of a class.");
+	}
+	else if (!currentClass->hasSuperclass) {
+		error("Can't use 'super' in a class with no superclass.");
+	}
+
+	namedVar(syntheticToken("this"), false);
+	namedVar(syntheticToken("super"), false);
+	emitBytes(OP_GET_SUPER, name);
+}
+
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	const Token& token = expr->getToken();
 	current->line = token.line;
@@ -254,7 +284,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	case TOKEN_THIS: {
 		if (currentClass == nullptr) {
 			error("Can't use 'this' outside of a class.");
-			return;
+			break;
 		}
 		namedVar(token, false);
 		break;
@@ -324,14 +354,31 @@ void compiler::visitClassDecl(ASTClass* decl) {
 	emitBytes(OP_CLASS, constant);
 	defineVar(constant);
 
-	classCompilerInfo temp(currentClass);
+	classCompilerInfo temp(currentClass, false);
 	currentClass = &temp;
 
-	namedVar(className, false);
+	if (decl->inherits()) {
+		namedVar(decl->getInherited(), false);
+		if (identifiersEqual(className.lexeme, decl->getInherited().lexeme)) {
+			error("A class can't inherit from itself.");
+		}
+		beginScope();
+		addLocal(syntheticToken("super"));
+		defineVar(0);
+
+		namedVar(className, false);
+		emitByte(OP_INHERIT);
+		currentClass->hasSuperclass = true;
+	}
+	if(!decl->inherits()) namedVar(className, false);
 	for (ASTNode* _method : decl->getMethods()) {
 		method((ASTFunc*)_method, className);
 	}
 	emitByte(OP_POP);
+
+	if (currentClass->hasSuperclass) {
+		endScope();
+	}
 	currentClass = currentClass->enclosing;
 }
 
@@ -572,7 +619,11 @@ void compiler::emitLoop(int start) {
 #pragma region Variables
 
 bool identifiersEqual(string* a, string* b) {
-	return (a->size() == b->size() && a->compare(*b) == 0);
+	return (a->compare(*b) == 0);
+}
+
+bool identifiersEqual(std::string_view a, std::string_view b) {
+	return (a.compare(b) == 0);
 }
 
 uint8_t compiler::identifierConstant(Token name) {
@@ -581,7 +632,7 @@ uint8_t compiler::identifierConstant(Token name) {
 }
 
 void compiler::defineVar(uint8_t name) {
-	//if this is a local var, bail out
+	//if this is a local var, mark it as ready and then bail out
 	if (current->scopeDepth > 0) { 
 		markInit();
 		return; 
@@ -654,7 +705,7 @@ void compiler::endScope() {
 		}
 		current->localCount--;
 	}
-	if(toPop > 0) emitBytes(OP_POPN, toPop);
+	if(toPop > 0 && !current->hasCapturedLocals) emitBytes(OP_POPN, toPop);
 }
 
 int compiler::resolveLocal(compilerInfo* func, Token& name) {
@@ -683,7 +734,7 @@ int compiler::resolveUpvalue(compilerInfo* func, Token& name) {
 	int local = resolveLocal(func->enclosing, name);
 	if (local != -1) {
 		func->enclosing->locals[local].isCaptured = true;
-		func->hasCapturedLocals = true;
+		func->enclosing->hasCapturedLocals = true;
 		return addUpvalue((uint8_t)local, true);
 	}
 
@@ -739,6 +790,13 @@ void compiler::patchBreak() {
 	}
 }
 
+Token compiler::syntheticToken(const char* str) {
+	Token token;
+	token.lexeme = str;
+	token.line = current->line;
+	return token;
+}
+
 #pragma endregion
 
 #pragma region Classes and methods
@@ -775,20 +833,42 @@ void compiler::method(ASTFunc* _method, Token className) {
 }
 
 bool compiler::invoke(ASTCallExpr* expr) {
-	if (expr->getCallee()->type != ASTType::CALL) return false;
-	ASTCallExpr* _call = (ASTCallExpr*)expr->getCallee();
-	if (_call->getAccessor().type != TOKEN_DOT) return false;
+	if (expr->getCallee()->type == ASTType::CALL) {
+		ASTCallExpr* _call = (ASTCallExpr*)expr->getCallee();
+		if (_call->getAccessor().type != TOKEN_DOT) return false;
 
-	_call->getCallee()->accept(this);
-	int field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
-	int argCount = 0;
-	for (ASTNode* arg : expr->getArgs()) {
-		arg->accept(this);
-		argCount++;
+		_call->getCallee()->accept(this);
+		int field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
+		int argCount = 0;
+		for (ASTNode* arg : expr->getArgs()) {
+			arg->accept(this);
+			argCount++;
+		}
+		emitBytes(OP_INVOKE, field);
+		emitByte(argCount);
+		return true;
+	}else if (expr->getCallee()->type == ASTType::SUPER) {
+		ASTSuperExpr* _superCall = (ASTSuperExpr*)expr->getCallee();
+		int name = identifierConstant(_superCall->getName());
+
+		if (currentClass == nullptr) {
+			error("Can't use 'super' outside of a class.");
+		}
+		else if (!currentClass->hasSuperclass) {
+			error("Can't use 'super' in a class with no superclass.");
+		}
+
+		namedVar(syntheticToken("this"), false);
+		int argCount = 0;
+		for (ASTNode* arg : expr->getArgs()) {
+			arg->accept(this);
+			argCount++;
+		}
+		namedVar(syntheticToken("super"), false);
+		emitBytes(OP_SUPER_INVOKE, name);
+		emitByte(argCount);
 	}
-	emitBytes(OP_INVOKE, field);
-	emitByte(argCount);
-	return true;
+	return false;
 }
 #pragma endregion
 

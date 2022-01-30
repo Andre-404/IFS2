@@ -59,7 +59,8 @@ struct compilerInfo {
 
 struct classCompilerInfo {
 	classCompilerInfo* enclosing;
-	classCompilerInfo(classCompilerInfo* _enclosing) : enclosing(_enclosing) {};
+	bool hasSuperclass;
+	classCompilerInfo(classCompilerInfo* _enclosing, bool _hasSuperclass) : enclosing(_enclosing), hasSuperclass(_hasSuperclass) {};
 };
 
 class compiler : public visitor {
@@ -106,13 +107,14 @@ private:
 	//classes and methods
 	void method(ASTFunc* _method, Token className);
 	bool invoke(ASTCallExpr* expr);
-	
+	Token syntheticToken(const char* str);
 	#pragma endregion
 	
 
 	//Visitor pattern
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
 	void visitSetExpr(ASTSetExpr* expr);
+	void visitConditionalExpr(ASTConditionalExpr* expr);
 	void visitBinaryExpr(ASTBinaryExpr* expr);
 	void visitGroupingExpr(ASTGroupingExpr* expr);
 	void visitArrayDeclExpr(ASTArrayDeclExpr* expr);
@@ -120,6 +122,7 @@ private:
 	void visitCallExpr(ASTCallExpr* expr);
 	void visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr);
 	void visitStructLiteralExpr(ASTStructLiteral* expr);
+	void visitSuperExpr(ASTSuperExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
 	
 

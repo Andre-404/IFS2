@@ -6,6 +6,7 @@
 
 class ASTAssignmentExpr;
 class ASTSetExpr;
+class ASTConditionalExpr;
 class ASTBinaryExpr;
 class ASTUnaryExpr;
 class ASTArrayDeclExpr;
@@ -14,6 +15,7 @@ class ASTGroupingExpr;
 class ASTUnaryVarAlterExpr;
 class ASTStructLiteral;
 class ASTLiteralExpr;
+class ASTSuperExpr;
 
 class ASTVarDecl;
 class ASTFunc;
@@ -33,6 +35,7 @@ class ASTReturn;
 enum class ASTType {
 	ASSINGMENT,
 	SET,
+	CONDITIONAL,
 	OR,
 	AND,
 	BINARY,
@@ -43,6 +46,7 @@ enum class ASTType {
 	CALL,
 	STRUCT_LITERAL,
 	LITERAL,
+	SUPER,
 	VAR_DECL,
 	PRINT_STMT,
 	EXPR_STMT,
@@ -72,6 +76,7 @@ public:
 	virtual ~visitor() {};
 	virtual void visitAssignmentExpr(ASTAssignmentExpr* expr) = 0;
 	virtual void visitSetExpr(ASTSetExpr* expr) = 0;
+	virtual void visitConditionalExpr(ASTConditionalExpr* expr) = 0;
 	virtual void visitBinaryExpr(ASTBinaryExpr* expr) = 0;
 	virtual void visitUnaryExpr(ASTUnaryExpr* expr) = 0;
 	virtual void visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) = 0;
@@ -80,6 +85,7 @@ public:
 	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
 	virtual void visitStructLiteralExpr(ASTStructLiteral* expr) = 0;
 	virtual void visitLiteralExpr(ASTLiteralExpr* expr) = 0;
+	virtual void visitSuperExpr(ASTSuperExpr* expr) = 0;
 
 	virtual void visitVarDecl(ASTVarDecl* decl) = 0;
 	virtual void visitFuncDecl(ASTFunc* decl) = 0;
@@ -138,6 +144,20 @@ public:
 	ASTNode* getValue() { return value; }
 };
 
+class ASTConditionalExpr : public ASTNode {
+private:
+	ASTNode* condition;
+	ASTNode* thenBranch;
+	ASTNode* elseBranch;
+public:
+	ASTConditionalExpr(ASTNode* _condition, ASTNode* _thenBranch, ASTNode* _elseBranch);
+	
+	void accept(visitor* vis);
+	ASTNode* getCondition() { return condition; }
+	ASTNode* getThenBranch() { return thenBranch; }
+	ASTNode* getElseBranch() { return elseBranch; }
+};
+
 class ASTBinaryExpr : public ASTNode {
 private:
 	Token op;
@@ -190,6 +210,18 @@ public:
 	ASTNode* getCallee() { return callee; }
 	vector<ASTNode*> getArgs() { return args; }
 	Token getAccessor() { return accessor; }
+};
+
+class ASTSuperExpr : public ASTNode {
+private:
+	Token methodName;
+public:
+	ASTSuperExpr(Token _methodName) : methodName(_methodName) {
+		type = ASTType::SUPER;
+	};
+
+	void accept(visitor* vis);
+	Token getName() { return methodName; }
 };
 
 class ASTGroupingExpr : public ASTNode {
@@ -407,14 +439,18 @@ public:
 class ASTClass : public ASTNode {
 private:
 	Token name;
+	Token inheritedClass;
 	vector<ASTNode*> methods;
+	bool _inherits;
 public:
-	ASTClass(Token _name, vector<ASTNode*> _methods);
+	ASTClass(Token _name, vector<ASTNode*> _methods, Token _inheritedClass, bool __inherits);
 	~ASTClass();
 	void accept(visitor* vis);
 
 	Token getName() { return name; }
+	Token getInherited() { return inheritedClass; }
 	vector<ASTNode*> getMethods() { return methods; }
+	bool inherits() { return _inherits; }
 };
 #pragma endregion
 

@@ -43,6 +43,19 @@ void ASTSetExpr::accept(visitor* vis) {
 
 #pragma endregion
 
+#pragma region Conditional expr
+ASTConditionalExpr::ASTConditionalExpr(ASTNode* _condition, ASTNode* _thenBranch, ASTNode* _elseBranch) {
+	condition = _condition;
+	thenBranch = _thenBranch;
+	elseBranch = _elseBranch;
+	type = ASTType::CONDITIONAL;
+}
+
+void ASTConditionalExpr::accept(visitor* vis) {
+	vis->visitConditionalExpr(this);
+}
+#pragma endregion
+
 
 #pragma region Binary expr
 ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
@@ -166,7 +179,6 @@ void ASTStructLiteral::accept(visitor* vis) {
 }
 #pragma endregion
 
-
 #pragma region Literal expr
 ASTLiteralExpr::ASTLiteralExpr(Token _token) {
 	token = _token;
@@ -177,6 +189,13 @@ void ASTLiteralExpr::accept(visitor* vis) {
 	vis->visitLiteralExpr(this);
 }
 #pragma endregion
+
+#pragma region Super literal
+void ASTSuperExpr::accept(visitor* vis) {
+	vis->visitSuperExpr(this);
+}
+#pragma endregion
+
 
 
 #pragma region Var decl
@@ -215,10 +234,12 @@ void ASTFunc::accept(visitor* vis) {
 #pragma endregion
 
 #pragma region Class decl
-ASTClass::ASTClass(Token _name, vector<ASTNode*> _methods) {
+ASTClass::ASTClass(Token _name, vector<ASTNode*> _methods, Token _inheritedClassName, bool __inherits) {
 	name = _name;
 	methods = _methods;
 	type = ASTType::CLASS;
+	_inherits = __inherits;
+	inheritedClass = _inheritedClassName;
 }
 
 ASTClass::~ASTClass() {

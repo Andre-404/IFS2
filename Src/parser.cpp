@@ -4,19 +4,6 @@
 
 #pragma region Parselets
 
-class assignmentExpr : public infixParselet {
-	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
-		//makes it right associative
-		ASTNode* right = cur->expression(prec - 1);
-		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
-			throw cur->error(token, "Left side is not assignable");
-		}
-		ASTAssignmentExpr* expr = new ASTAssignmentExpr(((ASTLiteralExpr*)left)->getToken(), right);
-		delete left;
-		return expr;
-	}
-};
-
 class unaryExpr : public prefixParselet {
 	ASTNode* parse(Token token) {
 		ASTNode* expr = cur->expression(prec);
@@ -26,13 +13,29 @@ class unaryExpr : public prefixParselet {
 
 class literalExpr : public prefixParselet {
 	ASTNode* parse(Token token) {
-		if (token.type == TOKEN_LEFT_PAREN) {
+		switch (token.type) {
+		case TOKEN_SUPER: {
+			cur->consume(TOKEN_DOT, "Expected '.' after super.");
+			Token ident = cur->consume(TOKEN_IDENTIFIER, "Expect superclass method name.");
+			return new ASTSuperExpr(ident);
+		}
+		case TOKEN_LEFT_PAREN:{
 			//grouping can contain a expr of any precedence
 			ASTNode* expr = cur->expression();
 			cur->consume(TOKEN_RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
 			return new ASTGroupingExpr(expr);
 		}
-		else if (token.type == TOKEN_LEFT_BRACE) {
+		case TOKEN_LEFT_BRACKET: {
+			vector<ASTNode*> members;
+			if (!(cur->peek().type == TOKEN_RIGHT_BRACKET)) {
+				do {
+					members.push_back(cur->expression());
+				} while (cur->match({ TOKEN_COMMA }));
+			}
+			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
+			return new ASTArrayDeclExpr(members);
+		}
+		case TOKEN_LEFT_BRACE: {
 			vector<structEntry> entries;
 			if (!(cur->peek().type == TOKEN_RIGHT_BRACE)) {
 				do {
@@ -45,17 +48,9 @@ class literalExpr : public prefixParselet {
 			cur->consume(TOKEN_RIGHT_BRACE, "Expect '}' after struct literal.");
 			return new ASTStructLiteral(entries);
 		}
-		else if (token.type == TOKEN_LEFT_BRACKET) {
-			vector<ASTNode*> members;
-			if (!(cur->peek().type == TOKEN_RIGHT_BRACKET)) {
-				do {
-					members.push_back(cur->expression());
-				} while (cur->match({ TOKEN_COMMA }));
-			}
-			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
-			return new ASTArrayDeclExpr(members);
+		default:
+			return new ASTLiteralExpr(token);
 		}
-		return new ASTLiteralExpr(token);
 	}
 };
 
@@ -76,6 +71,35 @@ class unaryVarAlterPrefix : public prefixParselet {
 	}
 };
 
+class assignmentExpr : public infixParselet {
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
+		//makes it right associative
+		ASTNode* right = cur->expression(prec - 1);
+		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
+			throw cur->error(token, "Left side is not assignable");
+		}
+		ASTAssignmentExpr* expr = new ASTAssignmentExpr(((ASTLiteralExpr*)left)->getToken(), right);
+		delete left;
+		return expr;
+	}
+};
+
+class conditionalExpr : public infixParselet {
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
+		ASTNode* thenBranch = cur->expression(prec - 1);
+		cur->consume(TOKEN_COLON, "Expected ':' after then branch.");
+		ASTNode* elseBranch = cur->expression(prec - 1);
+		return new ASTConditionalExpr(left, thenBranch, elseBranch);
+	}
+};
+
+class binaryExpr : public infixParselet {
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
+		ASTNode* right = cur->expression(prec);
+		return new ASTBinaryExpr(left, token, right);
+	}
+};
+
 class unaryVarAlterPostfix : public infixParselet {
 	ASTNode* parse(ASTNode* var, Token op, int surroundingPrec) {
 		ASTUnaryVarAlterExpr* expr = nullptr;
@@ -92,14 +116,8 @@ class unaryVarAlterPostfix : public infixParselet {
 	}
 };
 
-class binaryExpr : public infixParselet {
-	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
-		ASTNode* right = cur->expression(prec);
-		return new ASTBinaryExpr(left, token, right);
-	}
-};
-
 class callExpr : public infixParselet {
+public:
 	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		vector<ASTNode*> args;
 		if(token.type == TOKEN_LEFT_PAREN) {//function call
@@ -130,7 +148,6 @@ class callExpr : public infixParselet {
 		return new ASTCallExpr(left, token, args);
 	}
 };
-
 #pragma endregion
 
 parser::parser(vector<Token>* _tokens) {
@@ -150,7 +167,7 @@ parser::parser(vector<Token>* _tokens) {
 		unaryVarAlterPostfix* unaryVarAlterPostfixParselet = new unaryVarAlterPostfix;
 		binaryExpr* binaryParselet = new binaryExpr;
 		callExpr* callParselet = new callExpr;
-
+		conditionalExpr* conditionalParselet = new conditionalExpr;
 
 		//Prefix
 		addPrefix(TOKEN_THIS, literalParselet, precedence::NONE);
@@ -162,6 +179,7 @@ parser::parser(vector<Token>* _tokens) {
 		addPrefix(TOKEN_INCREMENT, unaryVarAlterPrefixParselet, precedence::ALTER);
 		addPrefix(TOKEN_DECREMENT, unaryVarAlterPrefixParselet, precedence::ALTER);
 
+
 		addPrefix(TOKEN_IDENTIFIER,		literalParselet, precedence::PRIMARY);
 		addPrefix(TOKEN_STRING,			literalParselet, precedence::PRIMARY);
 		addPrefix(TOKEN_NUMBER,			literalParselet, precedence::PRIMARY);
@@ -171,9 +189,12 @@ parser::parser(vector<Token>* _tokens) {
 		addPrefix(TOKEN_LEFT_PAREN,		literalParselet, precedence::PRIMARY);
 		addPrefix(TOKEN_LEFT_BRACKET,	literalParselet, precedence::PRIMARY);
 		addPrefix(TOKEN_LEFT_BRACE,		literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_SUPER,			literalParselet, precedence::PRIMARY);
 
 		//Infix
 		addInfix(TOKEN_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+
+		addInfix(TOKEN_QUESTIONMARK, conditionalParselet, precedence::CONDITIONAL);
 
 		addInfix(TOKEN_OR, binaryParselet, precedence::OR);
 		addInfix(TOKEN_AND, binaryParselet, precedence::AND);
@@ -282,13 +303,15 @@ ASTNode* parser::funcDecl() {
 
 ASTNode* parser::classDecl() {
 	Token name = consume(TOKEN_IDENTIFIER, "Expected a class name.");
+	Token inherited;
+	if (match({ TOKEN_COLON })) inherited = consume(TOKEN_IDENTIFIER, "Expected a parent class name.");
 	consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
 	vector<ASTNode*> methods;
 	while (!check(TOKEN_RIGHT_BRACE) && !isAtEnd()) {
 		methods.push_back(funcDecl());
 	}
 	consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
-	return new ASTClass(name, methods);
+	return new ASTClass(name, methods, inherited, inherited.line != -1);
 }
 
 ASTNode* parser::statement() {

@@ -316,7 +316,7 @@ void updateObjectPtrs(obj* object) {
 		closure->func = (objFunc*)closure->func->moveTo;
 		long size = closure->upvals.size();
 		for (int i = 0; i < size; i++) {
-			closure->upvals[i] = (objUpval*)closure->upvals[i]->moveTo;
+			if(closure->upvals[i] != nullptr) closure->upvals[i] = (objUpval*)closure->upvals[i]->moveTo;
 		}
 		break;
 	}

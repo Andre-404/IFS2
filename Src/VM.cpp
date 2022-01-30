@@ -198,7 +198,7 @@ objUpval* vm::captureUpvalue(Value* local) {
 		else break;
 	}
 	objUpval* createdUpval = new objUpval(local);
-
+	openUpvals.push_back(createdUpval);
 	return createdUpval;
 }
 
@@ -961,6 +961,37 @@ interpretResult vm::run() {
 			objString* method = READ_STRING();
 			int argCount = READ_BYTE();
 			if (!invoke(method, argCount)) {
+				return RUNTIME_ERROR;
+			}
+			frame = &frames[frameCount - 1];
+			break;
+		}
+
+		case OP_INHERIT: {
+			Value superclass = peek(1);
+			if (!IS_CLASS(superclass)) {
+				runtimeError("Superclass must be a class.");
+				return RUNTIME_ERROR;
+			}
+			objClass* subclass = AS_CLASS(peek(0));
+			subclass->methods.tableAddAll(&subclass->methods);
+			//pop(); // Subclass.
+			break;
+		}
+		case OP_GET_SUPER:{
+			objString* name = READ_STRING();
+			objClass* superclass = AS_CLASS(pop());
+
+			if (!bindMethod(superclass, name)) {
+				return RUNTIME_ERROR;
+			}
+			break;
+		}
+		case OP_SUPER_INVOKE: {
+			objString* method = READ_STRING();
+			int argCount = READ_BYTE();
+			objClass* superclass = AS_CLASS(pop());
+			if (!invokeFromClass(superclass, method, argCount)) {
 				return RUNTIME_ERROR;
 			}
 			frame = &frames[frameCount - 1];

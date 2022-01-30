@@ -75,6 +75,7 @@ Token scanner::scanToken() {
 			return makeToken(match('=') ? TOKEN_GREATER_EQUAL : match('>') ? TOKEN_BITSHIFT_RIGHT : TOKEN_GREATER);
 		case '"': return string_();
 		case ':': return makeToken(TOKEN_COLON);
+		case '?': return makeToken(TOKEN_QUESTIONMARK);
 	}
 
 	return errorToken("Unexpected character.");

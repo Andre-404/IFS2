@@ -183,6 +183,15 @@ static int jumpInstruction(const char* name, int sign, chunk* Chunk, int offset)
 	return offset + 3;
 }
 
+static int invokeInstruction(const char* name, chunk* Chunk, int offset) {
+	uint8_t constant = Chunk->code[offset + 1];
+	uint8_t argCount = Chunk->code[offset + 2];
+	printf("%-16s (%d args) %4d '", name, argCount, constant);
+	printValue(Chunk->constants[constant]);
+	printf("'\n");
+	return offset + 3;
+}
+
 int disassembleInstruction(chunk* Chunk, int offset) {
 	//printf usage because of %04d
 	printf("%04d ", offset);
@@ -319,7 +328,15 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return offset;
 	}
 	case OP_METHOD:
-		return constantInstruction("OP_METHOD", Chunk, offset);
+		return constantInstruction("OP METHOD", Chunk, offset);
+	case OP_INVOKE:
+		return invokeInstruction("OP INVOKE", Chunk, offset);
+	case OP_INHERIT:
+		return simpleInstruction("OP INHERIT", offset);
+	case OP_GET_SUPER:
+		return constantInstruction("OP GET SUPER", Chunk, offset);
+	case OP_SUPER_INVOKE:
+		return invokeInstruction("OP SUPER INVOKE", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;
