@@ -137,9 +137,23 @@ bool vm::callValue(Value callee, int argCount) {
 			return true;
 		}
 		case OBJ_CLASS: {
-			objClass* klass = AS_CLASS(callee);
-			stackTop[-argCount - 1] = OBJ_VAL(new objInstance(klass));
+			//we do this so if a GC runs we safely update all the pointers(since the stack is considered a root)
+			push(callee);
+			stackTop[-argCount - 2] = OBJ_VAL(new objInstance(AS_CLASS(peek(0))));
+			objClass* klass = AS_CLASS(pop());
+			Value initializer;
+			if (klass->methods.get(klass->name, &initializer)) {
+				return call(AS_CLOSURE(initializer), argCount);
+			} else if (argCount != 0) {
+				runtimeError("Expected 0 arguments for class initalization but got %d.", argCount);
+				return false;
+			}
 			return true;
+		}
+		case OBJ_BOUND_METHOD: {
+			objBoundMethod* bound = AS_BOUND_METHOD(callee);
+			stackTop[-argCount - 1] = bound->receiver;
+			return call(bound->method, argCount);
 		}
 		default:
 			break; // Non-callable object type.
@@ -315,6 +329,62 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 		return false;
 	}
 	return true;
+}
+
+void vm::defineMethod(objString* name) {
+	Value method = peek(0);
+	objClass* klass = AS_CLASS(peek(1));
+	klass->methods.set(name, method);
+	pop();
+}
+
+bool vm::bindMethod(objClass* klass, objString* name) {
+	Value method;
+	if (!klass->methods.get(name, &method)) {
+		runtimeError("Undefined property '%s'.", name->str);
+		return false;
+	}
+	//we need to push the method to the stack because if a GC collection happens the ptr inside of method becomes invalid
+	//easiest way for it to update is to push it onto the stack
+	push(method);
+	//peek(1) because the method(closure) itself is on top of the stack right now
+	objBoundMethod* bound = new objBoundMethod(peek(1), nullptr);
+	//make sure to pop the closure to maintain stack discipline and to get the updated value(if it changed)
+	method = pop();
+	bound->method = AS_CLOSURE(method);
+
+	pop();
+	push(OBJ_VAL(bound));
+	return true;
+}
+
+bool vm::invoke(objString* fieldName, int argCount) {
+	Value receiver = peek(argCount);
+	if (!IS_INSTANCE(receiver)) {
+		runtimeError("Only instances have methods.");
+		return false;
+	}
+	objInstance* instance = AS_INSTANCE(receiver);
+	Value value;
+	if (instance->table.get(fieldName, &value)) {
+		stackTop[-argCount - 1] = value;
+		return callValue(value, argCount);
+	}
+	//this check is used because we also use objInstance to represent struct literals
+	if (instance->klass == nullptr) {
+		runtimeError("Undefined property '%s'.", fieldName->str);
+		return false;
+	}
+	return invokeFromClass(instance->klass, fieldName, argCount);
+}
+
+bool vm::invokeFromClass(objClass* klass, objString* name, int argCount) {
+	Value method;
+	if (!klass->methods.get(name, &method)) {
+		runtimeError("Undefined property '%s'.", name->str);
+		return false;
+	}
+	return call(AS_CLOSURE(method), argCount);
 }
 #pragma endregion
 
@@ -847,6 +917,10 @@ interpretResult vm::run() {
 				push(value);
 				break;
 			}
+			if (!bindMethod(instance->klass, name)) {
+				return RUNTIME_ERROR;
+			}
+			else break;
 			push(NIL_VAL());
 			break;
 		}
@@ -866,6 +940,32 @@ interpretResult vm::run() {
 			break;
 		}
 
+		case OP_CREATE_STRUCT: {
+			int numOfFields = READ_BYTE();
+
+			objInstance* inst = new objInstance(nullptr);
+
+			for (int i = 0; i < numOfFields; i++) {
+				objString* name = READ_STRING();
+				inst->table.set(name, pop());
+			}
+			push(OBJ_VAL(inst));
+			break;
+		}
+
+		case OP_METHOD:
+			defineMethod(READ_STRING());
+			break;
+
+		case OP_INVOKE: {
+			objString* method = READ_STRING();
+			int argCount = READ_BYTE();
+			if (!invoke(method, argCount)) {
+				return RUNTIME_ERROR;
+			}
+			frame = &frames[frameCount - 1];
+			break;
+		}
 		#pragma endregion
 		}
 	}

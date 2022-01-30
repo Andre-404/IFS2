@@ -108,6 +108,7 @@ private:
 	ASTNode* switchStmt();
 	ASTNode* _case();
 	ASTNode* _return();
+
 #pragma endregion
 
 

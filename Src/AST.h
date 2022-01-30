@@ -12,6 +12,7 @@ class ASTArrayDeclExpr;
 class ASTCallExpr;
 class ASTGroupingExpr;
 class ASTUnaryVarAlterExpr;
+class ASTStructLiteral;
 class ASTLiteralExpr;
 
 class ASTVarDecl;
@@ -39,8 +40,8 @@ enum class ASTType {
 	GROUPING,
 	ARRAY,
 	VAR_ALTER,
-	FIELD_ALTER,
 	CALL,
+	STRUCT_LITERAL,
 	LITERAL,
 	VAR_DECL,
 	PRINT_STMT,
@@ -77,6 +78,7 @@ public:
 	virtual void visitCallExpr(ASTCallExpr* expr) = 0;
 	virtual void visitGroupingExpr(ASTGroupingExpr* expr) = 0;
 	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
+	virtual void visitStructLiteralExpr(ASTStructLiteral* expr) = 0;
 	virtual void visitLiteralExpr(ASTLiteralExpr* expr) = 0;
 
 	virtual void visitVarDecl(ASTVarDecl* decl) = 0;
@@ -93,6 +95,8 @@ public:
 	virtual void visitSwitchStmt(ASTSwitchStmt* stmt) = 0;
 	virtual void visitCase(ASTCase* _case) = 0;
 	virtual void visitReturnStmt(ASTReturn* stmt) = 0;
+	
+
 };
 
 class ASTNode {
@@ -225,6 +229,24 @@ public:
 
 	Token getToken() { return token; }
 };
+
+struct structEntry {
+	ASTNode* expr;
+	Token name;
+	structEntry(Token _name, ASTNode* _expr) : expr(_expr), name(_name) {};
+};
+
+class ASTStructLiteral : public ASTNode {
+private:
+	vector<structEntry> fields;
+public:
+	ASTStructLiteral(vector<structEntry> _fields);
+	~ASTStructLiteral();
+
+	void accept(visitor* vis);
+	vector<structEntry>& getEntries() { return fields; }
+};
+
 #pragma endregion
 
 #pragma region Statements
@@ -385,10 +407,14 @@ public:
 class ASTClass : public ASTNode {
 private:
 	Token name;
+	vector<ASTNode*> methods;
 public:
-	ASTClass(Token _name);
+	ASTClass(Token _name, vector<ASTNode*> _methods);
+	~ASTClass();
 	void accept(visitor* vis);
+
 	Token getName() { return name; }
+	vector<ASTNode*> getMethods() { return methods; }
 };
 #pragma endregion
 

@@ -13,6 +13,8 @@ struct entry {
 	Value val;
 };
 
+#define TOMBSTONE (objString*)0x000001
+
 class hashTable {
 public:
 	std::vector<entry> entries;

@@ -42,8 +42,27 @@ void printObject(Value value) {
 	case OBJ_CLASS:
 		std::cout << AS_CLASS(value)->name->str;
 		break;
-	case OBJ_INSTANCE:
-		std::cout << AS_INSTANCE(value)->klass->name->str<<" instance";
+	case OBJ_INSTANCE: {
+		objInstance* inst = AS_INSTANCE(value);
+		if (inst->klass != nullptr) std::cout << AS_INSTANCE(value)->klass->name->str << " instance";
+		else {
+			std::cout << "{ ";
+			bool isFirst = true;
+			for (int i = 0; i < inst->table.capacity; i++) {
+				entry& _entry = inst->table.entries[i];
+				if (_entry.key != nullptr && _entry.key != TOMBSTONE) {
+					if (!isFirst) std::cout << ", ";
+					else isFirst = false;
+					std::cout << _entry.key->str << " : ";
+					printValue(_entry.val);
+				}
+			}
+			std::cout << " }";
+		}
+		break;
+	}
+	case OBJ_BOUND_METHOD:
+		printFunction(AS_BOUND_METHOD(value)->method->func);
 		break;
 	case OBJ_ARR_HEADER: break;//this is never directly inside a value
 	}
@@ -190,6 +209,13 @@ objInstance::objInstance(objClass* _klass) {
 	moveTo = nullptr;
 	type = OBJ_INSTANCE;
 	table = hashTable();
+}
+
+objBoundMethod::objBoundMethod(Value _receiver, objClosure* _method) {
+	receiver = _receiver;
+	method = _method;
+	type = OBJ_BOUND_METHOD;
+	moveTo = nullptr;
 }
 
 

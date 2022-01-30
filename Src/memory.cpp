@@ -40,6 +40,10 @@ void destruct(T* ptr) {
 //we call this in the overwritten new operator of obj
 //it should also be used explicitly for allocating header + raw data(strings, arrays)
 void* GC::allocRaw(size_t size, bool shouldCollect) {
+	#ifdef DEBUG_STRESS_GC
+	collect();
+	#endif // DEBUG_STRESS_GC
+
 	double percentage = (double)(allocated + size) / (double)heapSize;
 	if (percentage > HEAP_MAX) {
 		//we first collect, hoping to free up some space on the heap
@@ -74,6 +78,7 @@ size_t getSizeOfObj(obj* ptr) {
 	}
 	case OBJ_CLASS: return sizeof(objClass); break;
 	case OBJ_INSTANCE: return sizeof(objInstance); break;
+	case OBJ_BOUND_METHOD: return sizeof(objBoundMethod); break;
 	default:
 		std::cout << "Couldn't convert obj" << "\n";
 		exit(1);
@@ -224,7 +229,9 @@ void GC::traceObj(obj* object) {
 		break;
 	}
 	case OBJ_CLASS: {
-		(((objClass*)object)->name)->moveTo = object;
+		objClass* klass = (objClass*)object;
+		klass->name->moveTo = object;
+		markTable(klass->methods);
 		setMarked(object);
 		break;
 	}
@@ -232,6 +239,12 @@ void GC::traceObj(obj* object) {
 		objInstance* inst = (objInstance*)object;
 		setMarked(inst);
 		markTable(inst->table);
+		if (inst->klass != nullptr) markObj(inst->klass);
+		break;
+	}
+	case OBJ_BOUND_METHOD: {
+		objBoundMethod* bound = (objBoundMethod*)object;
+		markVal(bound->receiver);
 		break;
 	}
 	case OBJ_NATIVE:
@@ -331,17 +344,24 @@ void updateObjectPtrs(obj* object) {
 		for (size_t i = 0; i < size; i++) {
 			updateVal(&header->arr[i]);
 		}
-		//header->arr = (Value*)(((char*)header->moveTo) + sizeof(Value));
 		break;
 	}
 	case OBJ_CLASS:{
 		objClass* klass = (objClass*)object;
 		klass->name = (objString*)klass->name->moveTo;
+		updateTable(&klass->methods);
 		break;
 	}
 	case OBJ_INSTANCE: {
 		objInstance* inst = (objInstance*)object;
-		inst->klass = (objClass*)inst->klass->moveTo;
+		if(inst->klass != nullptr) inst->klass = (objClass*)inst->klass->moveTo;
+		updateTable(&inst->table);
+		break;
+	}
+	case OBJ_BOUND_METHOD: {
+		objBoundMethod* method = (objBoundMethod*)object;
+		method->method = (objClosure*)method->method->moveTo;
+		updateVal(&method->receiver);
 		break;
 	}
 	case OBJ_NATIVE:

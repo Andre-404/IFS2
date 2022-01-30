@@ -71,6 +71,9 @@
 		OP_CLASS,
 		OP_GET_PROPERTY,
 		OP_SET_PROPERTY,
+		OP_CREATE_STRUCT,
+		OP_METHOD,
+		OP_INVOKE,
 	};
 
 	//disassemble is here, but the functions it calls are in debug.cpp

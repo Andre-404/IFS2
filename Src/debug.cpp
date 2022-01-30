@@ -307,6 +307,19 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return constantInstruction("OP GET PROPERTY", Chunk, offset);
 	case OP_SET_PROPERTY:
 		return constantInstruction("OP SET PROPERTY", Chunk, offset);
+	case OP_CREATE_STRUCT: {
+		offset++;
+		uint8_t fieldNum = Chunk->code[offset++];
+		printf("%-16s %4d ", "OP CREATE STRUCT", fieldNum);
+		printf("\n");
+		for (int i = 0; i < fieldNum; i++) {
+			int constant = Chunk->code[offset++];
+			printf("%04d    | %-16s %4d\n", offset-1, "FIELD CONSTANT", constant);
+		}
+		return offset;
+	}
+	case OP_METHOD:
+		return constantInstruction("OP_METHOD", Chunk, offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

@@ -15,6 +15,7 @@ enum ObjType {
 	OBJ_ARR_HEADER,
 	OBJ_CLASS,
 	OBJ_INSTANCE,
+	OBJ_BOUND_METHOD,
 };
 
 //pointer to a native function
@@ -105,7 +106,15 @@ public:
 class objClass : public obj {
 public:
 	objString* name;
+	hashTable methods;
 	objClass(objString* _name);
+};
+
+class objBoundMethod : public obj {
+public:
+	Value receiver;
+	objClosure* method;
+	objBoundMethod(Value _receiver, objClosure* _method);
 };
 
 class objInstance : public obj {
@@ -130,6 +139,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define IS_ARR_HEADER(value)   isObjType(value, OBJ_ARR_HEADER)
 #define IS_CLASS(value)        isObjType(value, OBJ_CLASS)
 #define IS_INSTANCE(value)     isObjType(value, OBJ_INSTANCE)
+#define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -140,6 +150,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_ARRHEADER(value)    (((objArrayHeader*)AS_OBJ(value)))
 #define AS_CLASS(value)        ((objClass*)AS_OBJ(value))
 #define AS_INSTANCE(value)     ((objInstance*)AS_OBJ(value))
+#define AS_BOUND_METHOD(value) ((objBoundMethod*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
 objString* takeString(char* str, uInt length);

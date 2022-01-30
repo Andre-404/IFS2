@@ -13,6 +13,8 @@
 
 enum class funcType {
 	TYPE_FUNC,
+	TYPE_METHOD,
+	TYPE_CONSTRUCTOR,
 	TYPE_SCRIPT
 };
 
@@ -55,10 +57,16 @@ struct compilerInfo {
 	compilerInfo(compilerInfo* _enclosing, funcType _type);
 };
 
+struct classCompilerInfo {
+	classCompilerInfo* enclosing;
+	classCompilerInfo(classCompilerInfo* _enclosing) : enclosing(_enclosing) {};
+};
+
 class compiler : public visitor {
 public:
 	//compiler only ever emits the code for a single function, top level code is considered a function
 	compilerInfo* current;
+	classCompilerInfo* currentClass;
 	bool compiled;
 	compiler(parser* Parser, funcType _type);//for compiling top level code
 	~compiler();
@@ -95,6 +103,9 @@ private:
 	void markInit();
 	void beginScope() { current->scopeDepth++; }
 	void endScope();
+	//classes and methods
+	void method(ASTFunc* _method, Token className);
+	bool invoke(ASTCallExpr* expr);
 	
 	#pragma endregion
 	
@@ -108,6 +119,7 @@ private:
 	void visitUnaryExpr(ASTUnaryExpr* expr);
 	void visitCallExpr(ASTCallExpr* expr);
 	void visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr);
+	void visitStructLiteralExpr(ASTStructLiteral* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
 	
 

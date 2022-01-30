@@ -48,6 +48,10 @@ private:
 	void closeUpvalues(Value* last);
 	bool setVal(int type, int arg, Value val);
 	bool incrementField(int type, bool isPrefix, bool positive);
+	void defineMethod(objString* name);
+	bool bindMethod(objClass* klass, objString* name);
+	bool invoke(objString* methodName, int argCount);
+	bool invokeFromClass(objClass* klass, objString* fieldName, int argCount);
 };
 
 

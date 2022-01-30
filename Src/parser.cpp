@@ -24,19 +24,6 @@ class unaryExpr : public prefixParselet {
 	}
 };
 
-class arrayExpr : public prefixParselet {
-	ASTNode* parse(Token token) {
-		vector<ASTNode*> members;
-		if (!(cur->peek().type == TOKEN_RIGHT_BRACKET)) {
-			do {
-				members.push_back(cur->expression());
-			} while (cur->match({ TOKEN_COMMA }));
-		}
-		cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
-		return new ASTArrayDeclExpr(members);
-	}
-};
-
 class literalExpr : public prefixParselet {
 	ASTNode* parse(Token token) {
 		if (token.type == TOKEN_LEFT_PAREN) {
@@ -44,6 +31,29 @@ class literalExpr : public prefixParselet {
 			ASTNode* expr = cur->expression();
 			cur->consume(TOKEN_RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
 			return new ASTGroupingExpr(expr);
+		}
+		else if (token.type == TOKEN_LEFT_BRACE) {
+			vector<structEntry> entries;
+			if (!(cur->peek().type == TOKEN_RIGHT_BRACE)) {
+				do {
+					Token identifier = cur->consume(TOKEN_IDENTIFIER, "Expected a identifier.");
+					cur->consume(TOKEN_COLON, "Expected a ':' after identifier");
+					ASTNode* expr = cur->expression((int)precedence::ASSIGNMENT);
+					entries.emplace_back(identifier, expr);
+				} while (cur->match({ TOKEN_COMMA }));
+			}
+			cur->consume(TOKEN_RIGHT_BRACE, "Expect '}' after struct literal.");
+			return new ASTStructLiteral(entries);
+		}
+		else if (token.type == TOKEN_LEFT_BRACKET) {
+			vector<ASTNode*> members;
+			if (!(cur->peek().type == TOKEN_RIGHT_BRACKET)) {
+				do {
+					members.push_back(cur->expression());
+				} while (cur->match({ TOKEN_COMMA }));
+			}
+			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
+			return new ASTArrayDeclExpr(members);
 		}
 		return new ASTLiteralExpr(token);
 	}
@@ -132,59 +142,72 @@ parser::parser(vector<Token>* _tokens) {
 	switchDepth = 0;
 
 	#pragma region Parselets
+		//Parselets
+		assignmentExpr* assignmentParselet = new assignmentExpr;
+		unaryExpr* unaryParselet = new unaryExpr;
+		literalExpr* literalParselet = new literalExpr;
+		unaryVarAlterPrefix* unaryVarAlterPrefixParselet = new unaryVarAlterPrefix;
+		unaryVarAlterPostfix* unaryVarAlterPostfixParselet = new unaryVarAlterPostfix;
+		binaryExpr* binaryParselet = new binaryExpr;
+		callExpr* callParselet = new callExpr;
+
+
 		//Prefix
-		addPrefix(TOKEN_BANG, new unaryExpr, precedence::NOT);
-		addPrefix(TOKEN_MINUS, new unaryExpr, precedence::NOT);
-		addPrefix(TOKEN_TILDA, new unaryExpr, precedence::NOT);
+		addPrefix(TOKEN_THIS, literalParselet, precedence::NONE);
 
-		addPrefix(TOKEN_INCREMENT, new unaryVarAlterPrefix, precedence::ALTER);
-		addPrefix(TOKEN_DECREMENT, new unaryVarAlterPrefix, precedence::ALTER);
+		addPrefix(TOKEN_BANG,  unaryParselet, precedence::NOT);
+		addPrefix(TOKEN_MINUS, unaryParselet, precedence::NOT);
+		addPrefix(TOKEN_TILDA, unaryParselet, precedence::NOT);
 
-		addPrefix(TOKEN_IDENTIFIER, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_STRING, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_NUMBER, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_TRUE, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_FALSE, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_NIL, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_LEFT_PAREN, new literalExpr, precedence::PRIMARY);
-		addPrefix(TOKEN_LEFT_BRACKET, new arrayExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_INCREMENT, unaryVarAlterPrefixParselet, precedence::ALTER);
+		addPrefix(TOKEN_DECREMENT, unaryVarAlterPrefixParselet, precedence::ALTER);
+
+		addPrefix(TOKEN_IDENTIFIER,		literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_STRING,			literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_NUMBER,			literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_TRUE,			literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_FALSE,			literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_NIL,			literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_PAREN,		literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_BRACKET,	literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_BRACE,		literalParselet, precedence::PRIMARY);
 
 		//Infix
-		addInfix(TOKEN_EQUAL, new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
 
-		addInfix(TOKEN_OR, new binaryExpr, precedence::OR);
-		addInfix(TOKEN_AND, new binaryExpr, precedence::AND);
+		addInfix(TOKEN_OR, binaryParselet, precedence::OR);
+		addInfix(TOKEN_AND, binaryParselet, precedence::AND);
 
-		addInfix(TOKEN_BITWISE_OR, new binaryExpr, precedence::BIN_OR);
-		addInfix(TOKEN_BITWISE_XOR, new binaryExpr, precedence::BIN_XOR);
-		addInfix(TOKEN_BITWISE_AND, new binaryExpr, precedence::BIN_AND);
+		addInfix(TOKEN_BITWISE_OR,  binaryParselet, precedence::BIN_OR);
+		addInfix(TOKEN_BITWISE_XOR, binaryParselet, precedence::BIN_XOR);
+		addInfix(TOKEN_BITWISE_AND, binaryParselet, precedence::BIN_AND);
 
-		addInfix(TOKEN_EQUAL_EQUAL, new binaryExpr, precedence::EQUALITY);
-		addInfix(TOKEN_BANG_EQUAL, new binaryExpr, precedence::EQUALITY);
+		addInfix(TOKEN_EQUAL_EQUAL, binaryParselet, precedence::EQUALITY);
+		addInfix(TOKEN_BANG_EQUAL, binaryParselet, precedence::EQUALITY);
 
-		addInfix(TOKEN_LESS, new binaryExpr, precedence::COMPARISON);
-		addInfix(TOKEN_LESS_EQUAL, new binaryExpr, precedence::COMPARISON);
-		addInfix(TOKEN_GREATER, new binaryExpr, precedence::COMPARISON);
-		addInfix(TOKEN_GREATER_EQUAL, new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_LESS,		binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_LESS_EQUAL,	binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER,		binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER_EQUAL, binaryParselet, precedence::COMPARISON);
 
-		addInfix(TOKEN_BITSHIFT_LEFT, new binaryExpr, precedence::BITSHIFT);
-		addInfix(TOKEN_BITSHIFT_RIGHT, new binaryExpr, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_LEFT, binaryParselet, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_RIGHT, binaryParselet, precedence::BITSHIFT);
 
-		addInfix(TOKEN_PLUS, new binaryExpr, precedence::SUM);
-		addInfix(TOKEN_MINUS, new binaryExpr, precedence::SUM);
+		addInfix(TOKEN_PLUS, binaryParselet, precedence::SUM);
+		addInfix(TOKEN_MINUS, binaryParselet, precedence::SUM);
 
-		addInfix(TOKEN_SLASH, new binaryExpr, precedence::FACTOR);
-		addInfix(TOKEN_STAR, new binaryExpr, precedence::FACTOR);
-		addInfix(TOKEN_PERCENTAGE, new binaryExpr, precedence::FACTOR);
+		addInfix(TOKEN_SLASH, binaryParselet, precedence::FACTOR);
+		addInfix(TOKEN_STAR, binaryParselet, precedence::FACTOR);
+		addInfix(TOKEN_PERCENTAGE, binaryParselet, precedence::FACTOR);
 
-		addInfix(TOKEN_LEFT_PAREN, new callExpr, precedence::CALL);
-		addInfix(TOKEN_LEFT_BRACKET, new callExpr, precedence::CALL);
-		addInfix(TOKEN_DOT, new callExpr, precedence::CALL);
+		addInfix(TOKEN_LEFT_PAREN, callParselet, precedence::CALL);
+		addInfix(TOKEN_LEFT_BRACKET, callParselet, precedence::CALL);
+		addInfix(TOKEN_DOT, callParselet, precedence::CALL);
 
 		//Postfix
 		//postfix and mixfix operators get parsed with the infix parselets
-		addInfix(TOKEN_INCREMENT, new unaryVarAlterPostfix, precedence::ALTER);
-		addInfix(TOKEN_DECREMENT, new unaryVarAlterPostfix, precedence::ALTER);
+		addInfix(TOKEN_INCREMENT, unaryVarAlterPostfixParselet, precedence::ALTER);
+		addInfix(TOKEN_DECREMENT, unaryVarAlterPostfixParselet, precedence::ALTER);
 	#pragma endregion
 
 	while (!isAtEnd()) {
@@ -195,6 +218,13 @@ parser::parser(vector<Token>* _tokens) {
 			sync();
 		}
 	}
+	delete assignmentParselet;
+	delete unaryParselet;
+	delete binaryParselet;
+	delete literalParselet;
+	delete callParselet;
+	delete unaryVarAlterPrefixParselet;
+	delete unaryVarAlterPostfixParselet;
 	#ifdef DEBUG_PRINT_AST
 		//debugASTPrinter printer(statements);
 	#endif // DEBUG_PRINT_AST
@@ -204,8 +234,8 @@ parser::~parser() {
 	for (int i = 0; i < statements.size(); i++) {
 		delete statements[i];
 	}
-	for (std::map<TokenType, prefixParselet*>::iterator it = prefixParselets.begin(); it != prefixParselets.end(); ++it) delete it->second;
-	for (std::map<TokenType, infixParselet*>::iterator it = infixParselets.begin(); it != infixParselets.end(); ++it) delete it->second;
+	//for (std::map<TokenType, prefixParselet*>::iterator it = prefixParselets.begin(); it != prefixParselets.end(); ++it) delete it->second;
+	//for (std::map<TokenType, infixParselet*>::iterator it = infixParselets.begin(); it != infixParselets.end(); ++it) delete it->second;
 }
 
 #pragma region Statements and declarations
@@ -253,8 +283,12 @@ ASTNode* parser::funcDecl() {
 ASTNode* parser::classDecl() {
 	Token name = consume(TOKEN_IDENTIFIER, "Expected a class name.");
 	consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+	vector<ASTNode*> methods;
+	while (!check(TOKEN_RIGHT_BRACE) && !isAtEnd()) {
+		methods.push_back(funcDecl());
+	}
 	consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
-	return new ASTClass(name);
+	return new ASTClass(name, methods);
 }
 
 ASTNode* parser::statement() {

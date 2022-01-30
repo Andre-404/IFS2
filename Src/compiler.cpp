@@ -10,7 +10,12 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 	//first slot is claimed for function name
 	local* _local = &locals[localCount++];
 	_local->depth = 0;
-	_local->name = "";
+	if (type != funcType::TYPE_FUNC) {
+		_local->name = "this";
+	}
+	else {
+		_local->name = "";
+	}
 	func = new objFunc();
 	code = &func->body;
 }
@@ -21,6 +26,7 @@ compiler::compiler(parser* _parser, funcType _type) {
 	compiled = true;
 	global::gc.compiling = this;
 	current = new compilerInfo(nullptr, funcType::TYPE_SCRIPT);
+	currentClass = nullptr;
 	//Don't compile if we had a parse error
 	if (Parser->hadError) {
 		//Do nothing
@@ -132,6 +138,7 @@ void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 }
 
 void compiler::visitCallExpr(ASTCallExpr* expr) {
+	if(invoke(expr)) return;
 	expr->getCallee()->accept(this);
 	// '(' is a function call, '[' and '.' are access operators
 	switch (expr->getAccessor().type) {
@@ -144,7 +151,7 @@ void compiler::visitCallExpr(ASTCallExpr* expr) {
 		emitBytes(OP_CALL, argCount);
 		break;
 	}
-		//these are usually things like array[index] or object.property
+	//these are usually things like array[index] or object.property
 	case TOKEN_LEFT_BRACKET: {
 		expr->getArgs()[0]->accept(this);
 		emitByte(OP_GET);
@@ -210,6 +217,19 @@ void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
 	}
 }
 
+void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
+	vector<structEntry>& entries = expr->getEntries();
+
+	vector<int> constants;
+
+	for (structEntry entry : entries) {
+		entry.expr->accept(this);
+		constants.push_back(identifierConstant(entry.name));
+	}
+	emitBytes(OP_CREATE_STRUCT, constants.size());
+	for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
+}
+
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	const Token& token = expr->getToken();
 	current->line = token.line;
@@ -231,6 +251,14 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 		break;
 	}
 
+	case TOKEN_THIS: {
+		if (currentClass == nullptr) {
+			error("Can't use 'this' outside of a class.");
+			return;
+		}
+		namedVar(token, false);
+		break;
+	}
 	case TOKEN_IDENTIFIER: {
 		namedVar(token, false);
 		break;
@@ -295,6 +323,16 @@ void compiler::visitClassDecl(ASTClass* decl) {
 
 	emitBytes(OP_CLASS, constant);
 	defineVar(constant);
+
+	classCompilerInfo temp(currentClass);
+	currentClass = &temp;
+
+	namedVar(className, false);
+	for (ASTNode* _method : decl->getMethods()) {
+		method((ASTFunc*)_method, className);
+	}
+	emitByte(OP_POP);
+	currentClass = currentClass->enclosing;
 }
 
 
@@ -456,6 +494,9 @@ void compiler::visitReturnStmt(ASTReturn* stmt) {
 		emitReturn();
 		return;
 	}
+	if (current->type == funcType::TYPE_CONSTRUCTOR) {
+		error("Can't return a value from an constructor.");
+	}
 	stmt->getExpr()->accept(this);
 	emitByte(OP_RETURN);
 	current->hasReturn = true;
@@ -495,7 +536,8 @@ void compiler::emitConstant(Value value) {
 
 
 void compiler::emitReturn() {
-	emitByte(OP_NIL);
+	if (current->type == funcType::TYPE_CONSTRUCTOR) emitBytes(OP_GET_LOCAL, 0);
+	else emitByte(OP_NIL);
 	emitByte(OP_RETURN);
 }
 
@@ -698,6 +740,58 @@ void compiler::patchBreak() {
 }
 
 #pragma endregion
+
+#pragma region Classes and methods
+void compiler::method(ASTFunc* _method, Token className) {
+	int name = identifierConstant(_method->getName());
+	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
+	//is stored in current->enclosing
+	funcType type = funcType::TYPE_METHOD;
+	if (_method->getName().lexeme.compare(className.lexeme) == 0) type = funcType::TYPE_CONSTRUCTOR;
+	current = new compilerInfo(current, type);
+	//no need for a endScope, since returning from the function discards the entire callstack
+	beginScope();
+	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
+	//we just assign those positions to each arg
+	for (Token& var : _method->getArgs()) {
+		uint8_t constant = parseVar(var);
+		defineVar(constant);
+	}
+	_method->getBody()->accept(this);
+	current->func->arity = _method->getArgs().size();
+	//could get away with using string instead of objString?
+	string str(_method->getName().lexeme);
+	current->func->name = copyString((char*)str.c_str(), str.length());
+	//have to do this here since endFuncDecl() deletes the compilerInfo
+	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
+
+	objFunc* func = endFuncDecl();
+	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	for (int i = 0; i < func->upvalueCount; i++) {
+		emitByte(upvals[i].isLocal ? 1 : 0);
+		emitByte(upvals[i].index);
+	}
+	emitBytes(OP_METHOD, name);
+}
+
+bool compiler::invoke(ASTCallExpr* expr) {
+	if (expr->getCallee()->type != ASTType::CALL) return false;
+	ASTCallExpr* _call = (ASTCallExpr*)expr->getCallee();
+	if (_call->getAccessor().type != TOKEN_DOT) return false;
+
+	_call->getCallee()->accept(this);
+	int field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
+	int argCount = 0;
+	for (ASTNode* arg : expr->getArgs()) {
+		arg->accept(this);
+		argCount++;
+	}
+	emitBytes(OP_INVOKE, field);
+	emitByte(argCount);
+	return true;
+}
+#pragma endregion
+
 
 chunk* compiler::getChunk() {
 	return &current->func->body;

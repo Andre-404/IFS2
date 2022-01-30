@@ -149,6 +149,23 @@ ASTUnaryVarAlterExpr::~ASTUnaryVarAlterExpr() {
 }
 #pragma endregion
 
+#pragma region Struct literal
+ASTStructLiteral::ASTStructLiteral(vector<structEntry> _fields) {
+	fields = _fields;
+	type = ASTType::STRUCT_LITERAL;
+}
+
+ASTStructLiteral::~ASTStructLiteral() {
+	for (structEntry entry : fields) {
+		delete entry.expr;
+	}
+}
+
+void ASTStructLiteral::accept(visitor* vis) {
+	vis->visitStructLiteralExpr(this);
+}
+#pragma endregion
+
 
 #pragma region Literal expr
 ASTLiteralExpr::ASTLiteralExpr(Token _token) {
@@ -198,9 +215,16 @@ void ASTFunc::accept(visitor* vis) {
 #pragma endregion
 
 #pragma region Class decl
-ASTClass::ASTClass(Token _name) {
+ASTClass::ASTClass(Token _name, vector<ASTNode*> _methods) {
 	name = _name;
+	methods = _methods;
 	type = ASTType::CLASS;
+}
+
+ASTClass::~ASTClass() {
+	for (ASTNode* method : methods) {
+		delete method;
+	}
 }
 
 void ASTClass::accept(visitor* vis) {
