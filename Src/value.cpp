@@ -2,9 +2,6 @@
 #include "object.h"
 #include <cmath>
 
-//Using epsilong value because of floating point precision
-#define FLOAT_EQ(x,v) (fabs(x - v) <= DBL_EPSILON)
-
 bool valuesEqual(Value a, Value b) {
     if (a.type != b.type) return false;
     switch (a.type) {

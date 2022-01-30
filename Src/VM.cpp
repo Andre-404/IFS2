@@ -534,9 +534,28 @@ interpretResult vm::run() {
 			break;
 		}
 		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
-		case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >= ); break;
 		case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
-		case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <= ); break;
+		case OP_GREATER_EQUAL: {
+			//Have to do this because of floating point comparisons
+			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
+				return runtimeError("Operands must be numbers."); 
+			} 
+			double b = AS_NUMBER(pop()); 
+			double a = AS_NUMBER(pop()); 
+			if (a > b || FLOAT_EQ(a, b)) push(BOOL_VAL(true));
+			else push(BOOL_VAL(false));
+			break;
+		}
+		case OP_LESS_EQUAL: {
+			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
+				return runtimeError("Operands must be numbers.");
+			}
+			double b = AS_NUMBER(pop());
+			double a = AS_NUMBER(pop());
+			if (a < b || FLOAT_EQ(a, b)) push(BOOL_VAL(true));
+			else push(BOOL_VAL(false));
+			break;
+		}
 		#pragma endregion
 
 		#pragma region Statements

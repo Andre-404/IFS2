@@ -1,0 +1,122 @@
+func BubbleSort(array){
+    var n = arrayLength(array);
+    var sorted = false;
+    while (!sorted){
+        sorted = true;
+        for (var i = 0; i < n-1; i++){
+            if (array[i] > array[i+1]){
+                sorted = false;
+                var t = array[i];
+                array[i] = array[i+1];
+                array[i+1] = t;
+            }
+        }
+    }
+}
+
+func MergeSort(array, l, r){
+    if (l == r) return;
+    var mid = floor((l+r)/2);
+    MergeSort(array, l, mid);
+    MergeSort(array, mid+1, r);
+    var merge = [];
+    var p1 = l;
+    var p2 = mid+1;
+    while (p1 <= mid && p2 <= r) {
+        if (array[p1] < array[p2]) {
+            arrayPush(merge, array[p1]);
+            p1++;
+        } else {
+            arrayPush(merge, array[p2]);
+            p2++;
+        }
+    }
+    while (p1 <= mid) { arrayPush(merge, array[p1]); p1++;}
+    while (p2 <= r) { arrayPush(merge, array[p2]); p2++;}
+    for (var i = l; i <= r; i++) {
+        array[i] = merge[i-l];
+    }
+}
+
+/* class MaxHeap{
+    var heap = [];
+    
+    
+    
+    func top(){
+        return heap[0];
+    } 
+    
+    func pop(){
+        
+    }
+}
+
+func HeapSort(array){
+    var n = arrayLength(array);
+    for (var i 
+} 
+*/
+func Partition(array, l, r){
+	var i = l;
+	var j = l;
+	var bck = r;
+	var val = array[randomRange(l, r)];
+	while (j <= bck) {
+		var x = array[j];
+		if (x < val){
+			array[j] = array[i];
+			array[i] = x;
+			i++;
+			j++;
+		} else if (x > val){
+			array[j] = array[bck];
+			array[bck] = x;
+			bck --;
+		} else {
+			j++;
+		}
+	}
+	return [i, j];
+}
+
+func QuickSort(array, l, r){
+	if (l >= r) return;
+	var pivot_rng = Partition(array, l, r);
+	QuickSort(array, l, pivot_rng[0] - 1);
+	QuickSort(array, pivot_rng[1] + 1, r);
+}
+
+func Sort(array, t){
+    var n = arrayLength(array);
+    print "Test for size: ";
+    print n;
+    var start = clock();
+    if (t == 0){ 
+		BubbleSort(array); 
+		print "Time for  bubble sort: ";
+	}
+    else if (t == 1) { 
+		MergeSort(array, 0, n-1); 
+		print "Time for merge sort: ";
+	}
+	else { 
+		QuickSort(array, 0, n-1); 
+		print "Time for quick sort: ";
+	}
+	print clock() - start;
+}
+
+setRandomSeed(-1);
+
+var a = [];
+var n = 1000000;
+
+arrayResize(a, 0);
+for (var i = 0; i < n; i++){
+    arrayPush(a, randomRange(1, 1000000000));
+}
+
+Sort(a, 2);
+
+if(0.1 + 0.2 <= 0.3) print "radi";

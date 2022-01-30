@@ -19,7 +19,7 @@ enum class funcType {
 };
 
 struct local {
-	string name;
+	string name = "";
 	int depth = -1;
 	bool isCaptured = false;
 };

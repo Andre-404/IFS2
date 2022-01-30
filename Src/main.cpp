@@ -44,9 +44,11 @@ string readFile(string path) {
 
 
 int main() {
+	cout << "Input filepath:\n";
 	string path;
 	cin >> path;
 	string source = readFile(path);
+	cout << "Output:\n\n";
 	if (!source.empty()) {
 		scanner* scan = new scanner(&source);
 		parser* parse = new parser(scan->getArr());
@@ -55,7 +57,10 @@ int main() {
 		vm* newVm = new vm(comp);
 		delete newVm;
 	}
-
+	while (true) {
+		cin >> path;
+		return 0;
+	}
 	cin.get();
 	return 0;
 }
