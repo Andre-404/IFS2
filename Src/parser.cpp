@@ -2,7 +2,57 @@
 #include "AST.h"
 #include "debug.h"
 
-#pragma region Parselets
+#pragma region Parselet
+
+Token makeToken(TokenType type, const char* str, int line) {
+	Token token;
+	token.lexeme = str;
+	token.type = type;
+	token.line = line;
+	return token;
+}
+
+ASTNode* parseAssign(parser* _parser, ASTNode* left, Token op) {
+	ASTNode* right = _parser->expression();
+	switch (op.type) {
+	case TOKEN_EQUAL: {
+		break;
+	}
+	case TOKEN_PLUS_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_PLUS, "+", op.line), right);
+		break;
+	}
+	case TOKEN_MINUS_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_MINUS, "-", op.line), right);
+		break;
+	}
+	case TOKEN_SLASH_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_SLASH, "/", op.line), right);
+		break;
+	}
+	case TOKEN_STAR_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_STAR, "*", op.line), right);
+		break;
+	}
+	case TOKEN_BITWISE_XOR_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_BITWISE_XOR, "^", op.line), right);
+		break;
+	}
+	case TOKEN_BITWISE_AND_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_BITWISE_AND, "&", op.line), right);
+		break;
+	}
+	case TOKEN_BITWISE_OR_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_BITWISE_OR, "|", op.line), right);
+		break;
+	}
+	case TOKEN_PERCENTAGE_EQUAL: {
+		right = new ASTBinaryExpr(left, makeToken(TOKEN_PERCENTAGE, "%", op.line), right);
+		break;
+	}
+	}
+	return right;
+}
 
 class unaryExpr : public prefixParselet {
 	ASTNode* parse(Token token) {
@@ -74,12 +124,11 @@ class unaryVarAlterPrefix : public prefixParselet {
 class assignmentExpr : public infixParselet {
 	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		//makes it right associative
-		ASTNode* right = cur->expression(prec - 1);
+		ASTNode* right = parseAssign(cur, left, token);
 		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
 			throw cur->error(token, "Left side is not assignable");
 		}
 		ASTAssignmentExpr* expr = new ASTAssignmentExpr(((ASTLiteralExpr*)left)->getToken(), right);
-		delete left;
 		return expr;
 	}
 };
@@ -140,8 +189,9 @@ public:
 		//if we have something like arr[0] = 1; we can't parse it with the assignment expr
 		//this handles that case and produces a special set expr
 		//we also check the precedence level of the surrounding expression, so "a + b.c = 3" doesn't get parsed
-		if (surroundingPrec <= (int)precedence::ASSIGNMENT && cur->match({ TOKEN_EQUAL })) {
-			ASTNode* val = cur->expression();
+		if (surroundingPrec <= (int)precedence::ASSIGNMENT && cur->match({ TOKEN_EQUAL, TOKEN_PLUS_EQUAL, TOKEN_MINUS_EQUAL, TOKEN_SLASH_EQUAL,
+				TOKEN_STAR_EQUAL, TOKEN_BITWISE_XOR_EQUAL, TOKEN_BITWISE_AND_EQUAL, TOKEN_BITWISE_OR_EQUAL, TOKEN_PERCENTAGE_EQUAL })) {
+			ASTNode* val = parseAssign(cur, left, cur->previous());
 			//args[0] because there is only every 1 argument inside [ ] when accessing/setting a field
 			return new ASTSetExpr(left, args[0], token, val);
 		}
@@ -193,6 +243,14 @@ parser::parser(vector<Token>* _tokens) {
 
 		//Infix
 		addInfix(TOKEN_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_PLUS_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_MINUS_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_SLASH_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_STAR_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_PERCENTAGE_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_XOR_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_OR_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_AND_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
 
 		addInfix(TOKEN_QUESTIONMARK, conditionalParselet, precedence::CONDITIONAL);
 

@@ -234,6 +234,7 @@ bool vm::setVal(int type, int arg, Value val) {
 			runtimeError("Undefined variable '%s'.", name->str);
 			return false;
 		}
+		return true;
 		break;
 	}
 	}
@@ -518,6 +519,9 @@ interpretResult vm::run() {
 		case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
 		case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, <<); break;
 		case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >>); break;
+		case OP_BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
+		case OP_BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, |); break;
+		case OP_BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
 		#pragma endregion
 
 		#pragma region Binary that returns bools
@@ -997,6 +1001,7 @@ interpretResult vm::run() {
 			//pop(); // Subclass.
 			break;
 		}
+
 		case OP_GET_SUPER:{
 			objString* name = READ_STRING();
 			objClass* superclass = AS_CLASS(pop());
@@ -1006,6 +1011,7 @@ interpretResult vm::run() {
 			}
 			break;
 		}
+
 		case OP_SUPER_INVOKE: {
 			objString* method = READ_STRING();
 			int argCount = READ_BYTE();

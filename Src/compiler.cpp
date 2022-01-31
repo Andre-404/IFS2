@@ -125,6 +125,9 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 	case TOKEN_PERCENTAGE: emitByte(OP_MOD); break;
 	case TOKEN_BITSHIFT_LEFT: emitByte(OP_BITSHIFT_LEFT); break;
 	case TOKEN_BITSHIFT_RIGHT: emitByte(OP_BITSHIFT_RIGHT); break;
+	case TOKEN_BITWISE_AND: emitByte(OP_BITWISE_AND); break;
+	case TOKEN_BITWISE_OR: emitByte(OP_BITWISE_OR); break;
+	case TOKEN_BITWISE_XOR: emitByte(OP_BITWISE_XOR); break;
 	//these return bools
 	case TOKEN_EQUAL_EQUAL: emitByte(OP_EQUAL); break;
 	case TOKEN_BANG_EQUAL: emitByte(OP_NOT_EQUAL); break;
