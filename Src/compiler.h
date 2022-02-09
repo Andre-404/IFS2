@@ -108,6 +108,8 @@ private:
 	void method(ASTFunc* _method, Token className);
 	bool invoke(ASTCallExpr* expr);
 	Token syntheticToken(const char* str);
+	//misc
+	void updateLine(Token token);
 	#pragma endregion
 	
 
@@ -136,6 +138,7 @@ private:
 	void visitIfStmt(ASTIfStmt* stmt);
 	void visitWhileStmt(ASTWhileStmt* stmt);
 	void visitForStmt(ASTForStmt* stmt);
+	void visitForeachStmt(ASTForeachStmt* stmt);
 	void visitBreakStmt(ASTBreakStmt* stmt);
 	void visitSwitchStmt(ASTSwitchStmt* stmt);
 	void visitCase(ASTCase* _case);

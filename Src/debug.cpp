@@ -358,6 +358,12 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return incrementInstruction("OP DECREMENT POST", Chunk, offset);
 	case OP_DECREMENT_PRE:
 		return incrementInstruction("OP DECREMENT PRE", Chunk, offset);
+	case OP_ITERATOR_GET:
+		return simpleInstruction("OP ITERATOR GET", offset);
+	case OP_ITERATOR_NEXT:
+		return simpleInstruction("OP ITERATOR NEXT", offset);
+	case OP_ITERATOR_START:
+		return simpleInstruction("OP ITERATOR START", offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

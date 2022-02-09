@@ -1,6 +1,6 @@
 #include "hashTable.h"
 #include "object.h"
-#define TABLE_LOAD_FACTOR 0.75//arbitrary, test and see what's best
+#define TABLE_LOAD_FACTOR 0.5//arbitrary, test and see what's best
 
 
 hashTable::hashTable() {
@@ -52,7 +52,7 @@ bool hashTable::del(objString* key) {
 
 entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
 	size_t bitMask = _entries.size() - 1 ;
-	uHash index = key->hash & bitMask;
+	uInt64 index = key->hash & bitMask;
 	entry* tombstone = nullptr;
 	//loop until we either find the key we're looking for, or a open slot
 	while(true) {
@@ -72,7 +72,7 @@ entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
 	}
 }
 
-void hashTable::resize(int _capacity) {
+void hashTable::resize(uInt64 _capacity) {
 	//create new array and fill it with NULL
 	std::vector<entry> newEntries;
 	newEntries.resize(_capacity, { nullptr, Value()});
@@ -110,10 +110,11 @@ objString* hashTable::getKey(Value val) {
 }
 
 
-objString* findInternedString(hashTable* table, char* str, uInt length, uHash hash) {
+objString* findInternedString(hashTable* table, char* str, uInt length, uInt64 hash) {
 	if (table->count == 0) return nullptr;
 	size_t bitMask = table->capacity - 1;
-	uHash index = hash & bitMask;
+	uInt64 index = hash & bitMask;
+
 	while(true) {
 		entry* _entry = &table->entries[index];
 		if (_entry->key == nullptr) {

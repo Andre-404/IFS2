@@ -27,6 +27,7 @@ class ASTBlockStmt;
 class ASTIfStmt;
 class ASTWhileStmt;
 class ASTForStmt;
+class ASTForeachStmt;
 class ASTBreakStmt;
 class ASTSwitchStmt;
 class ASTCase;
@@ -54,6 +55,7 @@ enum class ASTType {
 	IF_STMT,
 	WHILE_STMT,
 	FOR_STMT,
+	FOREACH_STMT,
 	BREAK_STMT,
 	SWITCH_STMT,
 	CASE,
@@ -97,12 +99,11 @@ public:
 	virtual void visitIfStmt(ASTIfStmt* stmt) = 0;
 	virtual void visitWhileStmt(ASTWhileStmt* stmt) = 0;
 	virtual void visitForStmt(ASTForStmt* stmt) = 0;
+	virtual void visitForeachStmt(ASTForeachStmt* stmt) = 0;
 	virtual void visitBreakStmt(ASTBreakStmt* stmt) = 0;
 	virtual void visitSwitchStmt(ASTSwitchStmt* stmt) = 0;
 	virtual void visitCase(ASTCase* _case) = 0;
 	virtual void visitReturnStmt(ASTReturn* stmt) = 0;
-	
-
 };
 
 class ASTNode {
@@ -366,6 +367,20 @@ public:
 	ASTNode* getBody() { return body; }
 	ASTNode* getInit() { return init; }
 	ASTNode* getIncrement() { return increment; }
+};
+
+class ASTForeachStmt : public ASTNode {
+private:
+	Token varName;
+	ASTNode* collection;
+	ASTNode* body;
+public:
+	ASTForeachStmt(Token _varName, ASTNode* _collection, ASTNode* _body);
+	
+	void accept(visitor* vis);
+	Token getVarName() { return varName; }
+	ASTNode* getCollection() { return collection; }
+	ASTNode* getBody() { return body; }
 };
 
 class ASTBreakStmt : public ASTNode {

@@ -10,6 +10,8 @@
 #define HEAP_MAX 1
 #define COLLECTION_THRESHOLD 16384  
 
+typedef char byte;
+
 class GC {
 public:
 	GC();
@@ -25,9 +27,9 @@ private:
 	//heap -> current heap memory block
 	//heapTop -> the next free pointer on the heap(NOT the top of the actual memory block)
 	//oldHeap -> used when resizing the heap, objects from oldHeap get copied to the current heap, and then oldHeap is dealloced
-	char* heap;
-	char* heapTop;
-	char* oldHeap;
+	byte* heap;
+	byte* heapTop;
+	byte* oldHeap;
 	size_t allocated;
 	//size of the current heap memory block
 	size_t heapSize;
@@ -36,12 +38,17 @@ private:
 	//used to prevent deep recursion
 	std::vector<obj*> stack;
 
+	//these are all the cached pointers to heap objects that need to be updated, works like a stack
+	std::vector<obj*> cachedPtrs;
+
 	//debug stuff
 	#ifdef DEBUG_GC
 	size_t nCollections;
 	size_t nReallocations;
 	#endif // DEBUG_GC
 
+	void cachePtr(obj* ptr);
+	obj* getCachedPtr();
 
 	void reallocate(size_t size);
 	void collect();

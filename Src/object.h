@@ -16,6 +16,7 @@ enum ObjType {
 	OBJ_CLASS,
 	OBJ_INSTANCE,
 	OBJ_BOUND_METHOD,
+	OBJ_ITERATOR,
 };
 
 //pointer to a native function
@@ -47,8 +48,8 @@ class objString : public obj {
 public:
 	char* str;
 	uInt length;
-	uHash hash;
-	objString(char* _str, uInt _length,uHash _hash);
+	uInt64 hash;
+	objString(char* _str, uInt _length, uInt64 _hash);
 	bool compare(char* toCompare, uInt _length);
 };
 
@@ -124,6 +125,15 @@ public:
 	objInstance(objClass* _klass);
 };
 
+class objIterator : public obj {
+public:
+	obj* iteratable;
+	//Insanely dumb way of making a iterator, doesn't really work, need to change this to be a pointer to a value
+	uInt64 count;
+	uInt64 oldPos;
+	objIterator(obj* _iteratable);
+};
+
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 
@@ -140,6 +150,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define IS_CLASS(value)        isObjType(value, OBJ_CLASS)
 #define IS_INSTANCE(value)     isObjType(value, OBJ_INSTANCE)
 #define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
+#define IS_ITERATOR(value)	   isObjType(value, OBJ_ITERATOR)
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -151,6 +162,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_CLASS(value)        ((objClass*)AS_OBJ(value))
 #define AS_INSTANCE(value)     ((objInstance*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value) ((objBoundMethod*)AS_OBJ(value))
+#define AS_ITERATOR(value)	   ((objIterator*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
 objString* takeString(char* str, uInt length);
@@ -160,6 +172,9 @@ objArrayHeader* createArrHeader(size_t size = 16);
 
 void printObject(Value value);
 void freeObject(obj* object);
+
+void updateIterator(objIterator* iterator);
+bool iteratorIsFinished(objIterator* iterator);
 
 
 #endif // !__IFS_OBJECT

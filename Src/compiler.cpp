@@ -55,11 +55,13 @@ bool identifiersEqual(std::string_view a, std::string_view b);
 
 void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	expr->getVal()->accept(this);//compile the right side of the expression
+	updateLine(expr->getToken());
 	namedVar(expr->getToken(), true);
 }
 
 void compiler::visitSetExpr(ASTSetExpr* expr) {
 	//different behaviour for '[' and '.'
+	updateLine(expr->getAccessor());
 	switch (expr->getAccessor().type) {
 	case TOKEN_LEFT_BRACKET: {
 		expr->getCallee()->accept(this);
@@ -68,7 +70,7 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 		emitByte(OP_SET);
 		break;
 	}
-	//this is a optimization for when the identifier is already there
+	//the "." is always followed by a field name as a string, so we can make it a constant and emit the position of the constant instead
 	case TOKEN_DOT: {
 		expr->getCallee()->accept(this);
 		expr->getValue()->accept(this);
@@ -93,6 +95,7 @@ void compiler::visitConditionalExpr(ASTConditionalExpr* expr) {
 }
 
 void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
+	updateLine(expr->getToken());
 	expr->getLeft()->accept(this);
 	if (expr->getToken().type == TOKEN_OR) {
 		//if the left side is true, we know that the whole expression will eval to true
@@ -114,7 +117,6 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 		return;
 	}
 	expr->getRight()->accept(this);
-	current->line = expr->getToken().line;
 	switch (expr->getToken().type) {
 	//take in double or string(in case of add)
 	case TOKEN_PLUS: emitByte(OP_ADD); break;
@@ -141,7 +143,7 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 	expr->getRight()->accept(this);
 	Token token = expr->getToken();
-	current->line = token.line;
+	updateLine(token);
 	switch (token.type) {
 	case TOKEN_MINUS: emitByte(OP_NEGATE); break;
 	case TOKEN_BANG: emitByte(OP_NOT); break;
@@ -150,6 +152,7 @@ void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
 }
 
 void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
+	//we need all of the array member values to be on the stack prior to executing "OP_CREATE_ARRAY"
 	for (ASTNode* node : expr->getMembers()) {
 		node->accept(this);
 	}
@@ -157,6 +160,7 @@ void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 }
 
 void compiler::visitCallExpr(ASTCallExpr* expr) {
+	//invoking is field access + call, when the compiler recognizes this pattern it optimizes
 	if(invoke(expr)) return;
 	expr->getCallee()->accept(this);
 	// '(' is a function call, '[' and '.' are access operators
@@ -170,7 +174,7 @@ void compiler::visitCallExpr(ASTCallExpr* expr) {
 		emitBytes(OP_CALL, argCount);
 		break;
 	}
-	//these are usually things like array[index] or object.property
+	//these are things like array[index] or object.property(or object["propertyAsString"])
 	case TOKEN_LEFT_BRACKET: {
 		expr->getArgs()[0]->accept(this);
 		emitByte(OP_GET);
@@ -189,9 +193,13 @@ void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {
 
 void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
 	//if 'field' field is null then this is a variable incrementing, if it's not null, then this is a field incrementing
+	//type => 0: local, 1: upvalue, 2: global, 3: '[' access, 4: '.' access
 	if (expr->getField() == nullptr) {
 		Token varName = ((ASTLiteralExpr*)expr->getCallee())->getToken();
+		updateLine(varName);
 		namedVar(varName, false);
+		//we can't use namedVar here because prefix and postfix incrementing/decrementing push the value of the variable at different times
+		//(before or after the incrementation)
 		int type = -1;
 		int arg = resolveLocal(varName);
 		if (arg != -1) {
@@ -206,8 +214,7 @@ void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
 		if (expr->getIsPrefix()) {
 			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_PRE);
 			else emitByte(OP_DECREMENT_PRE);
-		}
-		else {
+		}else {
 			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_POST);
 			else emitByte(OP_DECREMENT_POST);
 		}
@@ -241,15 +248,22 @@ void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
 
 	vector<int> constants;
 
+	//we first compile each expression, and then get it's field name
 	for (structEntry entry : entries) {
 		entry.expr->accept(this);
+		updateLine(entry.name);
 		constants.push_back(identifierConstant(entry.name));
 	}
+	//since the amount of fields is variable, we emit the number of fields follwed by constants for each field
+	//it's extremely important that we emit the constants in reverse order to how we pushed them, this is because when the VM gets to this point
+	//all of the values we need will be on the stack, and getting them from the back(by popping) will give us the values in reverse order
+	//compared to how we compiled them
 	emitBytes(OP_CREATE_STRUCT, constants.size());
 	for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
 }
 
 void compiler::visitSuperExpr(ASTSuperExpr* expr) {
+	updateLine(expr->getName());
 	int name = identifierConstant(expr->getName());
 	if (currentClass == nullptr) {
 		error("Can't use 'super' outside of a class.");
@@ -257,7 +271,7 @@ void compiler::visitSuperExpr(ASTSuperExpr* expr) {
 	else if (!currentClass->hasSuperclass) {
 		error("Can't use 'super' in a class with no superclass.");
 	}
-
+	//we use syntethic tokens since we know that 'super' and 'this' are defined if we're currently compiling a class method
 	namedVar(syntheticToken("this"), false);
 	namedVar(syntheticToken("super"), false);
 	emitBytes(OP_GET_SUPER, name);
@@ -265,7 +279,7 @@ void compiler::visitSuperExpr(ASTSuperExpr* expr) {
 
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	const Token& token = expr->getToken();
-	current->line = token.line;
+	updateLine(token);
 	switch (token.type) {
 	case TOKEN_NUMBER: {
 		double num = std::stod(string(token.lexeme));//doing this becuase stod doesn't accept string_view
@@ -289,6 +303,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 			error("Can't use 'this' outside of a class.");
 			break;
 		}
+		//'this' get implicitly defined by the compiler
 		namedVar(token, false);
 		break;
 	}
@@ -303,7 +318,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 
 void compiler::visitVarDecl(ASTVarDecl* decl) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
-	current->line = decl->getToken().line;
+	updateLine(decl->getToken());
 	uint8_t global = parseVar(decl->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = decl->getExpr();
@@ -318,6 +333,7 @@ void compiler::visitVarDecl(ASTVarDecl* decl) {
 }
 
 void compiler::visitFuncDecl(ASTFunc* decl) {
+	updateLine(decl->getName());
 	uint8_t name = parseVar(decl->getName());
 	markInit();
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
@@ -328,6 +344,7 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
 	//we just assign those positions to each arg
 	for (Token& var : decl->getArgs()) {
+		updateLine(var);
 		uint8_t constant = parseVar(var);
 		defineVar(constant);
 	}
@@ -341,6 +358,8 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 
 	objFunc* func = endFuncDecl();
 	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	//if this function does capture any upvalues, we emit the code for getting them, 
+	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);
@@ -350,17 +369,20 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 
 void compiler::visitClassDecl(ASTClass* decl) {
 	Token className = decl->getName();
-	current->line = className.line;
+	updateLine(className);
 	int constant = identifierConstant(className);
 	declareVar(className);
 
 	emitBytes(OP_CLASS, constant);
+	//define the class here, so that we can use it inside it's own methods
 	defineVar(constant);
 
 	classCompilerInfo temp(currentClass, false);
 	currentClass = &temp;
 
 	if (decl->inherits()) {
+		//if the class does inherit from some other class, we load the parent class and declare 'super' as a local variable
+		//which holds said class
 		namedVar(decl->getInherited(), false);
 		if (identifiersEqual(className.lexeme, decl->getInherited().lexeme)) {
 			error("A class can't inherit from itself.");
@@ -373,10 +395,13 @@ void compiler::visitClassDecl(ASTClass* decl) {
 		emitByte(OP_INHERIT);
 		currentClass->hasSuperclass = true;
 	}
+	//we need to load the class onto the top of the stack so that 'this' keyword can work correctly inside of methods
+	//the class that 'this' refers to is captured as a upvalue inside of methods
 	if(!decl->inherits()) namedVar(className, false);
 	for (ASTNode* _method : decl->getMethods()) {
 		method((ASTFunc*)_method, className);
 	}
+	//popping the current class
 	emitByte(OP_POP);
 
 	if (currentClass->hasSuperclass) {
@@ -461,10 +486,46 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 	patchBreak();
 }
 
+void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
+	beginScope();
+	//these synthetic tokens are used for variables that can never(and should never) be accessed by the user
+	Token iterator = syntheticToken("0");
+	//get the iterator
+	stmt->getCollection()->accept(this);
+	emitByte(OP_ITERATOR_START);
+	addLocal(iterator);
+	defineVar(0);
+	//Get the var ready
+	emitByte(OP_NIL);
+	addLocal(stmt->getVarName());
+	defineVar(0);
+
+	int loopStart = getChunk()->code.size();
+
+	//advancing
+	namedVar(iterator, false);
+	emitByte(OP_ITERATOR_NEXT);
+	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
+
+	//get new variable
+	namedVar(iterator, false);
+	emitByte(OP_ITERATOR_GET);
+	namedVar(stmt->getVarName(), true);
+	emitByte(OP_POP);
+
+	stmt->getBody()->accept(this);
+
+	//end of loop
+	emitLoop(loopStart);
+	patchJump(jump);
+	endScope();
+	patchBreak();
+}
+
 void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
 	//the amount of variables to pop and the amount of code to jump is determined in handleBreak()
 	//which is called at the end of loops
-	current->line = stmt->getToken().line;
+	updateLine(stmt->getToken());
 	emitByte(OP_BREAK);
 	int breakJump = getChunk()->code.size();
 	emitBytes(0xff, 0xff);
@@ -484,7 +545,6 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 	emitBytes(OP_SWITCH, pos);
 
 	long start = getChunk()->code.size();
-	//TODO:defaults
 	for (ASTNode* _case : stmt->getCases()) {
 		ASTCase* curCase = (ASTCase*)_case;
 		//based on the type of switch stmt, we either convert all token lexemes to numbers,
@@ -493,6 +553,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			switch (type) {
 			case switchType::NUM: {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
+				updateLine(expr->getToken());
 				//TODO: round this?
 				int key = std::stoi(string(expr->getToken().lexeme));
 				long _ip = getChunk()->code.size() - start;
@@ -504,6 +565,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			case switchType::STRING:
 			case switchType::MIXED: {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
+				updateLine(expr->getToken());
 				long _ip = getChunk()->code.size() - start;
 				//converts string_view to string and get's rid of ""
 				string _temp(expr->getToken().lexeme);
@@ -808,6 +870,7 @@ void compiler::method(ASTFunc* _method, Token className) {
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
 	funcType type = funcType::TYPE_METHOD;
+	//constructors are treated separatly, but are still methods
 	if (_method->getName().lexeme.compare(className.lexeme) == 0) type = funcType::TYPE_CONSTRUCTOR;
 	current = new compilerInfo(current, type);
 	//no need for a endScope, since returning from the function discards the entire callstack
@@ -837,6 +900,7 @@ void compiler::method(ASTFunc* _method, Token className) {
 
 bool compiler::invoke(ASTCallExpr* expr) {
 	if (expr->getCallee()->type == ASTType::CALL) {
+		//currently we only optimizes field invoking(struct.field())
 		ASTCallExpr* _call = (ASTCallExpr*)expr->getCallee();
 		if (_call->getAccessor().type != TOKEN_DOT) return false;
 
@@ -867,6 +931,7 @@ bool compiler::invoke(ASTCallExpr* expr) {
 			arg->accept(this);
 			argCount++;
 		}
+		//super gets popped, leaving only the receiver and args on the stack
 		namedVar(syntheticToken("super"), false);
 		emitBytes(OP_SUPER_INVOKE, name);
 		emitByte(argCount);
@@ -896,6 +961,11 @@ objFunc* compiler::endFuncDecl() {
 	delete current;
 	current = temp;
 	return func;
+}
+
+//a little helper for updating the lines emitted by the compiler(used for displaying runtime errors)
+void compiler::updateLine(Token token) {
+	current->line = token.line;
 }
 
 #pragma endregion

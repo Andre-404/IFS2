@@ -11,7 +11,8 @@
 
 	//used for strings
 	typedef unsigned int uInt;
-	typedef unsigned long long uHash;
+	typedef unsigned long long uInt64;
+	//typedef unsigned long long uHash;
 
 	namespace global {
 		

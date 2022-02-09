@@ -17,9 +17,11 @@ struct entry {
 
 class hashTable {
 public:
+	//this should honestly be moved to the GC managed heap
 	std::vector<entry> entries;
-	int count;
-	int capacity;
+	uInt64 count;
+	uInt64 capacity;
+
 	hashTable();
 	bool set(objString* key, Value val);
 	bool get(objString* key, Value* val);
@@ -27,11 +29,11 @@ public:
 	bool del(objString* key);
 	void tableAddAll(hashTable* src);
 private:
-	void resize(int _capacity);
-	entry* findEntry(std::vector<entry> &_entries, objString* _key);
+	void resize(uInt64 _capacity);
+	entry* findEntry(std::vector<entry> &_entries, objString* key);
 };
 
-objString* findInternedString(hashTable* table, char* str, uInt length, uHash hash);
+objString* findInternedString(hashTable* table, char* str, uInt length, uInt64 hash);
 
 
 #endif // !__IFS_HASH_TABLE

@@ -362,6 +362,20 @@ void ASTForStmt::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Foreach stmt
+ASTForeachStmt::ASTForeachStmt(Token _varName, ASTNode* _collection, ASTNode* _body) {
+	varName = _varName;
+	collection = _collection;
+	body = _body;
+	type = ASTType::FOREACH_STMT;
+}
+
+void ASTForeachStmt::accept(visitor* vis) {
+	vis->visitForeachStmt(this);
+}
+#pragma endregion
+
+
 #pragma region Break stmt
 ASTBreakStmt::ASTBreakStmt(Token _token) {
 	token = _token;

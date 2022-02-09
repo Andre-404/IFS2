@@ -9,21 +9,25 @@ using namespace global;
 Value nativeArrayCreate(int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw "Expected number for size argument.";
 	double size = AS_NUMBER(*args);
+
 	objArray* arr = createArr(size);
 	return OBJ_VAL(arr);
 }
 Value nativeArrayCopy(int argCount, Value* args) {
-	if(!IS_ARRAY(*args))throw "Expected array for array argument.";
+	if(!IS_ARRAY(*args)) throw "Expected array for array argument.";
 	objArray* arr = createArr(AS_ARRAY(*args)->values->capacity);
+	//we can safely do this since both the actual Value array is of POD type
 	memmove(arr->values->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
 	return OBJ_VAL(arr);
 }
 Value nativeArrayResize(int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
 	if (!IS_NUMBER(*(args + 1))) throw "Expected number for size argument.";
+
 	size_t count = AS_ARRAY(*args)->values->count;
 	size_t capacity = AS_ARRAY(*args)->values->capacity;
 	size_t newSize = AS_NUMBER(*(args + 1));
+
 	objArrayHeader* temp = createArrHeader(newSize);
 	memcpy(temp->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
 	temp->count = newSize;

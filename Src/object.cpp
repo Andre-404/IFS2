@@ -64,6 +64,9 @@ void printObject(Value value) {
 	case OBJ_BOUND_METHOD:
 		printFunction(AS_BOUND_METHOD(value)->method->func);
 		break;
+	case OBJ_ITERATOR:
+		std::cout << "iterator";
+		break;
 	case OBJ_ARR_HEADER: break;//this is never directly inside a value
 	}
 }
@@ -99,8 +102,8 @@ void freeObject(obj* object) {
 	}
 }
 
-static uHash hashString(char* str, uInt length) {
-	uHash hash = 14695981039346656037u;
+static uInt64 hashString(char* str, uInt length) {
+	uInt64 hash = 14695981039346656037u;
 	for (int i = 0; i < length; i++) {
 		hash ^= (uint8_t)str[i];
 		hash *= 1099511628211;
@@ -108,7 +111,7 @@ static uHash hashString(char* str, uInt length) {
 	return hash;
 }
 
-objString::objString(char* _str, uInt _length, uHash _hash) {
+objString::objString(char* _str, uInt _length, uInt64 _hash) {
 	type = OBJ_STRING;
 	length = _length;
 	hash = _hash;
@@ -136,7 +139,7 @@ bool objString::compare(char* toCompare, uInt _length) {
 
 //assumes the string hasn't been heap allocated
 objString* copyString(char* str, uInt length) {
-	uHash hash = hashString(str, length);
+	uInt64 hash = hashString(str, length);
 	objString* interned = findInternedString(&global::internedStrings, str, length, hash);
 	if (interned != nullptr) return interned;
 	//we do this because on the heap a string obj is always followed by the char pointer for the string
@@ -151,7 +154,7 @@ objString* copyString(char* str, uInt length) {
 
 //works on the same basis as copyString, but it assumed that "str" has been heap allocated, so it frees it
 objString* takeString(char* str, uInt length) {
-	uHash hash = hashString(str, length);
+	uInt64 hash = hashString(str, length);
 	objString* interned = findInternedString(&global::internedStrings, str, length, hash);
 	if (interned != nullptr) return interned;
 	//we do this because on the heap a string obj is always followed by the char pointer for the string
@@ -218,9 +221,26 @@ objBoundMethod::objBoundMethod(Value _receiver, objClosure* _method) {
 	moveTo = nullptr;
 }
 
+objIterator::objIterator(obj* _iteratable) {
+	iteratable = _iteratable;
+	count = 0;
+	oldPos = 0;
+	if (iteratable->type == OBJ_INSTANCE) {
+		objInstance* inst = (objInstance*)iteratable;
+		entry* key = &inst->table.entries[count];
+
+		while ((key->key == TOMBSTONE || key->key == nullptr) && count < inst->table.capacity) {
+			count++;
+			key = &inst->table.entries[count];
+		}
+	}
+	moveTo = nullptr;
+	type = OBJ_ITERATOR;
+}
+
 
 objArray* createArr(size_t size) {
-	size_t capacity = pow(2, ceil(log2(size < 16 ? 16 : size)));
+	size_t capacity = (1ll << (64 - _lzcnt_u64(size < 16 ? 16 : size)));
 	char* ptr = (char*)__allocObj(sizeof(objArray) + sizeof(objArrayHeader) + (capacity * sizeof(Value)));
 	Value* arr = new(ptr + sizeof(objArray) + sizeof(objArrayHeader)) Value[capacity];
 	objArrayHeader* header = new(ptr + sizeof(objArray)) objArrayHeader(arr, capacity);
@@ -232,6 +252,38 @@ objArrayHeader* createArrHeader(size_t size) {
 	char* ptr = (char*)__allocObj(sizeof(objArrayHeader) + (capacity * sizeof(Value)));
 	Value* arr = new(ptr + sizeof(objArrayHeader)) Value[capacity];
 	return new(ptr) objArrayHeader(arr, capacity);
+}
+
+void updateIterator(objIterator* iterator) {
+	iterator->oldPos = iterator->count;
+	if (iterator->iteratable->type == OBJ_ARRAY) {
+		iterator->count++;
+	}
+	else {
+		objInstance* inst = (objInstance*)iterator->iteratable;
+		if (iterator->count >= inst->table.capacity - 1) {
+			iterator->count++;
+			return;
+		}
+		entry* key = &inst->table.entries[++iterator->count];
+
+		while ((key->key == TOMBSTONE || key->key == nullptr) && iterator->count < inst->table.capacity) {
+			iterator->count++;
+			if(iterator->count < inst->table.capacity) key = &inst->table.entries[iterator->count];
+		}
+	}
+}
+
+bool iteratorIsFinished(objIterator* iterator) {
+	if (iterator->iteratable->type == OBJ_ARRAY) {
+		objArray* arr = (objArray*)iterator->iteratable;
+		if (iterator->count >= arr->values->count) return true;
+		return false;
+	}else {
+		objInstance* inst = (objInstance*)iterator->iteratable;
+		if (iterator->count >= inst->table.capacity) return true;
+		return false;
+	}
 }
 
 

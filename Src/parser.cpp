@@ -2,6 +2,7 @@
 #include "AST.h"
 #include "debug.h"
 
+//TODO: fix memory leak issues with AST nodes inside of expressions
 #pragma region Parselet
 
 Token makeToken(TokenType type, const char* str, int line) {
@@ -12,6 +13,7 @@ Token makeToken(TokenType type, const char* str, int line) {
 	return token;
 }
 
+//used for parsing assignment tokens(eg. =, +=, *=...)
 ASTNode* parseAssign(parser* _parser, ASTNode* left, Token op) {
 	ASTNode* right = _parser->expression();
 	switch (op.type) {
@@ -75,6 +77,7 @@ class literalExpr : public prefixParselet {
 			cur->consume(TOKEN_RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
 			return new ASTGroupingExpr(expr);
 		}
+		//Array literal
 		case TOKEN_LEFT_BRACKET: {
 			vector<ASTNode*> members;
 			if (!(cur->peek().type == TOKEN_RIGHT_BRACKET)) {
@@ -85,13 +88,15 @@ class literalExpr : public prefixParselet {
 			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array initialization.");
 			return new ASTArrayDeclExpr(members);
 		}
+		//Struct literal
 		case TOKEN_LEFT_BRACE: {
 			vector<structEntry> entries;
 			if (!(cur->peek().type == TOKEN_RIGHT_BRACE)) {
+				//a struct literal looks like this: {var1 : expr1, var2 : expr2}
 				do {
 					Token identifier = cur->consume(TOKEN_IDENTIFIER, "Expected a identifier.");
 					cur->consume(TOKEN_COLON, "Expected a ':' after identifier");
-					ASTNode* expr = cur->expression((int)precedence::ASSIGNMENT);
+					ASTNode* expr = cur->expression();
 					entries.emplace_back(identifier, expr);
 				} while (cur->match({ TOKEN_COMMA }));
 			}
@@ -108,6 +113,7 @@ class unaryVarAlterPrefix : public prefixParselet {
 	ASTNode* parse(Token op) {
 		ASTNode* var = cur->expression(prec);
 		ASTUnaryVarAlterExpr* expr = nullptr;
+		//differentiate between variable incrementation, and (array or struct) field incrementation
 		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
 			expr = new ASTUnaryVarAlterExpr(var, nullptr, op, true);
 		}
@@ -152,6 +158,7 @@ class binaryExpr : public infixParselet {
 class unaryVarAlterPostfix : public infixParselet {
 	ASTNode* parse(ASTNode* var, Token op, int surroundingPrec) {
 		ASTUnaryVarAlterExpr* expr = nullptr;
+		//differentiate between variable incrementation, and (array or struct) field incrementation
 		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
 			expr = new ASTUnaryVarAlterExpr(var, nullptr, op, false);
 		}
@@ -186,9 +193,10 @@ public:
 			Token field = cur->consume(TOKEN_IDENTIFIER, "Expected a field identifier.");
 			args.push_back(new ASTLiteralExpr(field));
 		}
-		//if we have something like arr[0] = 1; we can't parse it with the assignment expr
+		//if we have something like arr[0] = 1 or struct.field = 1 we can't parse it with the assignment expr
 		//this handles that case and produces a special set expr
 		//we also check the precedence level of the surrounding expression, so "a + b.c = 3" doesn't get parsed
+		//the huge match() covers every possible type of assignment
 		if (surroundingPrec <= (int)precedence::ASSIGNMENT && cur->match({ TOKEN_EQUAL, TOKEN_PLUS_EQUAL, TOKEN_MINUS_EQUAL, TOKEN_SLASH_EQUAL,
 				TOKEN_STAR_EQUAL, TOKEN_BITWISE_XOR_EQUAL, TOKEN_BITWISE_AND_EQUAL, TOKEN_BITWISE_OR_EQUAL, TOKEN_PERCENTAGE_EQUAL })) {
 			ASTNode* val = parseAssign(cur, left, cur->previous());
@@ -313,8 +321,6 @@ parser::~parser() {
 	for (int i = 0; i < statements.size(); i++) {
 		delete statements[i];
 	}
-	//for (std::map<TokenType, prefixParselet*>::iterator it = prefixParselets.begin(); it != prefixParselets.end(); ++it) delete it->second;
-	//for (std::map<TokenType, infixParselet*>::iterator it = infixParselets.begin(); it != infixParselets.end(); ++it) delete it->second;
 }
 
 #pragma region Statements and declarations
@@ -362,8 +368,10 @@ ASTNode* parser::funcDecl() {
 ASTNode* parser::classDecl() {
 	Token name = consume(TOKEN_IDENTIFIER, "Expected a class name.");
 	Token inherited;
+	//inheritance is optional
 	if (match({ TOKEN_COLON })) inherited = consume(TOKEN_IDENTIFIER, "Expected a parent class name.");
 	consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+	//a class body can contain only methods(fields are initialized in the constructor
 	vector<ASTNode*> methods;
 	while (!check(TOKEN_RIGHT_BRACE) && !isAtEnd()) {
 		methods.push_back(funcDecl());
@@ -438,8 +446,10 @@ ASTNode* parser::forStmt() {
 	ASTNode* init = NULL;
 	if (match({ TOKEN_SEMICOLON })) {
 		//do nothing
-	}else if (match({ TOKEN_VAR })) {
-		init = varDecl();
+	}else if (match({ TOKEN_VAR })) {//this is for differentiating between for and foreach(since they both use the same keyword)
+		if (peekNext().type == TOKEN_COLON) {
+			return foreachStmt();
+		}else init = varDecl();
 	}else {
 		init = exprStmt();
 	}
@@ -456,6 +466,15 @@ ASTNode* parser::forStmt() {
 	//disallows declarations unless they're in a block
 	ASTNode* body = statement();
 	return new ASTForStmt(init, condition, increment, body);
+}
+
+ASTNode* parser::foreachStmt() {
+	Token varName = consume(TOKEN_IDENTIFIER, "Expected a variable name.");
+	advance();
+	ASTNode* collection = expression();
+	consume(TOKEN_RIGHT_PAREN, "Expected ')' after foreach clause.");
+	ASTNode* body = statement();
+	return new ASTForeachStmt(varName, collection, body);
 }
 
 ASTNode* parser::breakStmt() {
@@ -577,6 +596,10 @@ Token parser::peek() {
 	return tokens->at(current);
 }
 
+Token parser::peekNext() {
+	return tokens->at(current + 1);
+}
+
 Token parser::previous() {
 	return tokens->at(current - 1);
 }
@@ -628,6 +651,7 @@ void parser::sync() {
 	}
 }
 
+//parses the args and wraps the callee and args into a call expr
 ASTCallExpr* parser::finishCall(ASTNode* callee) {
 	Token prev = previous();
 	vector<ASTNode*> args;

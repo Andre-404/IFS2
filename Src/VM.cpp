@@ -151,6 +151,7 @@ bool vm::callValue(Value callee, int argCount) {
 			return true;
 		}
 		case OBJ_BOUND_METHOD: {
+			//puts the receiver instance in the 0th slot('this' points to the 0th slot)
 			objBoundMethod* bound = AS_BOUND_METHOD(callee);
 			stackTop[-argCount - 1] = bound->receiver;
 			return call(bound->method, argCount);
@@ -183,20 +184,25 @@ bool vm::call(objClosure* closure, int argCount) {
 }
 
 void vm::defineNative(string name, NativeFn func, int arity) {
+	//pushing the values because of GC
 	push(OBJ_VAL(copyString((char*)name.c_str(), name.length())));
 	push(OBJ_VAL(new objNativeFn(func, arity)));
+
 	globals.set(AS_STRING(stack[0]), stack[1]);
+
 	pop();
 	pop();
 }
 
 objUpval* vm::captureUpvalue(Value* local) {
+	//first checks to see if there already exists a upvalue that points to stack location 'local'
 	for (int i = openUpvals.size() - 1; i >= 0; i--) {
 		if (openUpvals[i]->location >= local) {
 			if (openUpvals[i]->location == local) return openUpvals[i];
 		}
 		else break;
 	}
+	//if not, create a new upvalue
 	objUpval* createdUpval = new objUpval(local);
 	openUpvals.push_back(createdUpval);
 	return createdUpval;
@@ -204,18 +210,21 @@ objUpval* vm::captureUpvalue(Value* local) {
 
 void vm::closeUpvalues(Value* last) {
 	objUpval* upval;
+	//close every value on the stack until last
 	for (int i = openUpvals.size() - 1; i >= 0; i--) {
 		upval = openUpvals[i];
 		if (upval->location >= last) {
 			upval->closed = *upval->location;
 			upval->location = &upval->closed;
-			upval->isOpen = false;
+			upval->isOpen = false;//this check is used by the GC
 		}
 		else break;
 	}
 }
 
 bool vm::setVal(int type, int arg, Value val) {
+	//little helper used for incrementation
+	//type => 0: local, 1: upvalue, 2: global
 	switch (type) {
 	case 0: {
 		frames[frameCount - 1].slots[arg] = val;
@@ -242,7 +251,7 @@ bool vm::setVal(int type, int arg, Value val) {
 }
 
 bool vm::incrementField(int type, bool isPrefix, bool positive) {
-	//Get's the object whose field we're try to retrieve
+	//gets the object whose field we're try to retrieve
 	Value callee = pop();
 	if (!IS_OBJ(callee)) {
 		runtimeError("Expected a array or struct.");
@@ -257,13 +266,13 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 			return false;
 		}
 		double index = AS_NUMBER(field);
-		if ((int)index != index) {
+		if ((uInt64)index != index) {
 			runtimeError("Index must be integer.");
 			return false;
 		}
 		objArray* arr = AS_ARRAY(callee);
 
-		Value val = arr->values->arr[(int)index];
+		Value val = arr->values->arr[(uInt64)index];
 		
 		if (!IS_NUMBER(val)) {
 			runtimeError("Cannot increment a value that's not a number");
@@ -280,7 +289,7 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 			val.as.num += 1 * ((positive * 2) - 1);
 		}
 
-		arr->values->arr[(int)index] = val;
+		arr->values->arr[(uInt64)index] = val;
 		break;
 	}
 	case OBJ_INSTANCE: {
@@ -316,8 +325,7 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 		if (isPrefix) {
 			val.as.num += 1 * ((positive * 2) - 1);
 			push(val);
-		}
-		else {
+		}else {
 			push(val);
 			val.as.num += 1 * ((positive * 2) - 1);
 		}
@@ -333,9 +341,11 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 }
 
 void vm::defineMethod(objString* name) {
+	//no need to typecheck since the compiler made sure to emit code in this order
 	Value method = peek(0);
 	objClass* klass = AS_CLASS(peek(1));
 	klass->methods.set(name, method);
+	//we only pop the method, since other methods we're compiling will also need to know their class
 	pop();
 }
 
@@ -353,7 +363,7 @@ bool vm::bindMethod(objClass* klass, objString* name) {
 	//make sure to pop the closure to maintain stack discipline and to get the updated value(if it changed)
 	method = pop();
 	bound->method = AS_CLOSURE(method);
-
+	//pop the receiver instance
 	pop();
 	push(OBJ_VAL(bound));
 	return true;
@@ -365,17 +375,21 @@ bool vm::invoke(objString* fieldName, int argCount) {
 		runtimeError("Only instances have methods.");
 		return false;
 	}
+
 	objInstance* instance = AS_INSTANCE(receiver);
 	Value value;
+	//this is here because invoke can also be used on functions stored in a instances field
 	if (instance->table.get(fieldName, &value)) {
 		stackTop[-argCount - 1] = value;
 		return callValue(value, argCount);
 	}
 	//this check is used because we also use objInstance to represent struct literals
+	//and if this instance is a struct it can only contain functions inside it's field table
 	if (instance->klass == nullptr) {
 		runtimeError("Undefined property '%s'.", fieldName->str);
 		return false;
 	}
+
 	return invokeFromClass(instance->klass, fieldName, argCount);
 }
 
@@ -385,6 +399,7 @@ bool vm::invokeFromClass(objClass* klass, objString* name, int argCount) {
 		runtimeError("Undefined property '%s'.", name->str);
 		return false;
 	}
+	//the bottom of the call stack will contain the receiver instance
 	return call(AS_CLOSURE(method), argCount);
 }
 #pragma endregion
@@ -603,7 +618,7 @@ interpretResult vm::run() {
 			frame->slots[slot] = peek(0);
 			break;
 		}
-
+		//upvals[slot]->location can be a pointer to either a stack slot, or a closed upvalue in a functions closure
 		case OP_GET_UPVALUE: {
 			uint8_t slot = READ_BYTE();
 			push(*frame->closure->upvals[slot]->location);
@@ -775,6 +790,47 @@ interpretResult vm::run() {
 			}
 			break;
 		}
+
+		case OP_ITERATOR_GET: {
+			//the top of the stack will always be a iterator(the compiler makes sure of that), so there is no need for runtime checks
+			objIterator* iterator = AS_ITERATOR(peek(0));
+			if (iterator->iteratable->type == OBJ_ARRAY) {
+				objArray* arr = (objArray*)iterator->iteratable;
+				pop();
+				push(arr->values->arr[iterator->oldPos]);
+			}else {
+				objInstance* inst = (objInstance*)iterator->iteratable;
+				objArray* arr = createArr(2);
+				iterator = AS_ITERATOR(peek(0));
+				inst = (objInstance*)iterator->iteratable;
+
+				arr->values->arr[0] = OBJ_VAL(inst->table.entries[iterator->oldPos].key);
+				arr->values->arr[1] = inst->table.entries[iterator->oldPos].val;
+				arr->values->count = 2;
+				pop();
+				push(OBJ_VAL(arr));
+			}
+			break;
+		}
+
+		case OP_ITERATOR_START: {
+			if (!IS_OBJ(peek(0))) return runtimeError("Expected a collection for iteration.");
+			if(!(IS_INSTANCE(peek(0)) || IS_ARRAY(peek(0)))) return runtimeError("Expected a collection for iteration.");
+
+			push(OBJ_VAL(new objIterator(AS_OBJ(pop()))));
+			break;
+		}
+
+		case OP_ITERATOR_NEXT: {
+			//this will always be a iterator, the compiler makes sure of that, so there is not need for runtime checks
+			objIterator* iterator = AS_ITERATOR(pop());
+			bool isFin = iteratorIsFinished(iterator);
+			if (!isFin) {
+				updateIterator(iterator);
+			}
+			push(BOOL_VAL(!isFin));
+			break;
+		}
 		#pragma endregion
 
 		#pragma region Functions
@@ -825,17 +881,13 @@ interpretResult vm::run() {
 
 		#pragma region Objects, arrays and maps
 		case OP_CREATE_ARRAY: {
-			int size = READ_BYTE();
-			int i = 0;
+			uInt64 size = READ_BYTE();
+			uInt64 i = 0;
 			objArray* arr = createArr(size);
 			while (i < size) {
-				arr->values->arr[i] = peek(size - i - 1);
+				//size-i to because the values on the stack are in reverse order compared to how they're supposed to be in a array
+				arr->values->arr[size - i] = pop();
 				arr->values->count++;
-				i++;
-			}
-			i = 0;
-			while (i < size) {
-				pop();
 				i++;
 			}
 			push(OBJ_VAL(arr));
@@ -853,12 +905,13 @@ interpretResult vm::run() {
 			case OBJ_ARRAY: {
 				if (!IS_NUMBER(field)) return runtimeError("Index must be a number.");
 				double index = AS_NUMBER(field);
-				if ((int)index != index) return runtimeError("Expected interger, got float.");
 				objArray* arr = AS_ARRAY(callee);
+				//Trying to access a variable using a float is a error
+				if ((uInt64)index != index) return runtimeError("Expected interger, got float.");
 				if (index < 0 || index > arr->values->count - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (int)index, AS_ARRAY(callee)->values->count - 1);
+					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, AS_ARRAY(callee)->values->count - 1);
 
-				push(arr->values->arr[(int)index]);
+				push(arr->values->arr[(uInt64)index]);
 				break;
 			}
 			case OBJ_INSTANCE: {
@@ -867,10 +920,12 @@ interpretResult vm::run() {
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* name = AS_STRING(field);
 				Value value;
+
 				if (instance->table.get(name, &value)) {
 					push(value);
 					break;
 				}
+				//if the field doesn't exist, we push nil as a sentinel value, since this is not considered a runtime error
 				push(NIL_VAL());
 				break;
 			}
@@ -895,18 +950,19 @@ interpretResult vm::run() {
 
 				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number");
 				double index = AS_NUMBER(field);
-				if (index != (int)index) return runtimeError("Index has to be a integer.");
+				//accessing array with a float is a error
+				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
 				if (index < 0 || index > arr->values->count - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (int)index, arr->values->count - 1);
+					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, arr->values->count - 1);
 
-				arr->values->arr[(int)index] = val;
+				arr->values->arr[(uInt64)index] = val;
 				break;
 				}
 			case OBJ_INSTANCE: {
 				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* str = AS_STRING(field);
-
+				//settting will always succeed, and we don't care if we're overriding an existing field, or creating a new one
 				instance->table.set(str, val);
 				break;
 			}
@@ -921,13 +977,14 @@ interpretResult vm::run() {
 			break;
 		}
 
-		case OP_CLASS:
+		case OP_CLASS: {
 			push(OBJ_VAL(new objClass(READ_STRING())));
 			break;
+		}
 
 		case OP_GET_PROPERTY: {
 			if (!IS_INSTANCE(peek(0))) {
-				runtimeError("Only instances have properties.");
+				runtimeError("Only instances/structs have properties.");
 				return RUNTIME_ERROR;
 			}
 
@@ -940,10 +997,9 @@ interpretResult vm::run() {
 				push(value);
 				break;
 			}
-			if (!bindMethod(instance->klass, name)) {
-				return RUNTIME_ERROR;
-			}
-			else break;
+			//first check is because structs(instances with no class) are also represented using objInstance
+			if (instance->klass && bindMethod(instance->klass, name)) break;
+			//if 'name' isn't a field property, nor is it a method, we push nil as a sentinel value
 			push(NIL_VAL());
 			break;
 		}
@@ -955,6 +1011,7 @@ interpretResult vm::run() {
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(1));
+			//we don't care if we're overriding or creating a new field
 			instance->table.set(READ_STRING(), peek(0));
 
 			Value value = pop();
@@ -966,8 +1023,10 @@ interpretResult vm::run() {
 		case OP_CREATE_STRUCT: {
 			int numOfFields = READ_BYTE();
 
+			//passing null instead of class signals to the VM that this is a struct, and not a instance of a class
 			objInstance* inst = new objInstance(nullptr);
 
+			//the compiler emits the fields in reverse order, so we can loop through them normally and pop the values on the stack
 			for (int i = 0; i < numOfFields; i++) {
 				objString* name = READ_STRING();
 				inst->table.set(name, pop());
@@ -977,10 +1036,12 @@ interpretResult vm::run() {
 		}
 
 		case OP_METHOD:
+			//class that this method binds too
 			defineMethod(READ_STRING());
 			break;
 
 		case OP_INVOKE: {
+			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
 			objString* method = READ_STRING();
 			int argCount = READ_BYTE();
 			if (!invoke(method, argCount)) {
@@ -997,12 +1058,13 @@ interpretResult vm::run() {
 				return RUNTIME_ERROR;
 			}
 			objClass* subclass = AS_CLASS(peek(0));
+			//copy down inheritance
 			subclass->methods.tableAddAll(&subclass->methods);
-			//pop(); // Subclass.
 			break;
 		}
 
 		case OP_GET_SUPER:{
+			//super is ALWAYS followed by a field and is a call expr
 			objString* name = READ_STRING();
 			objClass* superclass = AS_CLASS(pop());
 
@@ -1013,9 +1075,11 @@ interpretResult vm::run() {
 		}
 
 		case OP_SUPER_INVOKE: {
+			//works same as OP_INVOKE, but uses invokeFromClass() to specify the superclass
 			objString* method = READ_STRING();
 			int argCount = READ_BYTE();
 			objClass* superclass = AS_CLASS(pop());
+
 			if (!invokeFromClass(superclass, method, argCount)) {
 				return RUNTIME_ERROR;
 			}

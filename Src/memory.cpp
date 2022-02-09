@@ -7,7 +7,7 @@ GC::GC() {
 	allocated = 0;
 	sinceLastClear = allocated;
 
-	heap = new char[HEAP_START_SIZE];
+	heap = new byte[HEAP_START_SIZE];
 	heapTop = heap;
 	oldHeap = nullptr;
 	heapSize = HEAP_START_SIZE;
@@ -24,7 +24,7 @@ GC::GC() {
 }
 
 //these 2 template function are used for actually moving the objects in memory
-//we're explicitly calling the destructors to get rid of any containers that are a part of the object
+//we're explicitly calling the destructors to get rid of any STL containers that are a part of the object
 template<typename T> 
 void moveData(void* to, T* from) {
 	T temp = *from;
@@ -44,6 +44,7 @@ void* GC::allocRaw(size_t size, bool shouldCollect) {
 	collect();
 	#endif // DEBUG_STRESS_GC
 
+	//we only collect/reallocate if we're full
 	double percentage = (double)(allocated + size) / (double)heapSize;
 	if (percentage > HEAP_MAX) {
 		//we first collect, hoping to free up some space on the heap
@@ -79,6 +80,7 @@ size_t getSizeOfObj(obj* ptr) {
 	case OBJ_CLASS: return sizeof(objClass); break;
 	case OBJ_INSTANCE: return sizeof(objInstance); break;
 	case OBJ_BOUND_METHOD: return sizeof(objBoundMethod); break;
+	case OBJ_ITERATOR: return sizeof(objIterator); break;
 	default:
 		std::cout << "Couldn't convert obj" << "\n";
 		exit(1);
@@ -112,7 +114,7 @@ void GC::reallocate(size_t size) {
 	collecting = true;
 	oldHeap = heap;
 	heapSize = size;//heap size is always a power of 2, maybe change this?
-	heap = new char[heapSize];
+	heap = new byte[heapSize];
 	//calculate the address of each marked object after reallocation
 	computeAddress(true);
 	//update pointers both in the roots and in the heap objects themselves,
@@ -141,7 +143,7 @@ void setMarked(obj* ptr) {
 
 void GC::markObj(obj* ptr) {
 	if (!ptr) return;
-	//there is no reason to push native function and strings to the stack, we can't trace any further nodes from the,
+	//there is no reason to push native function and strings to the stack, we can't trace any further nodes from them
 	if (ptr->type == OBJ_NATIVE || ptr->type == OBJ_STRING) {
 		setMarked(ptr);
 		return;
@@ -153,7 +155,7 @@ void GC::markObj(obj* ptr) {
 void GC::markTable(hashTable& table) {
 	for (int i = 0; i < table.capacity; i++) {
 		entry* _entry = &table.entries[i];
-		if (_entry->key) {
+		if (_entry->key && _entry->key != TOMBSTONE) {
 			markObj(_entry->key);
 			markVal(_entry->val);
 		}
@@ -173,6 +175,7 @@ void GC::markRoots() {
 			markObj(VM->openUpvals[i]);
 		}
 	}
+	//since a GC collection can be triggered during the compilation, we must also mark all function which are currently being compiled
 	if (compiling != nullptr) {
 		compilerInfo* cur = compiling->current;
 		while (cur != nullptr) {
@@ -184,6 +187,10 @@ void GC::markRoots() {
 
 void GC::mark() {
 	markRoots();
+	//cached pointers are also considered root nodes(since such cached pointers may be a direct result of things like the pop() operation on the stack)
+	for (obj* ptr : cachedPtrs) {
+		markObj(ptr);
+	}
 	//we use a stack to avoid going into a deep recursion(which might fail)
 	while (stack.size() != 0) {
 		obj* ptr = stack.back();
@@ -194,6 +201,7 @@ void GC::mark() {
 
 void GC::traceObj(obj* object) {
 	if (!object) return;
+	setMarked(object);
 	switch (object->type) {
 	case OBJ_FUNC: {
 		objFunc* func = (objFunc*)object;
@@ -201,12 +209,10 @@ void GC::traceObj(obj* object) {
 		for (Value val : func->body.constants) {
 			markVal(val);
 		}
-		setMarked(func);
 		break;
 	}
 	case OBJ_ARRAY: {
 		objArray* arr = (objArray*)object;
-		setMarked(arr);
 		stack.push_back(arr->values);
 		break;
 	}
@@ -216,28 +222,24 @@ void GC::traceObj(obj* object) {
 		for (objUpval* upval : closure->upvals) {
 			stack.push_back(upval);
 		}
-		setMarked(closure);
 		break;
 	}
-	case OBJ_UPVALUE: setMarked(object); markVal(((objUpval*)object)->closed);  break;
+	case OBJ_UPVALUE: markVal(((objUpval*)object)->closed);  break;
 	case OBJ_ARR_HEADER: {
 		objArrayHeader* header = (objArrayHeader*)object;
 		for (size_t i = 0; i < header->count; i++) {
 			markVal(header->arr[i]);
 		}
-		setMarked(object);
 		break;
 	}
 	case OBJ_CLASS: {
 		objClass* klass = (objClass*)object;
 		klass->name->moveTo = object;
 		markTable(klass->methods);
-		setMarked(object);
 		break;
 	}
 	case OBJ_INSTANCE: {
 		objInstance* inst = (objInstance*)object;
-		setMarked(inst);
 		markTable(inst->table);
 		if (inst->klass != nullptr) markObj(inst->klass);
 		break;
@@ -245,6 +247,11 @@ void GC::traceObj(obj* object) {
 	case OBJ_BOUND_METHOD: {
 		objBoundMethod* bound = (objBoundMethod*)object;
 		markVal(bound->receiver);
+		break;
+	}
+	case OBJ_ITERATOR: {
+		objIterator* iterator = (objIterator*)object;
+		markObj(iterator->iteratable);
 		break;
 	}
 	case OBJ_NATIVE:
@@ -260,9 +267,9 @@ bool forwardAddress(obj* ptr) {
 
 void GC::computeAddress(bool isReallocating) {
 	//we scan the heap linearly, for each marked object(those whose moveTo field isn't null), we calculate a new(compacted) position
-	//"to" can point either to start of the same memory, or to a entirely new buffer
-	char* to = heap;
-	char* from = oldHeap;
+	//"to" can point either to start of the same memory block, or to a entirely memory block
+	byte* to = heap;
+	byte* from = oldHeap;
 
 	while (from < heapTop) {
 		obj* temp = (obj*)from;
@@ -286,7 +293,7 @@ void updateTable(hashTable* table) {
 	for (int i = 0; i < table->capacity; i++) {
 		entry* _entry = &table->entries[i];
 		//only update live cells(avoid empty/tombstone ones)
-		if (_entry->key && _entry->key != (objString*)0x000001) {
+		if (_entry->key && _entry->key != TOMBSTONE) {
 			//this little check here is for global::internedStrings, since the strings there are "weak" pointers
 			if (_entry->key->moveTo == nullptr) {
 				table->del(_entry->key);
@@ -340,10 +347,13 @@ void updateObjectPtrs(obj* object) {
 	}
 	case OBJ_ARR_HEADER: {
 		objArrayHeader* header = (objArrayHeader*)object;
+
 		size_t size = header->count;
 		for (size_t i = 0; i < size; i++) {
 			updateVal(&header->arr[i]);
 		}
+
+		header->arr = (Value*)(((byte*)header) + sizeof(objArrayHeader));
 		break;
 	}
 	case OBJ_CLASS:{
@@ -364,6 +374,11 @@ void updateObjectPtrs(obj* object) {
 		updateVal(&method->receiver);
 		break;
 	}
+	case OBJ_ITERATOR: {
+		objIterator* iterator = (objIterator*)object;
+		iterator->iteratable = iterator->iteratable->moveTo;
+		break;
+	}
 	case OBJ_NATIVE:
 		break;
 	}
@@ -372,6 +387,10 @@ void updateObjectPtrs(obj* object) {
 void GC::updatePtrs() {
 	updateRootPtrs();
 	updateHeapPtrs();
+	//updating cached pointers
+	for (int i = 0; i < cachedPtrs.size(); i++) {
+		cachedPtrs[i] = cachedPtrs[i]->moveTo;
+	}
 }
 
 void GC::updateRootPtrs() {
@@ -390,6 +409,7 @@ void GC::updateRootPtrs() {
 			VM->openUpvals[i] = (objUpval*)VM->openUpvals[i]->moveTo;
 		}
 	}
+	//the GC can also be called during the compilation process, so we need to update it's compiler info
 	if (compiling != nullptr) {
 		compilerInfo* cur = compiling->current;
 		while (cur != nullptr) {
@@ -417,17 +437,17 @@ void GC::updateHeapPtrs() {
 void GC::compact() {
 	//heap can be either the same memory buffer, or a completely different one
 	//we're always copy FROM old heap
-	char* from = oldHeap;
-	char* newTop = heap;
+	byte* from = oldHeap;
+	byte* newTop = heap;
 
 	//heapTop points to the top of the old heap, we ONLY update heapTop once we're done with compacting
 	while (from < heapTop) {
 		obj* curObject = (obj*)from;
 		size_t sizeOfObj = getSizeOfObj(curObject);
-		char* nextObj = from + sizeOfObj;
+		byte* nextObj = from + sizeOfObj;
 
 		if (forwardAddress(curObject)) {
-			char* to = (char*)curObject->moveTo;
+			byte* to = (byte*)curObject->moveTo;
 			curObject->moveTo = nullptr;//reset the marked flag
 			//this is a simple optimization, if the object doesn't move in memory at all, there's no need to copy it
 			if(from != to) moveObj(to, curObject);
@@ -453,7 +473,7 @@ void GC::moveObj(void* to, obj* from) {
 		moveData(to, (objString*)from);
 		objString* str = (objString*)to;
 		//length + 1 here is for the null terminator
-		moveRaw((char*)to + sizeof(objString), (char*)from + sizeof(objString), ((objString*)from)->length + 1);
+		moveRaw((byte*)to + sizeof(objString), (byte*)from + sizeof(objString), ((objString*)from)->length + 1);
 		break;
 	}
 	case OBJ_UPVALUE: {
@@ -473,13 +493,15 @@ void GC::moveObj(void* to, obj* from) {
 		size_t capacity = ((objArrayHeader*)from)->capacity;
 		moveData(to, (objArrayHeader*)from);
 		objArrayHeader* newHeader = (objArrayHeader*)to;
-		newHeader->arr = (Value*)(((char*)newHeader) + sizeof(objArrayHeader));
-		Value* fromArr = ((Value*)(((char*)from + sizeof(objArrayHeader))));
-		memmove((char*)newHeader->arr, (char*)fromArr, capacity * sizeof(Value));
+		//newHeader->arr = (Value*)(((char*)newHeader) + sizeof(objArrayHeader));
+		Value* fromArr = ((Value*)(((byte*)from + sizeof(objArrayHeader))));
+		memmove((byte*)newHeader->arr, (byte*)fromArr, capacity * sizeof(Value));
 		break;
 	}
 	case OBJ_CLASS: moveData(to, (objClass*)from); break;
 	case OBJ_INSTANCE: moveData(to, (objInstance*)from); break;
+	case OBJ_BOUND_METHOD: moveData(to, (objBoundMethod*)from); break;
+	case OBJ_ITERATOR: moveData(to, (objIterator*)from); break;
 	}
 }
 
@@ -490,23 +512,25 @@ void GC::moveRaw(void* to, void* from, size_t size) {
 //call the destructor for the appropriate type
 void GC::destructObj(obj* ptr) {
 	switch (ptr->type) {
-	case OBJ_ARRAY:		destruct((objArray*)ptr); break;
-	case OBJ_STRING:	destruct((objString*)ptr); break;
-	case OBJ_CLOSURE:	destruct((objClosure*)ptr); break;
-	case OBJ_FUNC:		destruct((objFunc*)ptr); break;
-	case OBJ_NATIVE:	destruct((objNativeFn*)ptr); break;
-	case OBJ_UPVALUE:	destruct((objUpval*)ptr); break;
-	case OBJ_CLASS:		destruct((objClass*)ptr); break;
-	case OBJ_INSTANCE:	destruct((objInstance*)ptr); break;
+	case OBJ_ARRAY:			destruct((objArray*)ptr); break;
+	case OBJ_STRING:		destruct((objString*)ptr); break;
+	case OBJ_CLOSURE:		destruct((objClosure*)ptr); break;
+	case OBJ_FUNC:			destruct((objFunc*)ptr); break;
+	case OBJ_NATIVE:		destruct((objNativeFn*)ptr); break;
+	case OBJ_UPVALUE:		destruct((objUpval*)ptr); break;
+	case OBJ_CLASS:			destruct((objClass*)ptr); break;
+	case OBJ_INSTANCE:		destruct((objInstance*)ptr); break;
+	case OBJ_BOUND_METHOD:	destruct((objBoundMethod*)ptr); break;
+	case OBJ_ITERATOR:		destruct((objIterator*)ptr); break;
 	}
 }
 
 
 //helpers
 
-//deallocts the entire heap
+//deallocates the entire heap
 void GC::clear() {
-	char* it = heap;
+	byte* it = heap;
 
 	//we need to explicitly call the destructor for each object to handle things like STL containers
 	while (it < heapTop) {
@@ -528,4 +552,19 @@ void GC::clear() {
 	std::cout << "Final size of heap: " << heapSize << "\n";
 	#endif // DEBUG_GC
 	
+}
+
+//these 2 functions are for handling potential cached pointers(such pointers may appear in native functions/while executing bytecode)
+void GC::cachePtr(obj* ptr) {
+	cachedPtrs.push_back(ptr);
+}
+
+obj* GC::getCachedPtr() {
+	if (cachedPtrs.size() == 0) {
+		std::cout << "Cannot retrieve cached pointer, exiting...\n";
+		exit(64);
+	}
+	obj* ptr = cachedPtrs[cachedPtrs.size() - 1];
+	cachedPtrs.pop_back();
+	return ptr;
 }

@@ -64,6 +64,8 @@ public:
 
 		Token peek();
 
+		Token peekNext();
+
 		Token previous();
 
 		Token consume(TokenType type, string msg);
@@ -104,6 +106,7 @@ private:
 	ASTNode* ifStmt();
 	ASTNode* whileStmt();
 	ASTNode* forStmt();
+	ASTNode* foreachStmt();
 	ASTNode* breakStmt();
 	ASTNode* switchStmt();
 	ASTNode* _case();
