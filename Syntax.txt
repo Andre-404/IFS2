@@ -15,15 +15,13 @@ true
 
 collections:
 array->dynamic
-hashMap[key:string, val:any]
 struct
 ---------
-var arr = [];
-var Map = hashMap<>
+var arr = [val1, val2, ...];
 var struct = {field: val}
 
 
-Operators
+Operators:
 - ! ~
 ()
 + - * / %
@@ -35,6 +33,7 @@ and or
 ==
 = += -= *= /= %= &= |= ^=
 ---------------------------------------------------
+precedence(the higher they are, the lower precedence they have):
 = += -= *= /= %= &= |= ^=
 ?:
 or
@@ -50,7 +49,7 @@ and
 ~ a++ ++a a-- --a - !
 
 
-Statements
+Keywords:
 for
 while
 if else
@@ -59,17 +58,13 @@ continue
 switch
 case
 default
-foreach->array, hashMap
+foreach
+print
 
-
-Declarations
-variable
-class(single inheritance), only global level->methods and fields
--> init
-this
-super
-
-function->func
+Declarations:
+var
+class
+func
 
 
 
