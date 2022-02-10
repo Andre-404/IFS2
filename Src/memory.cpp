@@ -55,6 +55,7 @@ void* GC::allocRaw(size_t size, bool shouldCollect) {
 	//we use a while loop here in case the new heap size still isn't enough
 	if(percentage > HEAP_MAX) {
 		size_t newHeapSize = (1ll << (64 - _lzcnt_u64(allocated + size - 1)));
+		std::cout << "GC ran";
 		reallocate(newHeapSize);
 	}
 	void* temp = heapTop;
@@ -353,7 +354,7 @@ void updateObjectPtrs(obj* object) {
 			updateVal(&header->arr[i]);
 		}
 
-		header->arr = (Value*)(((byte*)header) + sizeof(objArrayHeader));
+		header->arr = (Value*)(((byte*)header->moveTo) + sizeof(objArrayHeader));
 		break;
 	}
 	case OBJ_CLASS:{
@@ -493,8 +494,7 @@ void GC::moveObj(void* to, obj* from) {
 		size_t capacity = ((objArrayHeader*)from)->capacity;
 		moveData(to, (objArrayHeader*)from);
 		objArrayHeader* newHeader = (objArrayHeader*)to;
-		//newHeader->arr = (Value*)(((char*)newHeader) + sizeof(objArrayHeader));
-		Value* fromArr = ((Value*)(((byte*)from + sizeof(objArrayHeader))));
+		Value* fromArr = ((Value*)((((byte*)from) + sizeof(objArrayHeader))));
 		memmove((byte*)newHeader->arr, (byte*)fromArr, capacity * sizeof(Value));
 		break;
 	}

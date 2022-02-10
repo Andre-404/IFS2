@@ -43,7 +43,8 @@ Value nativeArrayPush(int argCount, Value* args) {
 	size_t capacity = AS_ARRAY(*args)->values->capacity;
 	if ((count + 1) >= capacity) {
 		objArrayHeader* temp = createArrHeader(capacity * 2);
-		memcpy(temp->arr, AS_ARRAY(*args)->values->arr, AS_ARRAY(*args)->values->count * sizeof(Value));
+		objArray* arr = AS_ARRAY(*args);
+		memcpy(temp->arr, arr->values->arr, arr->values->count * sizeof(Value));
 		temp->count = count;
 		AS_ARRAY(*args)->values = temp;
 	}

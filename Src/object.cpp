@@ -152,6 +152,10 @@ objString* copyString(char* str, uInt length) {
 	return onHeap;
 }
 
+objString* copyString(const char* str, uInt length) {
+	return copyString((char*)str, length);
+}
+
 //works on the same basis as copyString, but it assumed that "str" has been heap allocated, so it frees it
 objString* takeString(char* str, uInt length) {
 	uInt64 hash = hashString(str, length);

@@ -165,6 +165,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_ITERATOR(value)	   ((objIterator*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
+objString* copyString(const char* str, uInt length);
 objString* takeString(char* str, uInt length);
 
 objArray* createArr(size_t size = 16);

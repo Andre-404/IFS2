@@ -492,7 +492,9 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	Token iterator = syntheticToken("0");
 	//get the iterator
 	stmt->getCollection()->accept(this);
-	emitByte(OP_ITERATOR_START);
+	int name = identifierConstant(syntheticToken("begin"));
+	emitBytes(OP_GET_PROPERTY, name);
+	emitBytes(OP_CALL, 0);
 	addLocal(iterator);
 	defineVar(0);
 	//Get the var ready
@@ -504,12 +506,15 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 
 	//advancing
 	namedVar(iterator, false);
-	emitByte(OP_ITERATOR_NEXT);
+	name = identifierConstant(syntheticToken("next"));
+	emitBytes(OP_GET_PROPERTY, name);
+	emitBytes(OP_CALL, 0);
 	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
 
 	//get new variable
 	namedVar(iterator, false);
-	emitByte(OP_ITERATOR_GET);
+	name = identifierConstant(syntheticToken("current"));
+	emitBytes(OP_GET_PROPERTY, name);
 	namedVar(stmt->getVarName(), true);
 	emitByte(OP_POP);
 
@@ -899,6 +904,8 @@ void compiler::method(ASTFunc* _method, Token className) {
 }
 
 bool compiler::invoke(ASTCallExpr* expr) {
+	//we only optimize function calls
+	if (expr->getAccessor().type != TOKEN_LEFT_PAREN) return false;
 	if (expr->getCallee()->type == ASTType::CALL) {
 		//currently we only optimizes field invoking(struct.field())
 		ASTCallExpr* _call = (ASTCallExpr*)expr->getCallee();

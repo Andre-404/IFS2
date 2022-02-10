@@ -793,42 +793,65 @@ interpretResult vm::run() {
 
 		case OP_ITERATOR_GET: {
 			//the top of the stack will always be a iterator(the compiler makes sure of that), so there is no need for runtime checks
-			objIterator* iterator = AS_ITERATOR(peek(0));
-			if (iterator->iteratable->type == OBJ_ARRAY) {
-				objArray* arr = (objArray*)iterator->iteratable;
-				pop();
-				push(arr->values->arr[iterator->oldPos]);
-			}else {
-				objInstance* inst = (objInstance*)iterator->iteratable;
-				objArray* arr = createArr(2);
-				iterator = AS_ITERATOR(peek(0));
-				inst = (objInstance*)iterator->iteratable;
+			if (!IS_INSTANCE(peek(0))) return runtimeError("Expected a iterator");
+			objInstance* inst = AS_INSTANCE(pop());
 
-				arr->values->arr[0] = OBJ_VAL(inst->table.entries[iterator->oldPos].key);
-				arr->values->arr[1] = inst->table.entries[iterator->oldPos].val;
-				arr->values->count = 2;
-				pop();
-				push(OBJ_VAL(arr));
+			Value val;
+
+			if (!inst->table.get(copyString("current", 7), &val)) {
+				return runtimeError("Iterator object is expected to have a 'current' field.");
 			}
+
+			push(val);
 			break;
 		}
 
 		case OP_ITERATOR_START: {
-			if (!IS_OBJ(peek(0))) return runtimeError("Expected a collection for iteration.");
+			if(!IS_OBJ(peek(0))) return runtimeError("Expected a collection for iteration.");
 			if(!(IS_INSTANCE(peek(0)) || IS_ARRAY(peek(0)))) return runtimeError("Expected a collection for iteration.");
 
-			push(OBJ_VAL(new objIterator(AS_OBJ(pop()))));
+			if(IS_INSTANCE(peek(0))) {
+				Value val;
+				objInstance* inst = AS_INSTANCE(pop());
+				if (!inst->table.get(copyString("begin", 5), &val)) {
+					if (inst->klass) {
+						if (!inst->klass->methods.get(copyString("begin", 5), &val)) {
+							return runtimeError("Expected a iteratable object to have a 'begin' method.");
+						}
+					}
+					else return runtimeError("Expected a iteratable object to have a 'begin' method.");
+				}
+				//copied from OP_CALL
+				if (!callValue(peek(0), 0)) {
+					return RUNTIME_ERROR;
+				}
+				//if the call is succesful, there is a new call frame, so we need to update the pointer
+				frame = &frames[frameCount - 1];
+				break;
+			}
+			return runtimeError("Error.");
 			break;
 		}
 
 		case OP_ITERATOR_NEXT: {
-			//this will always be a iterator, the compiler makes sure of that, so there is not need for runtime checks
-			objIterator* iterator = AS_ITERATOR(pop());
-			bool isFin = iteratorIsFinished(iterator);
-			if (!isFin) {
-				updateIterator(iterator);
+			if (!IS_INSTANCE(peek(0))) return runtimeError("Expected a iterator.");
+
+			Value val;
+			objInstance* inst = AS_INSTANCE(pop());
+			if (!inst->table.get(copyString("next", 4), &val)) {
+				if (inst->klass) {
+					if (!inst->klass->methods.get(copyString("next", 4), &val)) {
+						return runtimeError("Expected a iterator object to have a 'next' method.");
+					}
+				}
+				else return runtimeError("Expected a iterator object to have a 'next' method.");
 			}
-			push(BOOL_VAL(!isFin));
+			//copied from OP_CALL
+			if (!callValue(peek(0), 0)) {
+				return RUNTIME_ERROR;
+			}
+			//if the call is succesful, there is a new call frame, so we need to update the pointer
+			frame = &frames[frameCount - 1];
 			break;
 		}
 		#pragma endregion
