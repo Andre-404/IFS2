@@ -199,7 +199,7 @@ public:
 		//the huge match() covers every possible type of assignment
 		if (surroundingPrec <= (int)precedence::ASSIGNMENT && cur->match({ TOKEN_EQUAL, TOKEN_PLUS_EQUAL, TOKEN_MINUS_EQUAL, TOKEN_SLASH_EQUAL,
 				TOKEN_STAR_EQUAL, TOKEN_BITWISE_XOR_EQUAL, TOKEN_BITWISE_AND_EQUAL, TOKEN_BITWISE_OR_EQUAL, TOKEN_PERCENTAGE_EQUAL })) {
-			ASTNode* val = parseAssign(cur, left, cur->previous());
+			ASTNode* val = parseAssign(cur, new ASTCallExpr(left, token, args), cur->previous());
 			//args[0] because there is only every 1 argument inside [ ] when accessing/setting a field
 			return new ASTSetExpr(left, args[0], token, val);
 		}

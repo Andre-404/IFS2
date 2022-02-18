@@ -66,8 +66,8 @@ ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
 }
 
 ASTBinaryExpr::~ASTBinaryExpr() {
-	delete left;
-	delete right;
+	//delete left;
+	//delete right;
 }
 
 void ASTBinaryExpr::accept(visitor* vis) {

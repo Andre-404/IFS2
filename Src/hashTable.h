@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "value.h"
+#include "gcVector.h"
 
 class objString;
 
@@ -11,6 +12,10 @@ class objString;
 struct entry {
 	objString* key;
 	Value val;
+	entry() {
+		key = nullptr;
+		val = NIL_VAL();
+	}
 };
 
 #define TOMBSTONE (objString*)0x000001
@@ -18,7 +23,7 @@ struct entry {
 class hashTable {
 public:
 	//this should honestly be moved to the GC managed heap
-	std::vector<entry> entries;
+	gcVector<entry> entries;
 	uInt64 count;
 	uInt64 capacity;
 
@@ -30,7 +35,7 @@ public:
 	void tableAddAll(hashTable* src);
 private:
 	void resize(uInt64 _capacity);
-	entry* findEntry(std::vector<entry> &_entries, objString* key);
+	entry* findEntry(gcVector<entry> &_entries, objString* key);
 };
 
 objString* findInternedString(hashTable* table, char* str, uInt length, uInt64 hash);

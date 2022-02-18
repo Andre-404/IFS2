@@ -8,6 +8,11 @@ using namespace global;
 
 compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing(_enclosing), type(_type) {
 	//first slot is claimed for function name
+	upvalues = std::array<upvalue, UPVAL_MAX>();
+	hasReturn = false;
+	localCount = 0;
+	scopeDepth = 0;
+	line = 0;
 	local* _local = &locals[localCount++];
 	_local->depth = 0;
 	if (type != funcType::TYPE_FUNC) {
@@ -17,7 +22,6 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 		_local->name = "";
 	}
 	func = new objFunc();
-	code = &func->body;
 }
 
 
@@ -25,6 +29,7 @@ compiler::compiler(parser* _parser, funcType _type) {
 	Parser = _parser;
 	compiled = true;
 	global::gc.compiling = this;
+	std::cout << sizeof(compilerInfo);
 	current = new compilerInfo(nullptr, funcType::TYPE_SCRIPT);
 	currentClass = nullptr;
 	//Don't compile if we had a parse error
@@ -339,6 +344,7 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
 	current = new compilerInfo(current, funcType::TYPE_FUNC);
+	//current->func = new objFunc();
 	//no need for a endScope, since returning from the function discards the entire callstack
 	beginScope();
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
@@ -357,7 +363,9 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
+	global::gc.cachePtr(func);
 	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	global::gc.getCachedPtr();
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
@@ -451,7 +459,7 @@ void compiler::visitIfStmt(ASTIfStmt* stmt) {
 void compiler::visitWhileStmt(ASTWhileStmt* stmt) {
 	//the bytecode for this is almost the same as if statement
 	//but at the end of the body, we loop back to the start of the condition
-	int loopStart = getChunk()->code.size();
+	int loopStart = getChunk()->code.count();
 	stmt->getCondition()->accept(this);
 	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
 	stmt->getBody()->accept(this);
@@ -464,7 +472,7 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 	//we wrap this in a scope so if there is a var declaration in the initialization it's scoped to the loop
 	beginScope();
 	if(stmt->getInit() != NULL) stmt->getInit()->accept(this);
-	int loopStart = getChunk()->code.size();
+	int loopStart = getChunk()->code.count();
 	//only emit the exit jump code if there is a condition expression
 	int exitJump = -1;
 	if (stmt->getCondition() != NULL) { 
@@ -502,7 +510,7 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	addLocal(stmt->getVarName());
 	defineVar(0);
 
-	int loopStart = getChunk()->code.size();
+	int loopStart = getChunk()->code.count();
 
 	//advancing
 	namedVar(iterator, false);
@@ -532,7 +540,7 @@ void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
 	//which is called at the end of loops
 	updateLine(stmt->getToken());
 	emitByte(OP_BREAK);
-	int breakJump = getChunk()->code.size();
+	int breakJump = getChunk()->code.count();
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
 	current->breakStmts.emplace_back(current->scopeDepth, breakJump, current->localCount);
@@ -549,7 +557,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 	switchTable& table = getChunk()->switchTables[pos];
 	emitBytes(OP_SWITCH, pos);
 
-	long start = getChunk()->code.size();
+	long start = getChunk()->code.count();
 	for (ASTNode* _case : stmt->getCases()) {
 		ASTCase* curCase = (ASTCase*)_case;
 		//based on the type of switch stmt, we either convert all token lexemes to numbers,
@@ -561,17 +569,17 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 				updateLine(expr->getToken());
 				//TODO: round this?
 				int key = std::stoi(string(expr->getToken().lexeme));
-				long _ip = getChunk()->code.size() - start;
+				long _ip = getChunk()->code.count() - start;
 
 				table.addToArr(key, _ip);
 				break;
 			}
-								//for both strings and mixed switches we pass them as strings
+			//for both strings and mixed switches we pass them as strings
 			case switchType::STRING:
 			case switchType::MIXED: {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
 				updateLine(expr->getToken());
-				long _ip = getChunk()->code.size() - start;
+				long _ip = getChunk()->code.count() - start;
 				//converts string_view to string and get's rid of ""
 				string _temp(expr->getToken().lexeme);
 				if (expr->getToken().type == TOKEN_STRING) {
@@ -584,12 +592,12 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			}
 		}
 		else {
-			table.defaultJump = getChunk()->code.size() - start;
+			table.defaultJump = getChunk()->code.count() - start;
 		}
 		curCase->accept(this);
 	}
 	//implicit default if the user hasn't defined one, jumps to the end of switch stmt
-	if (table.defaultJump == -1) table.defaultJump = getChunk()->code.size() - start;
+	if (table.defaultJump == -1) table.defaultJump = getChunk()->code.count() - start;
 	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
 	endScope();
 	patchBreak();
@@ -661,12 +669,12 @@ void compiler::emitReturn() {
 int compiler::emitJump(OpCode jumpType) {
 	emitByte((uint8_t)jumpType);
 	emitBytes(0xff, 0xff);
-	return getChunk()->code.size() - 2;
+	return getChunk()->code.count() - 2;
 }
 
 void compiler::patchJump(int offset) {
 	// -2 to adjust for the bytecode for the jump offset itself.
-	int jump = getChunk()->code.size() - offset - 2;
+	int jump = getChunk()->code.count() - offset - 2;
 	//fix for future: insert 2 more bytes into the array, but make sure to do the same in lines array
 	if (jump > UINT16_MAX) {
 		error("Too much code to jump over.");
@@ -678,7 +686,7 @@ void compiler::patchJump(int offset) {
 void compiler::emitLoop(int start) {
 	emitByte(OP_LOOP);
 
-	int offset = getChunk()->code.size() - start + 2;
+	int offset = getChunk()->code.count() - start + 2;
 	if (offset > UINT16_MAX) error("Loop body too large.");
 
 	emit16Bit(offset);
@@ -698,7 +706,14 @@ bool identifiersEqual(std::string_view a, std::string_view b) {
 
 uint8_t compiler::identifierConstant(Token name) {
 	string temp(name.lexeme);
-	return makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
+	//since str is a cached pointer(a collection may occur while resizing the chunk constants array, we need to treat it as a cached ptr
+	objString* str = copyString((char*)temp.c_str(), temp.length());
+
+	global::gc.cachePtr(str);
+	uint8_t index = makeConstant(OBJ_VAL(str));
+	global::gc.getCachedPtr();
+
+	return index;
 }
 
 void compiler::defineVar(uint8_t name) {
@@ -840,7 +855,7 @@ void compiler::markInit() {
 }
 
 void compiler::patchBreak() {
-	int curCode = getChunk()->code.size();
+	int curCode = getChunk()->code.count();
 	//most recent breaks are going to be on top
 	for (int i = current->breakStmts.size() - 1; i >= 0; i--) {
 		_break curBreak = current->breakStmts[i];
@@ -877,7 +892,9 @@ void compiler::method(ASTFunc* _method, Token className) {
 	funcType type = funcType::TYPE_METHOD;
 	//constructors are treated separatly, but are still methods
 	if (_method->getName().lexeme.compare(className.lexeme) == 0) type = funcType::TYPE_CONSTRUCTOR;
+	std::cout << "compiler info: " << sizeof(compilerInfo) << "\n";
 	current = new compilerInfo(current, type);
+	//->func = new objFunc();
 	//no need for a endScope, since returning from the function discards the entire callstack
 	beginScope();
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
@@ -895,7 +912,11 @@ void compiler::method(ASTFunc* _method, Token className) {
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
+	//func is now only exists as a cached ptr, so we need to account for that when emitting bytes(since they can cause a reallocation)
+	global::gc.cachePtr(func);
 	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	global::gc.getCachedPtr();
+
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);

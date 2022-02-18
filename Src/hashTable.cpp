@@ -50,8 +50,8 @@ bool hashTable::del(objString* key) {
 	return true;
 }
 
-entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
-	size_t bitMask = _entries.size() - 1 ;
+entry* hashTable::findEntry(gcVector<entry> &_entries, objString* key) {
+	size_t bitMask = _entries.count() - 1 ;
 	uInt64 index = key->hash & bitMask;
 	entry* tombstone = nullptr;
 	//loop until we either find the key we're looking for, or a open slot
@@ -74,8 +74,9 @@ entry* hashTable::findEntry(std::vector<entry> &_entries, objString* key) {
 
 void hashTable::resize(uInt64 _capacity) {
 	//create new array and fill it with NULL
-	std::vector<entry> newEntries;
-	newEntries.resize(_capacity, { nullptr, Value()});
+	gcVector<entry> newEntries;
+	newEntries.resize(_capacity);
+	int oldcount = count;
 	count = 0;
 	//copy over the entries of the old array into the new one, avoid tombstones and recalculate the index
 	for (int i = 0; i < capacity; i++) {
@@ -103,8 +104,9 @@ void hashTable::tableAddAll(hashTable* src) {
 }
 
 objString* hashTable::getKey(Value val) {
-	for (auto it = entries.begin(); it != entries.end(); ++it) {
-		if (valuesEqual(it->val, val)) return it->key;
+	for (int i = 0; i < entries.count(); i++) {
+		Value& toCompare = entries[i].val;
+		if (valuesEqual(toCompare, val)) return entries[i].key;
 	}
 	return nullptr;
 }
@@ -114,7 +116,6 @@ objString* findInternedString(hashTable* table, char* str, uInt length, uInt64 h
 	if (table->count == 0) return nullptr;
 	size_t bitMask = table->capacity - 1;
 	uInt64 index = hash & bitMask;
-
 	while(true) {
 		entry* _entry = &table->entries[index];
 		if (_entry->key == nullptr) {

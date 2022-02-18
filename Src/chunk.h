@@ -3,6 +3,7 @@
 	#include "common.h"
 	#include "value.h"
 	#include "switch.h"
+	#include "gcVector.h"
 
 	using std::vector;
 
@@ -90,9 +91,9 @@
 	//disassemble is here, but the functions it calls are in debug.cpp
 	class chunk {
 	public:
-		vector<int> lines;
-		vector<uint8_t> code;
-		vector<Value> constants;
+		gcVector<int> lines;
+		gcVector<uint8_t> code;
+		gcVector<Value> constants;
 		vector<switchTable> switchTables;
 		chunk();
 		void writeData(uint8_t opCode, int line);

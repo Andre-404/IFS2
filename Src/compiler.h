@@ -27,6 +27,10 @@ struct local {
 struct upvalue{
 	uint8_t index;
 	bool isLocal;
+	upvalue() {
+		index = 0;
+		isLocal = false;
+	}
 };
 
 struct _break {
@@ -41,19 +45,18 @@ struct compilerInfo {
 	compilerInfo* enclosing;
 	//function that's currently being compiled
 	objFunc* func;
-	chunk* code;
 	funcType type;
-	bool hasReturn = false;
+	bool hasReturn;
 
-	int line = 0;
+	int line;
 	//keeps track of every break statement that has been encountered
 	vector<_break> breakStmts;
 	//locals
 	local locals[LOCAL_MAX];
-	int localCount = 0;
-	int scopeDepth = 0;
+	int localCount;
+	int scopeDepth;
 	std::array<upvalue, UPVAL_MAX> upvalues;
-	bool hasCapturedLocals = false;
+	bool hasCapturedLocals;
 	compilerInfo(compilerInfo* _enclosing, funcType _type);
 };
 

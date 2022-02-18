@@ -31,10 +31,10 @@ void printObject(Value value) {
 		break;
 	case OBJ_ARRAY: {
 		std::cout << "[";
-		objArrayHeader* vals = AS_ARRAY(value)->values;
-		for (int i = 0; i < vals->count; i++) {
-			printValue(vals->arr[i]);
-			if(i != vals->count - 1) std::cout << ", ";
+		gcVector<Value>& vals = AS_ARRAY(value)->values;
+		for (int i = 0; i < vals.count(); i++) {
+			printValue(vals[i]);
+			if(i != vals.count() - 1) std::cout << ", ";
 		}
 		std::cout << "]";
 		break;
@@ -64,12 +64,9 @@ void printObject(Value value) {
 	case OBJ_BOUND_METHOD:
 		printFunction(AS_BOUND_METHOD(value)->method->func);
 		break;
-	case OBJ_ITERATOR:
-		std::cout << "iterator";
-		break;
-	case OBJ_ARR_HEADER: break;//this is never directly inside a value
 	}
 }
+
 //heap allocated objects that are a part of objs are deallocated in it's destructor function
 void freeObject(obj* object) {
 	switch (object->type) {
@@ -111,23 +108,6 @@ static uInt64 hashString(char* str, uInt length) {
 	return hash;
 }
 
-objString::objString(char* _str, uInt _length, uInt64 _hash) {
-	type = OBJ_STRING;
-	length = _length;
-	hash = _hash;
-	str = _str;
-	moveTo = nullptr;
-	global::internedStrings.set(this, NIL_VAL());
-}
-
-objArrayHeader::objArrayHeader(Value* _arr, uInt _capacity) {
-	arr = _arr;
-	count = 0;
-	capacity = _capacity;
-	moveTo = nullptr;
-	type = OBJ_ARR_HEADER;
-}
-
 bool objString::compare(char* toCompare, uInt _length) {
 	if (length != _length) return false;
 	if (str == nullptr) return false;
@@ -144,11 +124,12 @@ objString* copyString(char* str, uInt length) {
 	if (interned != nullptr) return interned;
 	//we do this because on the heap a string obj is always followed by the char pointer for the string
 	//first, alloc enough memory for both the header and the string(length + 1 for null terminator)
-	char* temp = (char*)gc.allocRaw(sizeof(objString) + length + 1, true);
-	//first we init the header, the char* pointer we pass is where the string will be stored(just past the header)
-	objString* onHeap = new(temp) objString(temp + sizeof(objString), length, hash);
+	//if the string is over 100 characters long we allocate it on the large object heap
+	char* temp = (char*)gc.allocRaw(sizeof(objString) + length + 1, false);
 	//copy the string contents
 	memcpy(temp + sizeof(objString), str, length + 1);
+	//first we init the header, the char* pointer we pass is where the string will be stored(just past the header)
+	objString* onHeap = new(temp) objString(temp + sizeof(objString), length, hash);
 	return onHeap;
 }
 
@@ -162,13 +143,80 @@ objString* takeString(char* str, uInt length) {
 	objString* interned = findInternedString(&global::internedStrings, str, length, hash);
 	if (interned != nullptr) return interned;
 	//we do this because on the heap a string obj is always followed by the char pointer for the string
-	char* temp = (char*)gc.allocRaw(sizeof(objString) + length + 1, true);
+	//if the length is over 100 characters we allocate it on the large object heap
+	char* temp = (char*)gc.allocRaw(sizeof(objString) + length + 1, false);
 	objString* onHeap = new(temp) objString(temp + sizeof(objString), length, hash);
 	memcpy(temp + sizeof(objString), str, length + 1);
 	delete str;
 	return onHeap;
 }
 
+#pragma region Helpers
+//a way to move objects in memory while taking care of things like STL containers
+template<typename T>
+void moveData(void* to, T* from) {
+	T temp = *from;
+	from->~T();
+	T* test = new(to) T(temp);
+}
+
+void setMarked(obj* ptr) {
+	ptr->moveTo = ptr;//a non null pointer means this is a marked object
+}
+
+void markObj(std::vector<managed*>& stack, obj* ptr) {
+	if (!ptr) return;
+	if (ptr->moveTo != nullptr) return;
+	//there is no reason to push native function and strings to the stack, we can't trace any further nodes from them
+	if (ptr->type == OBJ_NATIVE || ptr->type == OBJ_STRING) {
+		setMarked(ptr);
+		return;
+	}
+	stack.push_back(ptr);
+
+}
+
+void markVal(std::vector<managed*>& stack, Value& val) {
+	if (val.type == VAL_OBJ) markObj(stack, AS_OBJ(val));
+}
+
+void markTable(std::vector<managed*>& stack, hashTable& table) {
+	for (int i = 0; i < table.capacity; i++) {
+		entry* _entry = &table.entries[i];
+		if (_entry->key && _entry->key != TOMBSTONE) {
+			markObj(stack, _entry->key);
+			markVal(stack, _entry->val);
+		}
+	}
+	//marks the internal array header
+	table.entries.mark();
+}
+#pragma endregion
+
+
+#pragma region objString
+objString::objString(char* _str, uInt _length, uInt64 _hash) {
+	length = _length;
+	hash = _hash;
+	str = _str;
+	moveTo = nullptr;
+	type = OBJ_STRING;
+	global::internedStrings.set(this, NIL_VAL());
+}
+
+
+void objString::updatePtrs() {
+	str = ((byte*)moveTo) + sizeof(objString);
+}
+
+void objString::move(byte* to) {
+	uInt l = length;
+	str = to + sizeof(objString);
+	memmove(to, ((byte*)this), sizeof(objString) + l + 1);
+}
+#pragma endregion
+
+#pragma region objFunc
 objFunc::objFunc() {
 	arity = 0;
 	upvalueCount = 0;
@@ -177,6 +225,35 @@ objFunc::objFunc() {
 	name = nullptr;
 }
 
+void objFunc::move(byte* to) {
+	moveData(to, this);
+}
+
+void objFunc::trace(std::vector<managed*>& stack) {
+	if (name != nullptr) markObj(stack, name);
+	for (int i = 0; i < body.constants.count(); i++) {
+		Value& val = body.constants[i];
+		markVal(stack, val);
+	}
+	body.constants.mark();
+	body.code.mark();
+	body.lines.mark();
+}
+
+void objFunc::updatePtrs() {
+	if (name != nullptr) name = (objString*)name->moveTo;
+	int size = body.constants.count();
+	for (int i = 0; i < size; i++) {
+		updateVal(&body.constants[i]);
+	}
+	body.constants.update();
+	body.code.update();
+	body.lines.update();
+}
+#pragma endregion
+
+
+#pragma region objNativeFn
 objNativeFn::objNativeFn(NativeFn _func, int _arity) {
 	func = _func;
 	arity = _arity;
@@ -184,6 +261,13 @@ objNativeFn::objNativeFn(NativeFn _func, int _arity) {
 	moveTo = nullptr;
 }
 
+void objNativeFn::move(byte* to) {
+	memmove(to, this, sizeof(objNativeFn));
+}
+#pragma endregion
+
+
+#pragma region objClosure
 objClosure::objClosure(objFunc* _func) {
 	func = _func;
 	upvals.resize(func->upvalueCount, nullptr);
@@ -191,6 +275,27 @@ objClosure::objClosure(objFunc* _func) {
 	moveTo = nullptr;
 }
 
+void objClosure::move(byte* to) {
+	moveData(to, this);
+}
+
+void objClosure::updatePtrs() {
+	func = (objFunc*)func->moveTo;
+	long size = upvals.size();
+	for (int i = 0; i < size; i++) {
+		if (upvals[i] != nullptr) upvals[i] = (objUpval*)upvals[i]->moveTo;
+	}
+}
+
+void objClosure::trace(std::vector<managed*>& stack) {
+	markObj(stack, func);
+	for (objUpval* upval : upvals) {
+		markObj(stack, upval);
+	}
+}
+#pragma endregion
+
+#pragma region objUpval
 objUpval::objUpval(Value* slot) {
 	location = slot;//this will have to be updated when moving objUpval
 	closed = NIL_VAL();
@@ -199,18 +304,74 @@ objUpval::objUpval(Value* slot) {
 	moveTo = nullptr;
 }
 
-objArray::objArray(objArrayHeader* vals) {
-	values = vals;
+void objUpval::move(byte* to) {
+	memmove(to, this, sizeof(objUpval));
+}
+
+void objUpval::trace(std::vector<managed*>& stack) {
+	markVal(stack, closed);
+}
+
+void objUpval::updatePtrs() {
+	updateVal(&closed);
+}
+#pragma endregion
+
+#pragma region objArray
+objArray::objArray() {
+	type = OBJ_ARRAY;
+	moveTo = nullptr;
+	values = gcVector<Value>(16);
+}
+
+objArray::objArray(size_t size) {
+	values = gcVector<Value>(size);
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
 }
 
+void objArray::move(byte* to) {
+	memmove(to, this, sizeof(objArray));
+}
+
+void objArray::trace(std::vector<managed*>& stack) {
+	for (int i = 0; i < values.count(); i++) {
+		markVal(stack, values[i]);
+	}
+	values.mark();
+}
+
+void objArray::updatePtrs() {
+	for (int i = 0; i < values.count(); i++) {
+		updateVal(&values[i]);
+	}
+	values.update();
+}
+#pragma endregion
+
+#pragma region objClass
 objClass::objClass(objString* _name) {
 	name = _name;
 	type = OBJ_CLASS;
 	moveTo = nullptr;
 }
 
+void objClass::move(byte* to) {
+	memmove(to, this, sizeof(objClass));
+}
+
+void objClass::trace(std::vector<managed*>& stack) {
+	name->moveTo = name;
+	markTable(stack, methods);
+}
+
+void objClass::updatePtrs() {
+	name = (objString*)name->moveTo;
+	updateTable(&methods);
+}
+#pragma endregion
+
+#pragma region objInstance
 objInstance::objInstance(objClass* _klass) {
 	klass = _klass;
 	moveTo = nullptr;
@@ -218,6 +379,22 @@ objInstance::objInstance(objClass* _klass) {
 	table = hashTable();
 }
 
+void objInstance::move(byte* to) {
+	memmove(to, this, sizeof(objInstance));
+}
+
+void objInstance::trace(std::vector<managed*>& stack) {
+	markTable(stack, table);
+	if (klass != nullptr) markObj(stack, klass);
+}
+
+void objInstance::updatePtrs() {
+	if (klass != nullptr) klass = (objClass*)klass->moveTo;
+	updateTable(&table);
+}
+#pragma endregion
+
+#pragma region objBoundMethod
 objBoundMethod::objBoundMethod(Value _receiver, objClosure* _method) {
 	receiver = _receiver;
 	method = _method;
@@ -225,73 +402,17 @@ objBoundMethod::objBoundMethod(Value _receiver, objClosure* _method) {
 	moveTo = nullptr;
 }
 
-objIterator::objIterator(obj* _iteratable) {
-	iteratable = _iteratable;
-	count = 0;
-	oldPos = 0;
-	if (iteratable->type == OBJ_INSTANCE) {
-		objInstance* inst = (objInstance*)iteratable;
-		entry* key = &inst->table.entries[count];
-
-		while ((key->key == TOMBSTONE || key->key == nullptr) && count < inst->table.capacity) {
-			count++;
-			key = &inst->table.entries[count];
-		}
-	}
-	moveTo = nullptr;
-	type = OBJ_ITERATOR;
+void objBoundMethod::move(byte* to) {
+	memmove(to, this, sizeof(objBoundMethod));
 }
 
-
-objArray* createArr(size_t size) {
-	size_t capacity = (1ll << (64 - _lzcnt_u64(size < 16 ? 16 : size)));
-	char* ptr = (char*)__allocObj(sizeof(objArray) + sizeof(objArrayHeader) + (capacity * sizeof(Value)));
-	Value* arr = new(ptr + sizeof(objArray) + sizeof(objArrayHeader)) Value[capacity];
-	objArrayHeader* header = new(ptr + sizeof(objArray)) objArrayHeader(arr, capacity);
-	return new(ptr) objArray(header);
+void objBoundMethod::trace(std::vector<managed*>& stack) {
+	markVal(stack, receiver);
+	markObj(stack, method);
 }
 
-objArrayHeader* createArrHeader(size_t size) {
-	size_t capacity = (1ll << (64 - _lzcnt_u64(size)));
-	char* ptr = (char*)__allocObj(sizeof(objArrayHeader) + (capacity * sizeof(Value)));
-	Value* arr = new(ptr + sizeof(objArrayHeader)) Value[capacity];
-	return new(ptr) objArrayHeader(arr, capacity);
+void objBoundMethod::updatePtrs() {
+	method = (objClosure*)method->moveTo;
+	updateVal(&receiver);
 }
-
-void updateIterator(objIterator* iterator) {
-	iterator->oldPos = iterator->count;
-	if (iterator->iteratable->type == OBJ_ARRAY) {
-		iterator->count++;
-	}
-	else {
-		objInstance* inst = (objInstance*)iterator->iteratable;
-		if (iterator->count >= inst->table.capacity - 1) {
-			iterator->count++;
-			return;
-		}
-		entry* key = &inst->table.entries[++iterator->count];
-
-		while ((key->key == TOMBSTONE || key->key == nullptr) && iterator->count < inst->table.capacity) {
-			iterator->count++;
-			if(iterator->count < inst->table.capacity) key = &inst->table.entries[iterator->count];
-		}
-	}
-}
-
-bool iteratorIsFinished(objIterator* iterator) {
-	if (iterator->iteratable->type == OBJ_ARRAY) {
-		objArray* arr = (objArray*)iterator->iteratable;
-		if (iterator->count >= arr->values->count) return true;
-		return false;
-	}else {
-		objInstance* inst = (objInstance*)iterator->iteratable;
-		if (iterator->count >= inst->table.capacity) return true;
-		return false;
-	}
-}
-
-
-//this is how we get the pointer operator new wants
-void* __allocObj(size_t size) {
-	return gc.allocRaw(size, true);
-}
+#pragma endregion

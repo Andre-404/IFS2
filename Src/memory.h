@@ -2,44 +2,47 @@
 #define __IFS_MEMORY
 
 #include "common.h"
-#include "VM.h"
-#include "compiler.h"
+#include "heapBlock.h"
 
 //handpicked values, need adjusting
 #define HEAP_START_SIZE (1024)
 #define HEAP_MAX 1
 #define COLLECTION_THRESHOLD 16384  
 
-typedef char byte;
 
+class vm;
+class compiler;
+
+//Lisp 2 style mark-compact GC,
+//utilizes 2 heaps, one for small objects(defined in  object.h) and one(LOH) for (potentially)larger objects such as strings and arrays
+//This was done to improve spacial locality of objs and to enable allocating arrays/strings in the constructors of obj objects
+//
+//if every type of data was allocated on a single heap, no allocation could happen in constructors(or methods) as it would risk moving
+//the object that called the constructor/method
+//Possible change: save yourself the trouble and go with a in-place GC(something akin to a Boehm-Demers-Weiser collector) for the small objs
+//and then use a mark compact for arrays and strings
 class GC {
 public:
 	GC();
 	vm* VM;
 	compiler* compiling;
-	void* allocRaw(size_t size, bool shouldCollect);
+	void* allocRaw(size_t size, bool shouldLOHAlloc);
 	void clear();
+	void cachePtr(managed* ptr);
+	managed* getCachedPtr();
 private:
-	//keeping track of memory allocated since last clear, as well as the point after which a allocation should occur
-	long sinceLastClear;
-
-	
-	//heap -> current heap memory block
-	//heapTop -> the next free pointer on the heap(NOT the top of the actual memory block)
-	//oldHeap -> used when resizing the heap, objects from oldHeap get copied to the current heap, and then oldHeap is dealloced
-	byte* heap;
-	byte* heapTop;
-	byte* oldHeap;
-	size_t allocated;
-	//size of the current heap memory block
-	size_t heapSize;
+	//LOH is used for arrays/strings, normal heap is used for obj* objects
+	heapBlock normalHeap;
+	heapBlock LOH;
+	heapBlock* activeHeap;
+	heapBlock* inactiveHeap;
 
 	bool collecting;
 	//used to prevent deep recursion
-	std::vector<obj*> stack;
+	std::vector<managed*> stack;
 
 	//these are all the cached pointers to heap objects that need to be updated, works like a stack
-	std::vector<obj*> cachedPtrs;
+	std::vector<managed*> cachedPtrs;
 
 	//debug stuff
 	#ifdef DEBUG_GC
@@ -47,31 +50,23 @@ private:
 	size_t nReallocations;
 	#endif // DEBUG_GC
 
-	void cachePtr(obj* ptr);
-	obj* getCachedPtr();
-
 	void reallocate(size_t size);
 	void collect();
 
 	void mark();
-	void markObj(obj* ptr);
-	void markVal(Value& val);
-	void markTable(hashTable& table);
+	void markObj(managed* ptr);
+	void markVal(Value* val);
+	void markTable(hashTable* table);
 	void markRoots();
-	void traceObj(obj* ptr);
+	void traceObj(managed* ptr);
 
-	void computeAddress(bool isReallocating);
+	void computeAddress();
 
 	void updatePtrs();
 	void updateRootPtrs();
 	void updateHeapPtrs();
 
 	void compact();
-
-	void moveObj(void* to, obj* from);
-	void moveRaw(void* to, void* from, size_t size);
-
-	void destructObj(obj* ptr);
 };
 
 #endif // !__IFS_MEMORY

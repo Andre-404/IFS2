@@ -272,7 +272,7 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 		}
 		objArray* arr = AS_ARRAY(callee);
 
-		Value val = arr->values->arr[(uInt64)index];
+		Value val = arr->values[(uInt64)index];
 		
 		if (!IS_NUMBER(val)) {
 			runtimeError("Cannot increment a value that's not a number");
@@ -289,7 +289,7 @@ bool vm::incrementField(int type, bool isPrefix, bool positive) {
 			val.as.num += 1 * ((positive * 2) - 1);
 		}
 
-		arr->values->arr[(uInt64)index] = val;
+		arr->values[(uInt64)index] = val;
 		break;
 	}
 	case OBJ_INSTANCE: {
@@ -495,11 +495,11 @@ interpretResult vm::run() {
 
 		#pragma region Unary
 		case OP_NEGATE:
-			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number.");
-			}
-			push(NUMBER_VAL(-AS_NUMBER(pop())));
-			break;
+		if (!IS_NUMBER(peek(0))) {
+			return runtimeError("Operand must be a number.");
+		}
+		push(NUMBER_VAL(-AS_NUMBER(pop())));
+		break;
 		case OP_NOT:
 			push(BOOL_VAL(isFalsey(pop())));
 			break;
@@ -511,7 +511,7 @@ interpretResult vm::run() {
 			push(NUMBER_VAL((double)~num));
 			break;
 		}
-		#pragma endregion
+#pragma endregion
 
 		#pragma region Binary
 		case OP_ADD: {
@@ -528,14 +528,14 @@ interpretResult vm::run() {
 			}
 			break;
 		}
-		case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break; 
+		case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
 		case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-		case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
+		case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, / ); break;
 		case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
-		case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, <<); break;
-		case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >>); break;
+		case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, << ); break;
+		case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >> ); break;
 		case OP_BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
-		case OP_BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, |); break;
+		case OP_BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
 		case OP_BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
 		#pragma endregion
 
@@ -546,21 +546,24 @@ interpretResult vm::run() {
 			push(BOOL_VAL(valuesEqual(a, b)));
 			break;
 		}
-		case OP_NOT_EQUAL: { 
+		case OP_NOT_EQUAL: {
 			Value b = pop();
 			Value a = pop();
 			push(BOOL_VAL(!valuesEqual(a, b)));
 			break;
 		}
 		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
-		case OP_LESS: BINARY_OP(BOOL_VAL, < ); break;
+		case OP_LESS: {
+			Value a = peek(1);
+			Value b = peek(0);
+			BINARY_OP(BOOL_VAL, < ); break; }
 		case OP_GREATER_EQUAL: {
 			//Have to do this because of floating point comparisons
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
-				return runtimeError("Operands must be numbers."); 
-			} 
-			double b = AS_NUMBER(pop()); 
-			double a = AS_NUMBER(pop()); 
+				return runtimeError("Operands must be numbers.");
+			}
+			double b = AS_NUMBER(pop());
+			double a = AS_NUMBER(pop());
 			if (a > b || FLOAT_EQ(a, b)) push(BOOL_VAL(true));
 			else push(BOOL_VAL(false));
 			break;
@@ -906,11 +909,10 @@ interpretResult vm::run() {
 		case OP_CREATE_ARRAY: {
 			uInt64 size = READ_BYTE();
 			uInt64 i = 0;
-			objArray* arr = createArr(size);
+			objArray* arr = new objArray(size);
 			while (i < size) {
 				//size-i to because the values on the stack are in reverse order compared to how they're supposed to be in a array
-				arr->values->arr[size - i] = pop();
-				arr->values->count++;
+				arr->values[size - i - 1] = pop();
 				i++;
 			}
 			push(OBJ_VAL(arr));
@@ -922,7 +924,7 @@ interpretResult vm::run() {
 			Value field = pop();
 			Value callee = pop();
 			if (!IS_OBJ(callee))
-				runtimeError("Expected a array or map, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+				runtimeError("Expected a array or struct, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
 			
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
@@ -931,10 +933,10 @@ interpretResult vm::run() {
 				objArray* arr = AS_ARRAY(callee);
 				//Trying to access a variable using a float is a error
 				if ((uInt64)index != index) return runtimeError("Expected interger, got float.");
-				if (index < 0 || index > arr->values->count - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, AS_ARRAY(callee)->values->count - 1);
+				if (index < 0 || index > arr->values.count() - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, AS_ARRAY(callee)->values.count() - 1);
 
-				push(arr->values->arr[(uInt64)index]);
+				push(arr->values[(uInt64)index]);
 				break;
 			}
 			case OBJ_INSTANCE: {
@@ -975,10 +977,10 @@ interpretResult vm::run() {
 				double index = AS_NUMBER(field);
 				//accessing array with a float is a error
 				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
-				if (index < 0 || index > arr->values->count - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, arr->values->count - 1);
+				if (index < 0 || index > arr->values.count() - 1)
+					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, arr->values.count() - 1);
 
-				arr->values->arr[(uInt64)index] = val;
+				arr->values[(uInt64)index] = val;
 				break;
 				}
 			case OBJ_INSTANCE: {
