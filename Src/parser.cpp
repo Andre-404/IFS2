@@ -4,15 +4,6 @@
 
 //TODO: fix memory leak issues with AST nodes inside of expressions
 #pragma region Parselet
-
-Token makeToken(TokenType type, const char* str, int line) {
-	Token token;
-	token.lexeme = str;
-	token.type = type;
-	token.line = line;
-	return token;
-}
-
 //used for parsing assignment tokens(eg. =, +=, *=...)
 ASTNode* parseAssign(parser* _parser, ASTNode* left, Token op) {
 	ASTNode* right = _parser->expression();
@@ -21,35 +12,35 @@ ASTNode* parseAssign(parser* _parser, ASTNode* left, Token op) {
 		break;
 	}
 	case TOKEN_PLUS_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_PLUS, "+", op.line), right);
+		right = new ASTBinaryExpr(left, Token("+", op.line, TOKEN_PLUS), right);
 		break;
 	}
 	case TOKEN_MINUS_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_MINUS, "-", op.line), right);
+		right = new ASTBinaryExpr(left, Token("-", op.line, TOKEN_MINUS), right);
 		break;
 	}
 	case TOKEN_SLASH_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_SLASH, "/", op.line), right);
+		right = new ASTBinaryExpr(left, Token("/", op.line, TOKEN_SLASH), right);
 		break;
 	}
 	case TOKEN_STAR_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_STAR, "*", op.line), right);
+		right = new ASTBinaryExpr(left, Token("*", op.line, TOKEN_STAR), right);
 		break;
 	}
 	case TOKEN_BITWISE_XOR_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_BITWISE_XOR, "^", op.line), right);
+		right = new ASTBinaryExpr(left, Token("^", op.line, TOKEN_BITWISE_XOR), right);
 		break;
 	}
 	case TOKEN_BITWISE_AND_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_BITWISE_AND, "&", op.line), right);
+		right = new ASTBinaryExpr(left, Token("&", op.line, TOKEN_BITWISE_AND), right);
 		break;
 	}
 	case TOKEN_BITWISE_OR_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_BITWISE_OR, "|", op.line), right);
+		right = new ASTBinaryExpr(left, Token("|", op.line, TOKEN_BITWISE_OR), right);
 		break;
 	}
 	case TOKEN_PERCENTAGE_EQUAL: {
-		right = new ASTBinaryExpr(left, makeToken(TOKEN_PERCENTAGE, "%", op.line), right);
+		right = new ASTBinaryExpr(left, Token("%", op.line, TOKEN_PERCENTAGE), right);
 		break;
 	}
 	}
@@ -113,15 +104,25 @@ class unaryVarAlterPrefix : public prefixParselet {
 	ASTNode* parse(Token op) {
 		ASTNode* var = cur->expression(prec);
 		ASTUnaryVarAlterExpr* expr = nullptr;
+		ASTLiteralExpr* one = new ASTLiteralExpr(Token("1", op.line, TOKEN_NUMBER));
+		Token _op = op.type == TOKEN_INCREMENT ? Token("+", op.line, TOKEN_PLUS) : Token("-", op.line, TOKEN_MINUS);
 		//differentiate between variable incrementation, and (array or struct) field incrementation
 		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
-			expr = new ASTUnaryVarAlterExpr(var, nullptr, op, true);
+			//++var gets translated to var = var + 1
+			Token varName = ((ASTLiteralExpr*)var)->getToken();
+			ASTBinaryExpr* binary = new ASTBinaryExpr(var, Token("+", op.line, TOKEN_PLUS), one);
+			expr = new ASTUnaryVarAlterExpr(var, new ASTAssignmentExpr(varName, binary), true);
 		}
 		else if (var->type == ASTType::CALL) {
 			ASTCallExpr* call = (ASTCallExpr*)var;
 			//if the accessor token type is a left paren, then this is a function call, and not a get expression, so we throw a error
-			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a non l-value.");
-			expr = new ASTUnaryVarAlterExpr(call->getCallee(), call->getArgs()[0], op, true);
+			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a r-value.");
+
+			ASTBinaryExpr* binary = new ASTBinaryExpr(call, Token("+", op.line, TOKEN_PLUS), one);
+			expr = new ASTUnaryVarAlterExpr(call, new ASTSetExpr(call->getCallee(), call->getArgs()[0], op, binary), true);
+		}
+		else {
+			throw cur->error(op, "Can't increment a r-value");
 		}
 		return expr;
 	}
@@ -158,15 +159,25 @@ class binaryExpr : public infixParselet {
 class unaryVarAlterPostfix : public infixParselet {
 	ASTNode* parse(ASTNode* var, Token op, int surroundingPrec) {
 		ASTUnaryVarAlterExpr* expr = nullptr;
+		ASTLiteralExpr* one = new ASTLiteralExpr(Token("1", op.line, TOKEN_NUMBER));
+		Token _op = op.type == TOKEN_INCREMENT ? Token("+", op.line, TOKEN_PLUS) : Token("-", op.line, TOKEN_MINUS);
 		//differentiate between variable incrementation, and (array or struct) field incrementation
 		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
-			expr = new ASTUnaryVarAlterExpr(var, nullptr, op, false);
+			//var++ gets translated to var = var + 1
+			Token varName = ((ASTLiteralExpr*)var)->getToken();
+			ASTBinaryExpr* binary = new ASTBinaryExpr(var, Token("+", op.line, TOKEN_PLUS), one);
+			expr = new ASTUnaryVarAlterExpr(var, new ASTAssignmentExpr(varName, binary), false);
 		}
 		else if (var->type == ASTType::CALL) {
 			ASTCallExpr* call = (ASTCallExpr*)var;
 			//if the accessor token type is a left paren, then this is a function call, and not a get expression, so we throw a error
-			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a non l-value.");
-			expr = new ASTUnaryVarAlterExpr(call->getCallee(), call->getArgs()[0], op, false);
+			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a r-value.");
+
+			ASTBinaryExpr* binary = new ASTBinaryExpr(call, Token("+", op.line, TOKEN_PLUS), one);
+			expr = new ASTUnaryVarAlterExpr(call, new ASTSetExpr(call->getCallee(), call->getArgs()[0], op, binary), false);
+		}
+		else {
+			throw cur->error(op, "Can't increment a r-value");
 		}
 		return expr;
 	}

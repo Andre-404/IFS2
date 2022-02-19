@@ -145,10 +145,9 @@ void ASTGroupingExpr::accept(visitor* vis) {
 #pragma endregion
 
 #pragma region Unary var altering expr
-ASTUnaryVarAlterExpr::ASTUnaryVarAlterExpr(ASTNode* _callee, ASTNode* _field, Token _op, bool _isPrefix) {
-	callee = _callee;
-	field = _field;
-	op = _op;
+ASTUnaryVarAlterExpr::ASTUnaryVarAlterExpr(ASTNode* _valToIncrement, ASTNode* _incrementExpr, bool _isPrefix) {
+	valToIncrement = _valToIncrement;
+	incrementExpr = _incrementExpr;
 	isPrefix = _isPrefix;
 	type = ASTType::VAR_ALTER;
 }
@@ -157,8 +156,7 @@ void ASTUnaryVarAlterExpr::accept(visitor* vis) {
 	vis->visitUnaryVarAlterExpr(this);
 }
 ASTUnaryVarAlterExpr::~ASTUnaryVarAlterExpr() {
-	delete callee;
-	if (field != nullptr) delete field;
+	delete incrementExpr;
 }
 #pragma endregion
 

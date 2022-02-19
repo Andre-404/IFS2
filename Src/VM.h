@@ -38,16 +38,17 @@ private:
 	void push(Value val);
 	Value pop();
 	Value peek(int depth);
+
 	void resetStack();
 	interpretResult runtimeError(const char* format, ...);
-	void freeObjects();
+
 	bool callValue(Value callee, int argCount);
 	bool call(objClosure* function, int argCount);
+
 	void defineNative(string name, NativeFn func, int arity);
 	objUpval* captureUpvalue(Value* local);
 	void closeUpvalues(Value* last);
-	bool setVal(int type, int arg, Value val);
-	bool incrementField(int type, bool isPrefix, bool positive);
+
 	void defineMethod(objString* name);
 	bool bindMethod(objClass* klass, objString* name);
 	bool invoke(objString* methodName, int argCount);

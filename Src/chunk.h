@@ -49,10 +49,6 @@
 		OP_GET_UPVALUE,
 		OP_SET_UPVALUE,
 		OP_CLOSE_UPVALUE,
-		OP_INCREMENT_PRE,
-		OP_DECREMENT_PRE,
-		OP_INCREMENT_POST,
-		OP_DECREMENT_POST,
 		//Arrays
 		OP_CREATE_ARRAY,
 		OP_GET,
@@ -81,11 +77,6 @@
 		OP_INHERIT,
 		OP_GET_SUPER,
 		OP_SUPER_INVOKE,
-		
-		//Iterators
-		OP_ITERATOR_START,
-		OP_ITERATOR_GET,
-		OP_ITERATOR_NEXT,
 	};
 
 	//disassemble is here, but the functions it calls are in debug.cpp

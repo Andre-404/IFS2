@@ -42,6 +42,16 @@
 			lexeme = "";
 			type = TOKEN_LEFT_PAREN;
 		}
+		Token(char* ptr, int _line, TokenType _type) {
+			line = _line;
+			lexeme = ptr;
+			type = _type;
+		}
+		Token(const char* ptr, int _line, TokenType _type) {
+			line = _line;
+			lexeme = ptr;
+			type = _type;
+		}
 	};
 
 	class scanner {

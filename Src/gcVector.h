@@ -47,7 +47,7 @@ public:
 	}
 
 	void mark() {
-		if (header == nullptr) return;
+		if (header == nullptr || header->moveTo != nullptr) return;
 		header->moveTo = header;
 	}
 

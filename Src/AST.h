@@ -238,18 +238,16 @@ public:
 
 class ASTUnaryVarAlterExpr : public ASTNode {
 private:
-	ASTNode* callee;
-	ASTNode* field;
-	Token op;
+	ASTNode* incrementExpr;
+	ASTNode* valToIncrement;
 	bool isPrefix;
 public:
-	ASTUnaryVarAlterExpr(ASTNode* _callee, ASTNode* _field, Token _op, bool _isPrefix);
+	ASTUnaryVarAlterExpr(ASTNode* _valToIncrement, ASTNode* _incrementExpr, bool _isPrefix);
 	~ASTUnaryVarAlterExpr();
 	void accept(visitor* vis);
 
-	ASTNode* getCallee() { return callee; }
-	ASTNode* getField() { return field; }
-	Token getOp() { return op; }
+	ASTNode* getVal() { return valToIncrement; }
+	ASTNode* getIncrementExpr() { return incrementExpr; }
 	bool getIsPrefix() { return isPrefix; }
 };
 

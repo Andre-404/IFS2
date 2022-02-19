@@ -350,20 +350,6 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return constantInstruction("OP GET SUPER", Chunk, offset);
 	case OP_SUPER_INVOKE:
 		return invokeInstruction("OP SUPER INVOKE", Chunk, offset);
-	case OP_INCREMENT_PRE:
-		return incrementInstruction("OP INCREMENT PRE", Chunk, offset);
-	case OP_INCREMENT_POST:
-		return incrementInstruction("OP INCREMENT POST", Chunk, offset);
-	case OP_DECREMENT_POST: 
-		return incrementInstruction("OP DECREMENT POST", Chunk, offset);
-	case OP_DECREMENT_PRE:
-		return incrementInstruction("OP DECREMENT PRE", Chunk, offset);
-	case OP_ITERATOR_GET:
-		return simpleInstruction("OP ITERATOR GET", offset);
-	case OP_ITERATOR_NEXT:
-		return simpleInstruction("OP ITERATOR NEXT", offset);
-	case OP_ITERATOR_START:
-		return simpleInstruction("OP ITERATOR START", offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

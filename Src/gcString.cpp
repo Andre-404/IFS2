@@ -1,17 +1,18 @@
 #include "gcString.h"
 #include "namespaces.h"
 
-
+//FNV-1a hash algo
 static uInt hashString(char* str, uInt length) {
-	uInt hash = 14695981039346656037u;
+	uInt hash = 2166136261;
 	for (int i = 0; i < length; i++) {
 		hash ^= (uint8_t)str[i];
-		hash *= 1099511628211;
+		hash *= 16777619;
 	}
 	return hash;
 }
 
 stringHeader::stringHeader(char* str, uInt _len) {
+	//memory of 'str' has to be managed outside of this call
 	byte* to = reinterpret_cast<byte*>(this) + sizeof(stringHeader);
 	memcpy(to, str, len);
 
@@ -32,12 +33,27 @@ void* stringHeader::operator new(size_t size, size_t stringLength) {
 	return global::gc.allocRaw(size + stringLength, true);
 }
 
+void stringHeader::move(byte* to) {
+	memmove(to, this, sizeof(stringHeader) + len);
+}
+
+
+
 gcString::gcString() {
 	str = nullptr;
 }
 
 gcString::gcString(char* _str, uInt len) {
 	str = new(len) stringHeader(_str, len);
+}
+
+void gcString::mark() {
+	if (str == nullptr || str->moveTo != nullptr) return;
+	str->moveTo = str;
+}
+
+void gcString::update() {
+	str = reinterpret_cast<stringHeader*>(str->moveTo);
 }
 
 bool compare(gcString& str1, gcString& str2) {
@@ -62,4 +78,5 @@ gcString concat(gcString& str1, gcString& str2) {
 	wrapperStr.str = newStr;
 	return wrapperStr;
 }
+
 

@@ -10,7 +10,7 @@ public:
 
 	void* operator new(size_t size, size_t strLen);
 
-	void move(byte* to) {};
+	void move(byte* to);
 	size_t getSize() { return sizeof(stringHeader) + len; }
 	void updatePtrs() { raw = reinterpret_cast<char*>(reinterpret_cast<byte*>(moveTo) + sizeof(stringHeader)); }
 	void trace(std::vector<managed*>& stack) {}

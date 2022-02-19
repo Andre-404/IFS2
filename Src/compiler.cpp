@@ -29,7 +29,6 @@ compiler::compiler(parser* _parser, funcType _type) {
 	Parser = _parser;
 	compiled = true;
 	global::gc.compiling = this;
-	std::cout << sizeof(compilerInfo);
 	current = new compilerInfo(nullptr, funcType::TYPE_SCRIPT);
 	currentClass = nullptr;
 	//Don't compile if we had a parse error
@@ -60,7 +59,6 @@ bool identifiersEqual(std::string_view a, std::string_view b);
 
 void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
 	expr->getVal()->accept(this);//compile the right side of the expression
-	updateLine(expr->getToken());
 	namedVar(expr->getToken(), true);
 }
 
@@ -197,55 +195,15 @@ void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {
 }
 
 void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
-	//if 'field' field is null then this is a variable incrementing, if it's not null, then this is a field incrementing
-	//type => 0: local, 1: upvalue, 2: global, 3: '[' access, 4: '.' access
-	if (expr->getField() == nullptr) {
-		Token varName = ((ASTLiteralExpr*)expr->getCallee())->getToken();
-		updateLine(varName);
-		namedVar(varName, false);
-		//we can't use namedVar here because prefix and postfix incrementing/decrementing push the value of the variable at different times
-		//(before or after the incrementation)
-		int type = -1;
-		int arg = resolveLocal(varName);
-		if (arg != -1) {
-			type = 0;
-		}else if ((arg = resolveUpvalue(current, varName)) != -1) {
-			type = 1;
-		}else {
-			arg = identifierConstant(varName);
-			type = 2;
-		}
-
-		if (expr->getIsPrefix()) {
-			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_PRE);
-			else emitByte(OP_DECREMENT_PRE);
-		}else {
-			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_POST);
-			else emitByte(OP_DECREMENT_POST);
-		}
-		emitBytes(type, arg);
+	//TODO: this is horribly unoptimized in the postfix case, fix it using OP_PUSH_TOP to avoid compiling stuff like
+	//getting variables/making calls twice
+	if (expr->getIsPrefix()) {
+		expr->getIncrementExpr()->accept(this);
+		return;
 	}
-	else {
-		//if this a dot call, we parse it differently than '[' access
-		int constant = -1;
-		if (expr->getOp().type == TOKEN_LEFT_BRACKET) expr->getField()->accept(this);
-		else constant = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
-		//we parse the callee last so that it's on top of the stack when we hit this
-		expr->getCallee()->accept(this);
-
-		if (expr->getIsPrefix()) {
-			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_PRE);
-			else emitByte(OP_DECREMENT_PRE);
-		}
-		else {
-			if (expr->getOp().type == TOKEN_INCREMENT) emitByte(OP_INCREMENT_POST);
-			else emitByte(OP_DECREMENT_POST);
-		}
-		//emitting type bytes for different access operator('.' or '[')
-		//3 means it's a '[' access, 4 means it's a '.' access
-		if(constant == -1) emitByte(3);
-		else emitBytes(4, constant);
-	}
+	expr->getVal()->accept(this);
+	expr->getIncrementExpr()->accept(this);
+	emitByte(OP_POP);
 }
 
 void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
@@ -423,6 +381,7 @@ void compiler::visitClassDecl(ASTClass* decl) {
 void compiler::visitPrintStmt(ASTPrintStmt* stmt) {
 	stmt->getExpr()->accept(this);
 	emitByte(OP_PRINT);
+	emitByte(OP_POP);
 }
 
 void compiler::visitExprStmt(ASTExprStmt* stmt) {
@@ -496,8 +455,9 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 
 void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	beginScope();
-	//these synthetic tokens are used for variables that can never(and should never) be accessed by the user
-	Token iterator = syntheticToken("0");
+	//the name of the variable is starts with "0" because no user defined variable can start with a number,
+	//and we don't want the underlying code to clash with some user defined variables
+	Token iterator = syntheticToken("0iterator");
 	//get the iterator
 	stmt->getCollection()->accept(this);
 	int name = identifierConstant(syntheticToken("begin"));
@@ -726,6 +686,7 @@ void compiler::defineVar(uint8_t name) {
 }
 
 void compiler::namedVar(Token token, bool canAssign) {
+	updateLine(token);
 	uint8_t getOp;
 	uint8_t setOp;
 	int arg = resolveLocal(token);
@@ -744,12 +705,14 @@ void compiler::namedVar(Token token, bool canAssign) {
 }
 
 uint8_t compiler::parseVar(Token name) {
+	updateLine(name);
 	declareVar(name);
 	if (current->scopeDepth > 0) return 0;
 	return identifierConstant(name);
 }
 
 void compiler::declareVar(Token& name) {
+	updateLine(name);
 	if (current->scopeDepth == 0) return;
 	for (int i = current->localCount - 1; i >= 0; i--) {
 		local* _local = &current->locals[i];
@@ -765,6 +728,7 @@ void compiler::declareVar(Token& name) {
 }
 
 void compiler::addLocal(Token name) {
+	updateLine(name);
 	if (current->localCount == LOCAL_MAX) {
 		error("Too many local variables in function.");
 		return;
@@ -795,6 +759,7 @@ void compiler::endScope() {
 
 int compiler::resolveLocal(compilerInfo* func, Token& name) {
 	//checks to see if there is a local variable with a provided name, if there is return the index of the stack slot of the var
+	updateLine(name);
 	for (int i = func->localCount - 1; i >= 0; i--) {
 		local* _local = &func->locals[i];
 		string str = string(name.lexeme);

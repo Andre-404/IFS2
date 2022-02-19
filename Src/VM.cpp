@@ -106,10 +106,6 @@ void vm::concatenate() {
 	push(OBJ_VAL(result));
 }
 
-void vm::freeObjects() {
-	global::gc.clear();
-}
-
 bool vm::callValue(Value callee, int argCount) {
 	if (IS_OBJ(callee)) {
 		switch (OBJ_TYPE(callee)) {
@@ -222,124 +218,6 @@ void vm::closeUpvalues(Value* last) {
 	}
 }
 
-bool vm::setVal(int type, int arg, Value val) {
-	//little helper used for incrementation
-	//type => 0: local, 1: upvalue, 2: global
-	switch (type) {
-	case 0: {
-		frames[frameCount - 1].slots[arg] = val;
-		return true;
-		break;
-	}
-	case 1: {
-		*(frames[frameCount - 1].closure->upvals[arg]->location) = val;
-		return true;
-		break;
-	}
-	case 2: {
-		objString* name = AS_STRING(frames[frameCount - 1].closure->func->body.constants[arg]);
-		if (globals.set(name, val)) {
-			globals.del(name);
-			runtimeError("Undefined variable '%s'.", name->str);
-			return false;
-		}
-		return true;
-		break;
-	}
-	}
-	return false;
-}
-
-bool vm::incrementField(int type, bool isPrefix, bool positive) {
-	//gets the object whose field we're try to retrieve
-	Value callee = pop();
-	if (!IS_OBJ(callee)) {
-		runtimeError("Expected a array or struct.");
-		return false;
-	}
-	switch (AS_OBJ(callee)->type) {
-	case OBJ_ARRAY: {
-
-		Value field = pop();
-		if (!IS_NUMBER(field)) {
-			runtimeError("Expected a number for array index.");
-			return false;
-		}
-		double index = AS_NUMBER(field);
-		if ((uInt64)index != index) {
-			runtimeError("Index must be integer.");
-			return false;
-		}
-		objArray* arr = AS_ARRAY(callee);
-
-		Value val = arr->values[(uInt64)index];
-		
-		if (!IS_NUMBER(val)) {
-			runtimeError("Cannot increment a value that's not a number");
-			return false;
-		}
-		//if it's a prefix increment(or decrement) like '++a' we first increment the value and then push it
-		//for postfix incrementing(like 'a++') we do the opposite
-		//the positive var is to determine if we're incrementing or decrementing
-		if (isPrefix) {
-			val.as.num += 1 * ((positive * 2) - 1);
-			push(val);
-		}else {
-			push(val);
-			val.as.num += 1 * ((positive * 2) - 1);
-		}
-
-		arr->values[(uInt64)index] = val;
-		break;
-	}
-	case OBJ_INSTANCE: {
-		objString* str;
-		//the 'type' passed is to determine whether the field of a struct is on the stack(as a string constant), or in the constant table
-		if (type == 3) {
-			Value temp = pop();
-			if (!IS_STRING(temp)) {
-				runtimeError("Expected a field name.");
-				return false;
-			}
-			str = AS_STRING(temp);
-		}
-		else {
-			//doing this because we don't have macros
-			str = AS_STRING(frames[frameCount - 1].closure->func->body.constants[getOp(frames[frameCount - 1].ip++)]);
-		}
-		objInstance* instance = AS_INSTANCE(callee);
-
-		Value val;
-
-		if (!instance->table.get(str, &val)) {
-			runtimeError("Attempting to access a field that isn't set.");
-			return false;
-		}
-		if (!IS_NUMBER(val)) {
-			runtimeError("Cannot increment a value that's not a number");
-			return false;
-		}
-		//if it's a prefix increment(or decrement) like '++a' we first increment the value and then push it
-		//for postfix incrementing(like 'a++') we do the opposite
-		//the positive var is to determine if we're incrementing or decrementing
-		if (isPrefix) {
-			val.as.num += 1 * ((positive * 2) - 1);
-			push(val);
-		}else {
-			push(val);
-			val.as.num += 1 * ((positive * 2) - 1);
-		}
-
-		instance->table.set(str, val);
-		break;
-	}
-	default: 
-		runtimeError("Expected a array or struct.");
-		return false;
-	}
-	return true;
-}
-
 void vm::defineMethod(objString* name) {
 	//no need to typecheck since the compiler made sure to emit code in this order
 	Value method = peek(0);
@@ -350,6 +228,7 @@ void vm::defineMethod(objString* name) {
 }
 
 bool vm::bindMethod(objClass* klass, objString* name) {
+	//At the start the instance whose method we're binding needs to be on top of the stack
 	Value method;
 	if (!klass->methods.get(name, &method)) {
 		runtimeError("Undefined property '%s'.", name->str);
@@ -582,7 +461,33 @@ interpretResult vm::run() {
 
 		#pragma region Statements
 		case OP_PRINT: {
-			printValue(pop());
+			Value toPrint = peek(0);
+			if (!IS_INSTANCE(toPrint)) {
+				//there is always a OP_POP after OP_PRINT, but if we know we're not going to call a toString method of some object,
+				//we pop the value and skip over the OP_POP
+				printValue(pop());
+				READ_BYTE();
+			}else {
+				Value instVal = peek(0);
+
+				objInstance* inst = AS_INSTANCE(instVal);
+				Value val;
+
+				if (inst->klass == nullptr) {
+					//there is always a OP_POP after OP_PRINT, but if we know we're not going to call a toString method of some object,
+					//we pop the value and skip over the OP_POP
+					printObject(pop());
+					READ_BYTE();
+					break;
+				}
+				//TODO: optimize this, if no object has a "toString" method this slows down the code massivly
+				objString* temp = copyString("toString", 8);
+				if (!invoke(temp, 0)) {
+					return RUNTIME_ERROR;
+				}
+				frame = &frames[frameCount - 1];
+				break;
+			}
 			std::cout << "\n";
 			break;
 		}
@@ -636,70 +541,6 @@ interpretResult vm::run() {
 			closeUpvalues(stackTop - 1);
 			pop();
 			break;
-		case OP_INCREMENT_PRE: {
-			int type = READ_BYTE();
-			//if 'type' is above 2 it means we have a field incrementing operation
-			if (type > 2) {
-				if (!incrementField(type, true, true)) return RUNTIME_ERROR;
-				break;
-			}
-			//otherwise we have a normal variable incrementation
-			int arg = READ_BYTE();
-			Value val = pop();
-			if (val.type != VAL_NUM) runtimeError("Cannot increment a value that's not a number");
-			val.as.num++;
-			if (!setVal(type, arg, val)) {
-				return RUNTIME_ERROR;
-			}
-			push(val);
-			break;
-		}
-		case OP_INCREMENT_POST: {
-			int type = READ_BYTE();
-			if (type > 2) {
-				if (!incrementField(type, false, true)) return RUNTIME_ERROR;
-				break;
-			}
-			int arg = READ_BYTE();
-			Value val = peek(0);
-			if (val.type != VAL_NUM) runtimeError("Cannot increment a value that's not a number");
-			val.as.num++;
-			if (!setVal(type, arg, val)) {
-				return RUNTIME_ERROR;
-			}
-			break;
-		}
-		case OP_DECREMENT_PRE: {
-			int type = READ_BYTE();
-			if (type > 2) {
-				if (!incrementField(type, true, false)) return RUNTIME_ERROR;
-				break;
-			}
-			int arg = READ_BYTE();
-			Value val = pop();
-			if (val.type != VAL_NUM) runtimeError("Cannot decrement a value that's not a number");
-			val.as.num--;
-			if (!setVal(type, arg, val)) {
-				return RUNTIME_ERROR;
-			}
-			push(val);
-			break;
-		}
-		case OP_DECREMENT_POST: {
-			int type = READ_BYTE();
-			if (type > 2) {
-				if (!incrementField(type, false, false)) return RUNTIME_ERROR;
-				break;
-			}
-			int arg = READ_BYTE();
-			Value val = peek(0);
-			if (val.type != VAL_NUM) runtimeError("Cannot decrement a value that's not a number");
-			val.as.num--;
-			if (!setVal(type, arg, val)) {
-				return RUNTIME_ERROR;
-			}
-			break;
-		}
 		#pragma endregion
 
 		#pragma region Control flow
@@ -793,70 +634,6 @@ interpretResult vm::run() {
 			}
 			break;
 		}
-
-		case OP_ITERATOR_GET: {
-			//the top of the stack will always be a iterator(the compiler makes sure of that), so there is no need for runtime checks
-			if (!IS_INSTANCE(peek(0))) return runtimeError("Expected a iterator");
-			objInstance* inst = AS_INSTANCE(pop());
-
-			Value val;
-
-			if (!inst->table.get(copyString("current", 7), &val)) {
-				return runtimeError("Iterator object is expected to have a 'current' field.");
-			}
-
-			push(val);
-			break;
-		}
-
-		case OP_ITERATOR_START: {
-			if(!IS_OBJ(peek(0))) return runtimeError("Expected a collection for iteration.");
-			if(!(IS_INSTANCE(peek(0)) || IS_ARRAY(peek(0)))) return runtimeError("Expected a collection for iteration.");
-
-			if(IS_INSTANCE(peek(0))) {
-				Value val;
-				objInstance* inst = AS_INSTANCE(pop());
-				if (!inst->table.get(copyString("begin", 5), &val)) {
-					if (inst->klass) {
-						if (!inst->klass->methods.get(copyString("begin", 5), &val)) {
-							return runtimeError("Expected a iteratable object to have a 'begin' method.");
-						}
-					}
-					else return runtimeError("Expected a iteratable object to have a 'begin' method.");
-				}
-				//copied from OP_CALL
-				if (!callValue(peek(0), 0)) {
-					return RUNTIME_ERROR;
-				}
-				//if the call is succesful, there is a new call frame, so we need to update the pointer
-				frame = &frames[frameCount - 1];
-				break;
-			}
-			return runtimeError("Error.");
-			break;
-		}
-
-		case OP_ITERATOR_NEXT: {
-			if (!IS_INSTANCE(peek(0))) return runtimeError("Expected a iterator.");
-
-			Value val;
-			objInstance* inst = AS_INSTANCE(pop());
-			if (!inst->table.get(copyString("next", 4), &val)) {
-				if (inst->klass) {
-					if (!inst->klass->methods.get(copyString("next", 4), &val)) {
-						return runtimeError("Expected a iterator object to have a 'next' method.");
-					}
-				}
-				else return runtimeError("Expected a iterator object to have a 'next' method.");
-			}
-			//copied from OP_CALL
-			if (!callValue(peek(0), 0)) {
-				return RUNTIME_ERROR;
-			}
-			//if the call is succesful, there is a new call frame, so we need to update the pointer
-			frame = &frames[frameCount - 1];
-			break;
-		}
 		#pragma endregion
 
 		#pragma region Functions
@@ -921,13 +698,19 @@ interpretResult vm::run() {
 
 		case OP_GET: {
 			//structs and objects also get their own OP_GET_PROPERTY operator for access using '.'
-			Value field = pop();
-			Value callee = pop();
+			//use peek because in case this is a get call to a instance that has a defined "access" method
+			//we want to use these 2 values as args and receiver
+			Value field = peek(0);
+			Value callee = peek(1);
 			if (!IS_OBJ(callee))
 				runtimeError("Expected a array or struct, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
 			
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
+				//we don't pop above because this might be a get call to a class that has a defined access method
+				//but in order to maintain stack balance we need to get rid of these 2 vars if this is not a get call to a access method
+				pop();
+				pop();
 				if (!IS_NUMBER(field)) return runtimeError("Index must be a number.");
 				double index = AS_NUMBER(field);
 				objArray* arr = AS_ARRAY(callee);
@@ -940,6 +723,18 @@ interpretResult vm::run() {
 				break;
 			}
 			case OBJ_INSTANCE: {
+				//check if this instance has a access method, and if it does it transfer control over to the user defined method
+				//the 'field' value becomes the argument for the method 
+				objString* temp = copyString("access", 6);
+				if (!invoke(temp, 1)) {
+					return RUNTIME_ERROR;
+				}else {
+					frame = &frames[frameCount - 1];
+					break;
+				}
+				//pop if this instance doesn't contain a access method to maintain stack balance
+				pop();
+				pop();
 				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
 				
 				objInstance* instance = AS_INSTANCE(callee);
@@ -950,6 +745,8 @@ interpretResult vm::run() {
 					push(value);
 					break;
 				}
+
+				if (instance->klass && bindMethod(instance->klass, name)) break;
 				//if the field doesn't exist, we push nil as a sentinel value, since this is not considered a runtime error
 				push(NIL_VAL());
 				break;
@@ -965,6 +762,8 @@ interpretResult vm::run() {
 			Value val = peek(0);
 			Value field = peek(1);
 			Value callee = peek(2);
+			//if we encounter a user defined set expr, we will want to exit early and not pop all of the above values as they will be used as args
+			bool earlyExit = false;
 
 			if (!IS_OBJ(callee))
 				runtimeError("Expected a array or struct, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
@@ -984,7 +783,19 @@ interpretResult vm::run() {
 				break;
 				}
 			case OBJ_INSTANCE: {
+				//check if this instance has a defined set method, if it does, transfer control to it and set the field and value as args to the method
+				objString* temp = copyString("set", 3);
+				if (!invoke(temp, 2)) {
+					return RUNTIME_ERROR;
+				}
+				else {
+					frame = &frames[frameCount - 1];
+					earlyExit = true;
+					break;
+				}
+				//if the instance doesn't have a defined set method, proceed as normal
 				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
+
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* str = AS_STRING(field);
 				//settting will always succeed, and we don't care if we're overriding an existing field, or creating a new one
@@ -994,6 +805,7 @@ interpretResult vm::run() {
 			default:
 				return runtimeError("Expected a array or struct.");
 			}
+			if (earlyExit) break;
 			//we want only the value to remain on the stack, since set is a assignment expr
 			pop();
 			pop();
