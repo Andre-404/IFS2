@@ -50,10 +50,8 @@ int main() {
 	string source = readFile(path);
 	cout << "Output:\n\n";
 	if (!source.empty()) {
-		scanner* scan = new scanner(&source);
-		parser* parse = new parser(scan->getArr());
+		parser* parse = new parser(source);
 		compiler* comp = new compiler(parse, funcType::TYPE_SCRIPT);
-		delete scan;
 		vm* newVm = new vm(comp);
 		delete newVm;
 	}

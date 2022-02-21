@@ -77,8 +77,9 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 	case TOKEN_DOT: {
 		expr->getCallee()->accept(this);
 		expr->getValue()->accept(this);
-		int name = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
-		emitBytes(OP_SET_PROPERTY, name);
+		uInt name = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
+		if (name < UINT8_MAX) emitBytes(OP_SET_PROPERTY, name);
+		else emitByteAnd24Bit(OP_SET_PROPERTY_LONG, name);
 		break;
 	}
 	}
@@ -184,8 +185,9 @@ void compiler::visitCallExpr(ASTCallExpr* expr) {
 		break;
 	}
 	case TOKEN_DOT:
-		int name = identifierConstant(((ASTLiteralExpr*)expr->getArgs()[0])->getToken());
-		emitBytes(OP_GET_PROPERTY, name);
+		uInt name = identifierConstant(((ASTLiteralExpr*)expr->getArgs()[0])->getToken());
+		if(name < UINT8_MAX) emitBytes(OP_GET_PROPERTY, name);
+		else emitByteAnd24Bit(OP_GET_PROPERTY_LONG, name);
 		break;
 	}
 }
@@ -201,9 +203,11 @@ void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
 		expr->getIncrementExpr()->accept(this);
 		return;
 	}
-	expr->getVal()->accept(this);
 	expr->getIncrementExpr()->accept(this);
-	emitByte(OP_POP);
+
+	if (expr->getIsPositive()) {
+		emitByte(OP_SUBTRACT_1);
+	}else emitByte(OP_ADD_1);
 }
 
 void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
@@ -221,8 +225,15 @@ void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
 	//it's extremely important that we emit the constants in reverse order to how we pushed them, this is because when the VM gets to this point
 	//all of the values we need will be on the stack, and getting them from the back(by popping) will give us the values in reverse order
 	//compared to how we compiled them
-	emitBytes(OP_CREATE_STRUCT, constants.size());
-	for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
+
+	if (constants[constants.size() - 1] < UINT8_MAX) {
+		emitBytes(OP_CREATE_STRUCT, constants.size());
+
+		for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
+	}else {
+		emitBytes(OP_CREATE_STRUCT_LONG, constants.size());
+		for (int i = constants.size() - 1; i >= 0; i--) emit24Bit(constants[i]);
+	}
 }
 
 void compiler::visitSuperExpr(ASTSuperExpr* expr) {
@@ -237,15 +248,16 @@ void compiler::visitSuperExpr(ASTSuperExpr* expr) {
 	//we use syntethic tokens since we know that 'super' and 'this' are defined if we're currently compiling a class method
 	namedVar(syntheticToken("this"), false);
 	namedVar(syntheticToken("super"), false);
-	emitBytes(OP_GET_SUPER, name);
+	if (name < UINT8_MAX) emitBytes(OP_GET_SUPER, name);
+	else emitByteAnd24Bit(OP_GET_SUPER_LONG, name);
 }
 
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
-	const Token& token = expr->getToken();
+	Token token = expr->getToken();
 	updateLine(token);
 	switch (token.type) {
 	case TOKEN_NUMBER: {
-		double num = std::stod(string(token.lexeme));//doing this becuase stod doesn't accept string_view
+		double num = std::stod(token.lexeme);//doing this becuase stod doesn't accept string_view
 		emitConstant(NUMBER_VAL(num));
 		break;
 	}
@@ -254,10 +266,9 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	case TOKEN_NIL: emitByte(OP_NIL); break;
 	case TOKEN_STRING: {
 		//this gets rid of quotes, eg. ""Hello world""->"Hello world"
-		string _temp(token.lexeme);//converts string_view to string
-		_temp.erase(0, 1);
-		_temp.erase(_temp.size() - 1, 1);
-		emitConstant(OBJ_VAL(copyString((char*)_temp.c_str(), _temp.length())));
+		token.lexeme.erase(0, 1);
+		token.lexeme.erase(token.lexeme.size() - 1, 1);
+		emitConstant(OBJ_VAL(copyString((char*)token.lexeme.c_str(), token.lexeme.length())));
 		break;
 	}
 
@@ -282,7 +293,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 void compiler::visitVarDecl(ASTVarDecl* decl) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
 	updateLine(decl->getToken());
-	uint8_t global = parseVar(decl->getToken());
+	uInt global = parseVar(decl->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = decl->getExpr();
 	if (expr == NULL) {
@@ -320,9 +331,12 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
+	//doing this because func is now a cached ptr
 	objFunc* func = endFuncDecl();
 	global::gc.cachePtr(func);
-	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	uInt constant = makeConstant(OBJ_VAL(func));
+	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
+	else emitByteAnd24Bit(OP_CLOSURE_LONG, constant);
 	global::gc.getCachedPtr();
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
@@ -339,7 +353,8 @@ void compiler::visitClassDecl(ASTClass* decl) {
 	int constant = identifierConstant(className);
 	declareVar(className);
 
-	emitBytes(OP_CLASS, constant);
+	emitByteAnd24Bit(OP_CLASS, constant);
+	
 	//define the class here, so that we can use it inside it's own methods
 	defineVar(constant);
 
@@ -461,8 +476,10 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	//get the iterator
 	stmt->getCollection()->accept(this);
 	int name = identifierConstant(syntheticToken("begin"));
-	emitBytes(OP_GET_PROPERTY, name);
-	emitBytes(OP_CALL, 0);
+	emitByte(OP_INVOKE);
+	emitBytes(name, 0);
+	//emitBytes(OP_GET_PROPERTY, name);
+	//emitBytes(OP_CALL, 0);
 	addLocal(iterator);
 	defineVar(0);
 	//Get the var ready
@@ -475,8 +492,8 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	//advancing
 	namedVar(iterator, false);
 	name = identifierConstant(syntheticToken("next"));
-	emitBytes(OP_GET_PROPERTY, name);
-	emitBytes(OP_CALL, 0);
+	emitByte(OP_INVOKE);
+	emitBytes(name, 0);
 	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
 
 	//get new variable
@@ -604,19 +621,33 @@ void compiler::emit16Bit(unsigned short number) {
 	emitBytes((number >> 8) & 0xff, number & 0xff);
 }
 
-uint8_t compiler::makeConstant(Value value) {
-	int constant = getChunk()->addConstant(value);
-	if (constant > UINT8_MAX) {
+void compiler::emit24Bit(uInt number) {
+	emitBytes(number & 0xff, (number >> 8) & 0xff);
+	emitByte((number >> 16) & 0xff);
+}
+
+void compiler::emitByteAnd24Bit(uint8_t byte, uInt num) {
+	emitByte(byte);
+	emit24Bit(num);
+}
+uInt compiler::makeConstant(Value value) {
+	if (IS_OBJ(value)) gc.cachePtr(AS_OBJ(value));
+	uInt constant = getChunk()->addConstant(value);
+	if (constant > UINT_24_MAX) {
 		error("Too many constants in one chunk.");
 		return 0;
 	}
-
-	return (uint8_t)constant;
+	if (IS_OBJ(value)) gc.getCachedPtr();
+	return (uInt)constant;
 }
 
 void compiler::emitConstant(Value value) {
 	//shorthand for adding a constant to the chunk and emitting it
-	emitBytes(OP_CONSTANT, makeConstant(value));
+	uInt constant = makeConstant(value);
+	if (constant < 256) emitBytes(OP_CONSTANT, constant);
+	else {
+		emitByteAnd24Bit(OP_CONSTANT_LONG, constant);
+	}
 }
 
 
@@ -664,25 +695,24 @@ bool identifiersEqual(std::string_view a, std::string_view b) {
 	return (a.compare(b) == 0);
 }
 
-uint8_t compiler::identifierConstant(Token name) {
+uInt compiler::identifierConstant(Token name) {
 	string temp(name.lexeme);
 	//since str is a cached pointer(a collection may occur while resizing the chunk constants array, we need to treat it as a cached ptr
-	objString* str = copyString((char*)temp.c_str(), temp.length());
-
-	global::gc.cachePtr(str);
-	uint8_t index = makeConstant(OBJ_VAL(str));
-	global::gc.getCachedPtr();
+	uInt index = makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
 
 	return index;
 }
 
-void compiler::defineVar(uint8_t name) {
+void compiler::defineVar(uInt name) {
 	//if this is a local var, mark it as ready and then bail out
 	if (current->scopeDepth > 0) { 
 		markInit();
 		return; 
 	}
-	emitBytes(OP_DEFINE_GLOBAL, name);
+	if(name < UINT8_MAX) emitBytes(OP_DEFINE_GLOBAL, name);
+	else {
+		emitByteAnd24Bit(OP_DEFINE_GLOBAL_LONG, name);
+	}
 }
 
 void compiler::namedVar(Token token, bool canAssign) {
@@ -700,11 +730,17 @@ void compiler::namedVar(Token token, bool canAssign) {
 		arg = identifierConstant(token);
 		getOp = OP_GET_GLOBAL;
 		setOp = OP_SET_GLOBAL;
+		if (arg > UINT8_MAX) {
+			getOp = OP_GET_GLOBAL_LONG;
+			setOp = OP_SET_GLOBAL_LONG;
+			emitByteAnd24Bit(canAssign ? setOp : getOp, arg);
+			return;
+		}
 	}
 	emitBytes(canAssign ? setOp : getOp, arg);
 }
 
-uint8_t compiler::parseVar(Token name) {
+uInt compiler::parseVar(Token name) {
 	updateLine(name);
 	declareVar(name);
 	if (current->scopeDepth > 0) return 0;
@@ -851,13 +887,12 @@ Token compiler::syntheticToken(const char* str) {
 
 #pragma region Classes and methods
 void compiler::method(ASTFunc* _method, Token className) {
-	int name = identifierConstant(_method->getName());
+	uInt name = identifierConstant(_method->getName());
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
 	funcType type = funcType::TYPE_METHOD;
 	//constructors are treated separatly, but are still methods
 	if (_method->getName().lexeme.compare(className.lexeme) == 0) type = funcType::TYPE_CONSTRUCTOR;
-	std::cout << "compiler info: " << sizeof(compilerInfo) << "\n";
 	current = new compilerInfo(current, type);
 	//->func = new objFunc();
 	//no need for a endScope, since returning from the function discards the entire callstack
@@ -865,7 +900,7 @@ void compiler::method(ASTFunc* _method, Token className) {
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
 	//we just assign those positions to each arg
 	for (Token& var : _method->getArgs()) {
-		uint8_t constant = parseVar(var);
+		uInt constant = parseVar(var);
 		defineVar(constant);
 	}
 	_method->getBody()->accept(this);
@@ -879,14 +914,16 @@ void compiler::method(ASTFunc* _method, Token className) {
 	objFunc* func = endFuncDecl();
 	//func is now only exists as a cached ptr, so we need to account for that when emitting bytes(since they can cause a reallocation)
 	global::gc.cachePtr(func);
-	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(func)));
+	uInt constant = makeConstant(OBJ_VAL(func));
+	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
+	else emitByteAnd24Bit(OP_CLOSURE_LONG, constant);
 	global::gc.getCachedPtr();
 
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);
 	}
-	emitBytes(OP_METHOD, name);
+	emitByteAnd24Bit(OP_METHOD, name);
 }
 
 bool compiler::invoke(ASTCallExpr* expr) {
@@ -904,8 +941,14 @@ bool compiler::invoke(ASTCallExpr* expr) {
 			arg->accept(this);
 			argCount++;
 		}
-		emitBytes(OP_INVOKE, field);
-		emitByte(argCount);
+		if (field < UINT8_MAX) {
+			emitBytes(OP_INVOKE, field);
+			emitByte(argCount);
+		}
+		else {
+			emitByteAnd24Bit(OP_INVOKE_LONG, field);
+			emitByte(argCount);
+		}
 		return true;
 	}else if (expr->getCallee()->type == ASTType::SUPER) {
 		ASTSuperExpr* _superCall = (ASTSuperExpr*)expr->getCallee();
@@ -926,8 +969,14 @@ bool compiler::invoke(ASTCallExpr* expr) {
 		}
 		//super gets popped, leaving only the receiver and args on the stack
 		namedVar(syntheticToken("super"), false);
-		emitBytes(OP_SUPER_INVOKE, name);
-		emitByte(argCount);
+		if (name < UINT8_MAX) {
+			emitBytes(OP_SUPER_INVOKE, name);
+			emitByte(argCount);
+		}
+		else {
+			emitByteAnd24Bit(OP_SUPER_INVOKE_LONG, name);
+			emitByte(argCount);
+		}
 	}
 	return false;
 }

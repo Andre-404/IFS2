@@ -84,6 +84,8 @@ private:
 	void emitByte(uint8_t byte);
 	void emitBytes(uint8_t byte1, uint8_t byte2);
 	void emit16Bit(unsigned short number);
+	void emit24Bit(uInt num);
+	void emitByteAnd24Bit(uint8_t byte, uInt num);
 	void emitConstant(Value value);
 	void emitReturn();
 	//control flow
@@ -91,12 +93,12 @@ private:
 	void patchJump(int offset);
 	void emitLoop(int start);
 	void patchBreak();
-	uint8_t makeConstant(Value value);
+	uInt makeConstant(Value value);
 	//variables
-	uint8_t identifierConstant(Token name);
-	void defineVar(uint8_t name);
+	uInt identifierConstant(Token name);
+	void defineVar(uInt name);
 	void namedVar(Token token, bool canAssign);
-	uint8_t parseVar(Token name);
+	uInt parseVar(Token name);
 	//locals
 	void declareVar(Token& name);
 	void addLocal(Token name);

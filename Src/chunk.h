@@ -13,6 +13,7 @@
 		OP_POPN,
 		//constants
 		OP_CONSTANT,
+		OP_CONSTANT_LONG,
 		OP_NIL,
 		OP_TRUE,
 		OP_FALSE,
@@ -31,6 +32,8 @@
 		OP_MOD,
 		OP_BITSHIFT_LEFT,
 		OP_BITSHIFT_RIGHT,
+		OP_ADD_1,
+		OP_SUBTRACT_1,
 		//comparisons and equality
 		OP_EQUAL,
 		OP_NOT_EQUAL,
@@ -42,8 +45,11 @@
 		OP_PRINT,
 		//Variables
 		OP_DEFINE_GLOBAL,
+		OP_DEFINE_GLOBAL_LONG,
 		OP_GET_GLOBAL,
+		OP_GET_GLOBAL_LONG,
 		OP_SET_GLOBAL,
+		OP_SET_GLOBAL_LONG,
 		OP_GET_LOCAL,
 		OP_SET_LOCAL,
 		OP_GET_UPVALUE,
@@ -66,17 +72,24 @@
 		OP_CALL,
 		OP_RETURN,
 		OP_CLOSURE,
+		OP_CLOSURE_LONG,
 
 		//OOP
 		OP_CLASS,
 		OP_GET_PROPERTY,
+		OP_GET_PROPERTY_LONG,
 		OP_SET_PROPERTY,
+		OP_SET_PROPERTY_LONG,
 		OP_CREATE_STRUCT,
+		OP_CREATE_STRUCT_LONG,
 		OP_METHOD,
 		OP_INVOKE,
+		OP_INVOKE_LONG,
 		OP_INHERIT,
 		OP_GET_SUPER,
+		OP_GET_SUPER_LONG,
 		OP_SUPER_INVOKE,
+		OP_SUPER_INVOKE_LONG,
 	};
 
 	//disassemble is here, but the functions it calls are in debug.cpp
@@ -89,7 +102,7 @@
 		chunk();
 		void writeData(uint8_t opCode, int line);
 		void disassemble(string name);
-		int addConstant(Value val);
+		uInt addConstant(Value val);
 		int addSwitch(switchTable table);
 	};
 

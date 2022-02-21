@@ -239,14 +239,14 @@ public:
 class ASTUnaryVarAlterExpr : public ASTNode {
 private:
 	ASTNode* incrementExpr;
-	ASTNode* valToIncrement;
+	bool isPositive;
 	bool isPrefix;
 public:
-	ASTUnaryVarAlterExpr(ASTNode* _valToIncrement, ASTNode* _incrementExpr, bool _isPrefix);
+	ASTUnaryVarAlterExpr(ASTNode* _incrementExpr, bool _isPrefix, bool _isPositive);
 	~ASTUnaryVarAlterExpr();
 	void accept(visitor* vis);
 
-	ASTNode* getVal() { return valToIncrement; }
+	bool getIsPositive() { return isPositive; }
 	ASTNode* getIncrementExpr() { return incrementExpr; }
 	bool getIsPrefix() { return isPrefix; }
 };

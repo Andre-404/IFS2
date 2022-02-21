@@ -106,20 +106,21 @@ class unaryVarAlterPrefix : public prefixParselet {
 		ASTUnaryVarAlterExpr* expr = nullptr;
 		ASTLiteralExpr* one = new ASTLiteralExpr(Token("1", op.line, TOKEN_NUMBER));
 		Token _op = op.type == TOKEN_INCREMENT ? Token("+", op.line, TOKEN_PLUS) : Token("-", op.line, TOKEN_MINUS);
+		bool isPositive = op.type == TOKEN_INCREMENT;
 		//differentiate between variable incrementation, and (array or struct) field incrementation
 		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
 			//++var gets translated to var = var + 1
 			Token varName = ((ASTLiteralExpr*)var)->getToken();
-			ASTBinaryExpr* binary = new ASTBinaryExpr(var, Token("+", op.line, TOKEN_PLUS), one);
-			expr = new ASTUnaryVarAlterExpr(var, new ASTAssignmentExpr(varName, binary), true);
+			ASTBinaryExpr* binary = new ASTBinaryExpr(var, _op, one);
+			expr = new ASTUnaryVarAlterExpr(new ASTAssignmentExpr(varName, binary), true, isPositive);
 		}
 		else if (var->type == ASTType::CALL) {
 			ASTCallExpr* call = (ASTCallExpr*)var;
 			//if the accessor token type is a left paren, then this is a function call, and not a get expression, so we throw a error
 			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a r-value.");
 
-			ASTBinaryExpr* binary = new ASTBinaryExpr(call, Token("+", op.line, TOKEN_PLUS), one);
-			expr = new ASTUnaryVarAlterExpr(call, new ASTSetExpr(call->getCallee(), call->getArgs()[0], op, binary), true);
+			ASTBinaryExpr* binary = new ASTBinaryExpr(call, _op, one);
+			expr = new ASTUnaryVarAlterExpr(new ASTSetExpr(call->getCallee(), call->getArgs()[0], op, binary), true, isPositive);
 		}
 		else {
 			throw cur->error(op, "Can't increment a r-value");
@@ -161,20 +162,21 @@ class unaryVarAlterPostfix : public infixParselet {
 		ASTUnaryVarAlterExpr* expr = nullptr;
 		ASTLiteralExpr* one = new ASTLiteralExpr(Token("1", op.line, TOKEN_NUMBER));
 		Token _op = op.type == TOKEN_INCREMENT ? Token("+", op.line, TOKEN_PLUS) : Token("-", op.line, TOKEN_MINUS);
+		bool isPositive = op.type == TOKEN_INCREMENT;
 		//differentiate between variable incrementation, and (array or struct) field incrementation
 		if (var->type == ASTType::LITERAL && ((ASTLiteralExpr*)var)->getToken().type == TOKEN_IDENTIFIER) {
 			//var++ gets translated to var = var + 1
 			Token varName = ((ASTLiteralExpr*)var)->getToken();
-			ASTBinaryExpr* binary = new ASTBinaryExpr(var, Token("+", op.line, TOKEN_PLUS), one);
-			expr = new ASTUnaryVarAlterExpr(var, new ASTAssignmentExpr(varName, binary), false);
+			ASTBinaryExpr* binary = new ASTBinaryExpr(var, _op, one);
+			expr = new ASTUnaryVarAlterExpr(new ASTAssignmentExpr(varName, binary), false, isPositive);
 		}
 		else if (var->type == ASTType::CALL) {
 			ASTCallExpr* call = (ASTCallExpr*)var;
 			//if the accessor token type is a left paren, then this is a function call, and not a get expression, so we throw a error
 			if (call->getAccessor().type == TOKEN_LEFT_PAREN) throw cur->error(op, "Can't increment a r-value.");
 
-			ASTBinaryExpr* binary = new ASTBinaryExpr(call, Token("+", op.line, TOKEN_PLUS), one);
-			expr = new ASTUnaryVarAlterExpr(call, new ASTSetExpr(call->getCallee(), call->getArgs()[0], op, binary), false);
+			ASTBinaryExpr* binary = new ASTBinaryExpr(call, _op, one);
+			expr = new ASTUnaryVarAlterExpr(new ASTSetExpr(call->getCallee(), call->getArgs()[0], op, binary), false, isPositive);
 		}
 		else {
 			throw cur->error(op, "Can't increment a r-value");
@@ -219,8 +221,7 @@ public:
 };
 #pragma endregion
 
-parser::parser(vector<Token>* _tokens) {
-	tokens = _tokens;
+parser::parser(string source) {
 	current = 0;
 	hadError = false;
 	scopeDepth = 0;
@@ -308,14 +309,7 @@ parser::parser(vector<Token>* _tokens) {
 		addInfix(TOKEN_DECREMENT, unaryVarAlterPostfixParselet, precedence::ALTER);
 	#pragma endregion
 
-	while (!isAtEnd()) {
-		try {
-			statements.push_back(declaration());
-		}
-		catch (int e) {
-			sync();
-		}
-	}
+	parse(source);
 	delete assignmentParselet;
 	delete unaryParselet;
 	delete binaryParselet;
@@ -590,7 +584,7 @@ bool parser::match(const std::initializer_list<TokenType>& tokenTypes) {
 }
 
 bool parser::isAtEnd() {
-	return tokens->at(current).type == TOKEN_EOF;
+	return tokens[current].type == TOKEN_EOF;
 }
 
 bool parser::check(TokenType type) {
@@ -604,15 +598,15 @@ Token parser::advance() {
 }
 
 Token parser::peek() {
-	return tokens->at(current);
+	return tokens[current];
 }
 
 Token parser::peekNext() {
-	return tokens->at(current + 1);
+	return tokens[current + 1];
 }
 
 Token parser::previous() {
-	return tokens->at(current - 1);
+	return tokens[current - 1];
 }
 
 Token parser::consume(TokenType type, string msg) {
@@ -696,6 +690,24 @@ int parser::getPrec() {
 		return 0;
 	}
 	return infixParselets[token.type]->prec;
+}
+
+
+void parser::parse(string source) {
+	scanner sc(source);
+	reset(sc.getArr());
+	while (!isAtEnd()) {
+		try {
+			statements.push_back(declaration());
+		}
+		catch (int e) {
+			sync();
+		}
+	}
+}
+
+void parser::reset(vector<Token> _tokens) {
+	tokens = _tokens;
 }
 
 #pragma endregion

@@ -1,7 +1,7 @@
 #ifndef __IFS_SCANNER
 	#define __IFS_SCANNER
 	#include "common.h"
-	#include <string_view>
+	//#include <string_view>
 	using std::vector;
 
 	enum TokenType {
@@ -35,7 +35,7 @@
 
 	struct Token {
 		TokenType type;
-		std::string_view lexeme;
+		std::string lexeme;
 		int line;
 		Token() {
 			line = -1;
@@ -44,22 +44,22 @@
 		}
 		Token(char* ptr, int _line, TokenType _type) {
 			line = _line;
-			lexeme = ptr;
+			lexeme = string(ptr);
 			type = _type;
 		}
 		Token(const char* ptr, int _line, TokenType _type) {
 			line = _line;
-			lexeme = ptr;
+			lexeme = string(ptr);
 			type = _type;
 		}
 	};
 
 	class scanner {
 	public:
-		scanner(string* src);
-		vector<Token>* getArr();
+		scanner(string src);
+		vector<Token>& getArr();
 	private:
-		string* source;
+		string source;
 		int line;
 		int start;
 		int current;

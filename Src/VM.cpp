@@ -301,8 +301,12 @@ interpretResult vm::run() {
 	callFrame* frame = &frames[frameCount - 1];
 	#pragma region Macros
 	#define READ_BYTE() (getOp(frame->ip++))
+	#define READ_SHORT() (frame->ip += 2, (uint16_t)((getOp(frame->ip-2) << 8) | getOp(frame->ip-1)))
+	#define READ_24BIT() (frame->ip += 3, (uInt)(getOp(frame->ip-3) | (getOp(frame->ip-2) << 8) | (getOp(frame->ip-1) << 16)))
 	#define READ_CONSTANT() (frames[frameCount - 1].closure->func->body.constants[READ_BYTE()])
+	#define READ_CONSTANT_LONG() (frames[frameCount - 1].closure->func->body.constants[READ_24BIT()])
 	#define READ_STRING() AS_STRING(READ_CONSTANT())
+	#define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
@@ -323,8 +327,6 @@ interpretResult vm::run() {
 			double a = AS_NUMBER(pop()); \
 			push(valueType((double)((int)a op (int)b))); \
 		} while (false)
-
-	#define READ_SHORT() (frame->ip += 2, (uint16_t)((getOp(frame->ip-2) << 8) | getOp(frame->ip-1)))
 
 	#ifdef DEBUG_TRACE_EXECUTION
 		std::cout << "-------------Code execution starts-------------\n";
@@ -364,6 +366,11 @@ interpretResult vm::run() {
 		#pragma region Constants
 		case OP_CONSTANT: {
 			Value constant = READ_CONSTANT();
+			push(constant);
+			break;
+		}
+		case OP_CONSTANT_LONG: {
+			Value constant = READ_CONSTANT_LONG();
 			push(constant);
 			break;
 		}
@@ -416,6 +423,23 @@ interpretResult vm::run() {
 		case OP_BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
 		case OP_BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
 		case OP_BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
+		case OP_ADD_1: {
+			if (IS_NUMBER(peek(0))) {
+				Value num = pop();
+				num.as.num++;
+				push(num);
+			}
+			else return runtimeError("Operands must be two numbers.");
+			break;
+		}
+		case OP_SUBTRACT_1: {
+			if (IS_NUMBER(peek(0))) {
+				Value num = pop();
+				num.as.num--;
+				push(num);
+			}else return runtimeError("Operands must be two numbers.");
+			break;
+		}
 		#pragma endregion
 
 		#pragma region Binary that returns bools
@@ -498,10 +522,26 @@ interpretResult vm::run() {
 			pop();
 			break;
 		}
+		case OP_DEFINE_GLOBAL_LONG: {
+			objString* name = READ_STRING_LONG();
+			globals.set(name, peek(0));
+			pop();
+			break;
+		}
+
 		case OP_GET_GLOBAL: {
 			objString* name = READ_STRING();
 			Value value;
 			if (!globals.get(name, &value)){
+				return runtimeError("Undefined variable '%s'.", name->str);
+			}
+			push(value);
+			break;
+		}
+		case OP_GET_GLOBAL_LONG: {
+			objString* name = READ_STRING_LONG();
+			Value value;
+			if (!globals.get(name, &value)) {
 				return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			push(value);
@@ -516,11 +556,21 @@ interpretResult vm::run() {
 			}
 			break;
 		}
+		case OP_SET_GLOBAL_LONG: {
+			objString* name = READ_STRING_LONG();
+			if (globals.set(name, peek(0))) {
+				globals.del(name);
+				return runtimeError("Undefined variable '%s'.", name->str);
+			}
+			break;
+		}
+
 		case OP_GET_LOCAL: {
 			uint8_t slot = READ_BYTE();
 			push(frame->slots[slot]);
 			break;
 		}
+
 		case OP_SET_LOCAL: {
 			uint8_t slot = READ_BYTE();
 			frame->slots[slot] = peek(0);
@@ -532,15 +582,18 @@ interpretResult vm::run() {
 			push(*frame->closure->upvals[slot]->location);
 			break;
 		}
+
 		case OP_SET_UPVALUE: {
 			uint8_t slot = READ_BYTE();
 			*frame->closure->upvals[slot]->location = peek(0);
 			break;
 		}
-		case OP_CLOSE_UPVALUE:
+
+		case OP_CLOSE_UPVALUE: {
 			closeUpvalues(stackTop - 1);
 			pop();
 			break;
+		}
 		#pragma endregion
 
 		#pragma region Control flow
@@ -673,6 +726,24 @@ interpretResult vm::run() {
 				if (isLocal) {
 					closure->upvals[i] = captureUpvalue(frame->slots + index);
 				}else {
+					closure->upvals[i] = frame->closure->upvals[index];
+				}
+				//this serves to satisfy the GC, since we can't have any cached pointers when we collect
+				closure = AS_CLOSURE(peek(0));
+			}
+			break;
+		}
+		case OP_CLOSURE_LONG: {
+			//doing this to avoid cached pointers
+			objClosure* closure = new objClosure(AS_FUNCTION(READ_CONSTANT_LONG()));
+			push(OBJ_VAL(closure));
+			for (int i = 0; i < closure->upvals.size(); i++) {
+				uint8_t isLocal = READ_BYTE();
+				uint8_t index = READ_BYTE();
+				if (isLocal) {
+					closure->upvals[i] = captureUpvalue(frame->slots + index);
+				}
+				else {
 					closure->upvals[i] = frame->closure->upvals[index];
 				}
 				//this serves to satisfy the GC, since we can't have any cached pointers when we collect
@@ -815,7 +886,7 @@ interpretResult vm::run() {
 		}
 
 		case OP_CLASS: {
-			push(OBJ_VAL(new objClass(READ_STRING())));
+			push(OBJ_VAL(new objClass(READ_STRING_LONG())));
 			break;
 		}
 
@@ -827,6 +898,27 @@ interpretResult vm::run() {
 
 			objInstance* instance = AS_INSTANCE(peek(0));
 			objString* name = READ_STRING();
+
+			Value value;
+			if (instance->table.get(name, &value)) {
+				pop(); // Instance.
+				push(value);
+				break;
+			}
+			//first check is because structs(instances with no class) are also represented using objInstance
+			if (instance->klass && bindMethod(instance->klass, name)) break;
+			//if 'name' isn't a field property, nor is it a method, we push nil as a sentinel value
+			push(NIL_VAL());
+			break;
+		}
+		case OP_GET_PROPERTY_LONG: {
+			if (!IS_INSTANCE(peek(0))) {
+				runtimeError("Only instances/structs have properties.");
+				return RUNTIME_ERROR;
+			}
+
+			objInstance* instance = AS_INSTANCE(peek(0));
+			objString* name = READ_STRING_LONG();
 
 			Value value;
 			if (instance->table.get(name, &value)) {
@@ -856,6 +948,21 @@ interpretResult vm::run() {
 			push(value);
 			break;
 		}
+		case OP_SET_PROPERTY_LONG: {
+			if (!IS_INSTANCE(peek(1))) {
+				runtimeError("Only instances have fields.");
+				return RUNTIME_ERROR;
+			}
+
+			objInstance* instance = AS_INSTANCE(peek(1));
+			//we don't care if we're overriding or creating a new field
+			instance->table.set(READ_STRING_LONG(), peek(0));
+
+			Value value = pop();
+			pop();
+			push(value);
+			break;
+		}
 
 		case OP_CREATE_STRUCT: {
 			int numOfFields = READ_BYTE();
@@ -871,15 +978,40 @@ interpretResult vm::run() {
 			push(OBJ_VAL(inst));
 			break;
 		}
+		case OP_CREATE_STRUCT_LONG: {
+			int numOfFields = READ_BYTE();
 
-		case OP_METHOD:
-			//class that this method binds too
-			defineMethod(READ_STRING());
+			//passing null instead of class signals to the VM that this is a struct, and not a instance of a class
+			objInstance* inst = new objInstance(nullptr);
+
+			//the compiler emits the fields in reverse order, so we can loop through them normally and pop the values on the stack
+			for (int i = 0; i < numOfFields; i++) {
+				objString* name = READ_STRING_LONG();
+				inst->table.set(name, pop());
+			}
+			push(OBJ_VAL(inst));
 			break;
+		}
+
+		case OP_METHOD: {
+			//class that this method binds too
+			defineMethod(READ_STRING_LONG());
+			break;
+		}
 
 		case OP_INVOKE: {
 			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
 			objString* method = READ_STRING();
+			int argCount = READ_BYTE();
+			if (!invoke(method, argCount)) {
+				return RUNTIME_ERROR;
+			}
+			frame = &frames[frameCount - 1];
+			break;
+		}
+		case OP_INVOKE_LONG: {
+			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
+			objString* method = READ_STRING_LONG();
 			int argCount = READ_BYTE();
 			if (!invoke(method, argCount)) {
 				return RUNTIME_ERROR;
@@ -910,10 +1042,32 @@ interpretResult vm::run() {
 			}
 			break;
 		}
+		case OP_GET_SUPER_LONG: {
+			//super is ALWAYS followed by a field and is a call expr
+			objString* name = READ_STRING_LONG();
+			objClass* superclass = AS_CLASS(pop());
+
+			if (!bindMethod(superclass, name)) {
+				return RUNTIME_ERROR;
+			}
+			break;
+		}
 
 		case OP_SUPER_INVOKE: {
 			//works same as OP_INVOKE, but uses invokeFromClass() to specify the superclass
 			objString* method = READ_STRING();
+			int argCount = READ_BYTE();
+			objClass* superclass = AS_CLASS(pop());
+
+			if (!invokeFromClass(superclass, method, argCount)) {
+				return RUNTIME_ERROR;
+			}
+			frame = &frames[frameCount - 1];
+			break;
+		}
+		case OP_SUPER_INVOKE_LONG: {
+			//works same as OP_INVOKE, but uses invokeFromClass() to specify the superclass
+			objString* method = READ_STRING_LONG();
 			int argCount = READ_BYTE();
 			objClass* superclass = AS_CLASS(pop());
 

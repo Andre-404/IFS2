@@ -53,6 +53,15 @@ bool heapBlock::canAllocate(size_t size) {
 	return heapTop + size < heapBuffer + heapSize;
 }
 
+bool heapBlock::canShrink(size_t size) {
+	size_t sizeAfterAllocation = (heapTop + size)-heapBuffer;
+	double heapTaken = ((double)sizeAfterAllocation) / ((double)heapSize);
+	if (heapTaken < .25 && heapSize > HEAP_START_SIZE * 2) {
+		return true;
+	}
+	return false;
+}
+
 void heapBlock::resize(size_t size) {
 	//Amortized size to reduce the number of future resizes
 	size_t newHeapSize = (1ll << (64 - _lzcnt_u64((heapTop - heapBuffer) + size - 1)));
@@ -60,6 +69,19 @@ void heapBlock::resize(size_t size) {
 	try {
 		heapBuffer = new byte[newHeapSize];
 	}catch (std::bad_alloc& ba) {
+		std::cout << "Couldn't allocate memory to resize the heap, exiting...\n";
+	}
+	heapSize = newHeapSize;
+}
+
+void heapBlock::shrink() {
+	size_t newHeapSize = (heapSize >> 2);
+	std::cout << "Heap shrank from: "<<heapSize<<" to: "<<newHeapSize<<"\n";
+	oldHeapBuffer = heapBuffer;
+	try {
+		heapBuffer = new byte[newHeapSize];
+	}
+	catch (std::bad_alloc& ba) {
 		std::cout << "Couldn't allocate memory to resize the heap, exiting...\n";
 	}
 	heapSize = newHeapSize;

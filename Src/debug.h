@@ -45,9 +45,9 @@ private:
 
 #pragma region Debug
 int disassembleInstruction(chunk* Chunk, int offset);
-static int constantInstruction(string name, chunk* Chunk, int offset);
-static int simpleInstruction(string name, int offset);
-void printValue(Value value);
+//static int constantInstruction(string name, chunk* Chunk, int offset);
+//static int simpleInstruction(string name, int offset);
+//void printValue(Value value);
 #pragma endregion
 
 

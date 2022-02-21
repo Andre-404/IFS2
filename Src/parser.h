@@ -42,9 +42,20 @@ public:
 	int prec;
 };
 
+class compilationUnit {
+public:
+	vector<ASTNode*> stmts;
+	string name;
+	vector<compilationUnit*> deps;
+	vector<string> fileDeps;
+	compilationUnit(string _name) {
+		name = _name;
+	}
+};
+
 class parser {
 public:
-	parser(vector<Token>* _tokens);
+	parser(string source);
 	~parser();
 	vector<ASTNode*> statements;
 	bool hadError;
@@ -79,10 +90,9 @@ public:
 		ASTCallExpr* finishCall(ASTNode* callee);
 
 		int getPrec();
-
 	#pragma endregion
 private:
-	vector<Token>* tokens;
+	vector<Token> tokens;
 	uint16_t current;
 	int scopeDepth;
 	int loopDepth;
@@ -93,7 +103,10 @@ private:
 	void addPrefix(TokenType type, prefixParselet* parselet, precedence prec);
 	void addInfix(TokenType type, infixParselet* parselet, precedence prec);
 
-#pragma region Statements
+	void reset(vector<Token> tokens);
+	void parse(string source);
+
+	#pragma region Statements
 	ASTNode* declaration();
 	ASTNode* varDecl();
 	ASTNode* funcDecl();

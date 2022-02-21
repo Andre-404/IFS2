@@ -69,7 +69,7 @@ Value nativeArrayDelete(int argCount, Value* args) {
 
 Value nativeArrayLength(int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
-
+	objArray* arr = AS_ARRAY(*args);
 	return NUMBER_VAL(AS_ARRAY(*args)->values.count());
 }
 

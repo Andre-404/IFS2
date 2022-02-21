@@ -12,8 +12,10 @@ public:
 
 	void* allocate(size_t size);
 	bool canAllocate(size_t size);
+	bool canShrink(size_t size);
 
 	void resize(size_t size);
+	void shrink();
 
 	void clear();
 

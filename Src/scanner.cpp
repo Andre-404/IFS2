@@ -1,7 +1,7 @@
 #include "scanner.h"
 #include <string_view>
 
-scanner::scanner(string* src) {
+scanner::scanner(string src) {
 	line = 1;
 	source = src;
 	start = 0;
@@ -15,24 +15,24 @@ scanner::scanner(string* src) {
 	}
 }
 
-vector<Token>* scanner::getArr() {
-	return &arr;
+vector<Token>& scanner::getArr() {
+	return arr;
 }
 
 bool scanner::isAtEnd() {
-	return current >= source->size();
+	return current >= source.size();
 }
 
 //if matched we consume the token
 bool scanner::match(char expected) {
 	if (isAtEnd()) return false;
-	if (source->at(current) != expected) return false;
+	if (source[current] != expected) return false;
 	current++;
 	return true;
 }
 
 char scanner::advance() {
-	return source->at(current++);
+	return source[current++];
 }
 
 Token scanner::scanToken() {
@@ -84,7 +84,7 @@ Token scanner::scanToken() {
 Token scanner::makeToken(TokenType type) {
 	Token token;
 	token.type = type;
-	token.lexeme = std::string_view(source->c_str() + start, current-start);
+	token.lexeme = string(source.c_str() + start, current-start);
 	token.line = line;
 	return token;
 }
@@ -99,12 +99,12 @@ Token scanner::errorToken(const char* message) {
 
 char scanner::peek() {
 	if (isAtEnd()) return '\0';
-	return source->at(current);
+	return source[current];
 }
 
 char scanner::peekNext() {
 	if (isAtEnd()) return '\0';
-	return source->at(current+1);
+	return source[current+1];
 }
 
 void scanner::skipWhitespace() {
@@ -190,12 +190,12 @@ Token scanner::identifier() {
 
 //trie implementation
 TokenType scanner::identifierType() {
-	switch (source->at(start)) {
+	switch (source[start]) {
 		case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
 		case 'b': return checkKeyword(1, 4, "reak", TOKEN_BREAK);
 		case 'c': 
 			if (current - start > 1) {
-				switch (source->at(start + 1)) {
+				switch (source[start + 1]) {
 				case 'l': return checkKeyword(2, 3, "ass", TOKEN_CLASS);
 				case 'a': return checkKeyword(2, 2, "se", TOKEN_CASE);
 				}
@@ -210,7 +210,7 @@ TokenType scanner::identifierType() {
 		case 'r': return checkKeyword(1, 5, "eturn", TOKEN_RETURN);
 		case 's': 
 			if (current - start > 1) {
-				switch (source->at(start + 1)) {
+				switch (source[start + 1]) {
 					case 'u': return checkKeyword(2, 3, "per", TOKEN_SUPER);
 					case 'w': return checkKeyword(2, 4, "itch", TOKEN_SWITCH);
 				}
@@ -220,7 +220,7 @@ TokenType scanner::identifierType() {
 		case 'w': return checkKeyword(1, 4, "hile", TOKEN_WHILE);
 		case 'f':
 			if (current - start > 1) {
-				switch (source->at(start+1)) {
+				switch (source[start+1]) {
 				case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
 				case 'o': 
 					//since foreach has the same letters as for we first check the total number of letters
@@ -234,7 +234,7 @@ TokenType scanner::identifierType() {
 			break;
 		case 't':
 			if (current - start > 1) {
-				switch (source->at(start+1)) {
+				switch (source[start+1]) {
 				case 'h': return checkKeyword(2, 2, "is", TOKEN_THIS);
 				case 'r': return checkKeyword(2, 2, "ue", TOKEN_TRUE);
 				}
@@ -246,7 +246,7 @@ TokenType scanner::identifierType() {
 
 //is string.compare fast enough?
 TokenType scanner::checkKeyword(int strt, int length, const char* rest, TokenType type) {
-	if (current - start == strt + length && source->substr(start + strt, length).compare(rest) == 0) {
+	if (current - start == strt + length && source.substr(start + strt, length).compare(rest) == 0) {
 		return type;
 	}
 

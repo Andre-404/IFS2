@@ -145,8 +145,8 @@ void ASTGroupingExpr::accept(visitor* vis) {
 #pragma endregion
 
 #pragma region Unary var altering expr
-ASTUnaryVarAlterExpr::ASTUnaryVarAlterExpr(ASTNode* _valToIncrement, ASTNode* _incrementExpr, bool _isPrefix) {
-	valToIncrement = _valToIncrement;
+ASTUnaryVarAlterExpr::ASTUnaryVarAlterExpr(ASTNode* _incrementExpr, bool _isPrefix, bool _isPositive) {
+	isPositive = _isPositive;
 	incrementExpr = _incrementExpr;
 	isPrefix = _isPrefix;
 	type = ASTType::VAR_ALTER;

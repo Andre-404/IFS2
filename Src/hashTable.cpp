@@ -1,5 +1,6 @@
 #include "hashTable.h"
 #include "object.h"
+#include "namespaces.h"
 #define TABLE_LOAD_FACTOR 0.5//arbitrary, test and see what's best
 
 
@@ -15,13 +16,13 @@ bool hashTable::set(objString* key, Value val) {
 		//arbitrary value, should be tested and changed
 		resize(((capacity) < 8 ? 8 : (capacity) * 2));
 	}
+	key->moveTo = nullptr;
 	entry* _entry = findEntry(entries, key);
 	bool isNewKey = _entry->key == nullptr || _entry->key == TOMBSTONE;
 	if (isNewKey && _entry->key == nullptr) count++;
 
 	_entry->key = key;
 	_entry->val = val;
-	key->moveTo = nullptr;
 	return isNewKey;
 }
 

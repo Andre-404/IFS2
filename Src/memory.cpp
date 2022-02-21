@@ -46,8 +46,9 @@ void* GC::allocRaw(size_t size, bool shouldLOHAlloc) {
 	//if we're still missing space, we reallocate the entire heap
 	//we use a while loop here in case the new heap size still isn't enough
 	if(!activeHeap->canAllocate(size)) {
-		reallocate(size);
-	}
+		resize(size);
+	}else if (activeHeap->canShrink(size)) shrink();
+	
 	return activeHeap->allocate(size);
 }
 
@@ -71,11 +72,33 @@ void GC::collect() {
 	#endif // DEBUG_GC
 }
 
-void GC::reallocate(size_t size) {
+void GC::resize(size_t size) {
 	if (collecting || (VM == nullptr && compiling == nullptr)) return;
 	collecting = true;
 
 	activeHeap->resize(size);
+
+	mark();
+	//calculate the address of each marked object after reallocation
+	computeAddress();
+	//update pointers both in the roots and in the heap objects themselves,
+	//special care needs to be taken to ensure that there are no cached pointers prior to a collection happening
+	updatePtrs();
+	//copying object to a new memory buffer while also compacting the heap
+	compact();
+	delete[] activeHeap->oldHeapBuffer;
+	activeHeap->oldHeapBuffer = nullptr;
+	collecting = false;
+	//debug stuff
+	#ifdef DEBUG_GC
+	nReallocations++;
+	#endif // DEBUG_GC
+}
+
+void GC::shrink() {
+	if (collecting || (VM == nullptr && compiling == nullptr)) return;
+	collecting = true;
+	activeHeap->shrink();
 
 	mark();
 	//calculate the address of each marked object after reallocation

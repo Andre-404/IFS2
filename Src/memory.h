@@ -50,8 +50,9 @@ private:
 	size_t nReallocations;
 	#endif // DEBUG_GC
 
-	void reallocate(size_t size);
+	void resize(size_t size);
 	void collect();
+	void shrink();
 
 	void mark();
 	void markObj(managed* ptr);
