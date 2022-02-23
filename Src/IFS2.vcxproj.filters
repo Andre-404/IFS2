@@ -69,6 +69,9 @@
     <ClCompile Include="gcString.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="files.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="scanner.h">
@@ -126,6 +129,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="gcString.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="files.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

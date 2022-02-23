@@ -1,17 +1,19 @@
 #include "scanner.h"
-#include <string_view>
+#include "files.h"
 
-scanner::scanner(string src) {
+scanner::scanner(string path) {
 	line = 1;
-	source = src;
+	source = readFile(path);
 	start = 0;
 	current = start;
 
-	Token token = scanToken();
-	arr.push_back(token);
-	while (token.type != TOKEN_EOF) {
-		token = scanToken();
+	if (source != "") {
+		Token token = scanToken();
 		arr.push_back(token);
+		while (token.type != TOKEN_EOF) {
+			token = scanToken();
+			arr.push_back(token);
+		}
 	}
 }
 
@@ -203,7 +205,14 @@ TokenType scanner::identifierType() {
 			break;
 		case 'd': return checkKeyword(1, 6, "efault", TOKEN_DEFAULT);
 		case 'e': return checkKeyword(1, 3, "lse", TOKEN_ELSE);
-		case 'i': return checkKeyword(1, 1, "f", TOKEN_IF);
+		case 'i': 
+			if (current - start > 1) {
+				switch (source[start + 1]) {
+				case 'f': return TOKEN_IF;
+				case 'm': return checkKeyword(2, 4, "port", TOKEN_IMPORT);
+				}
+			}
+			break;
 		case 'n': return checkKeyword(1, 2, "il", TOKEN_NIL);
 		case 'o': return checkKeyword(1, 1, "r", TOKEN_OR);
 		case 'p': return checkKeyword(1, 4, "rint", TOKEN_PRINT);

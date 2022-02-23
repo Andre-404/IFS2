@@ -394,10 +394,11 @@ interpretResult vm::run() {
 				return runtimeError("Operand must be a number.");
 			}
 			int num = AS_NUMBER(pop());
-			push(NUMBER_VAL((double)~num));
+			num = ~num;
+			push(NUMBER_VAL((double)num));
 			break;
 		}
-#pragma endregion
+		#pragma endregion
 
 		#pragma region Binary
 		case OP_ADD: {

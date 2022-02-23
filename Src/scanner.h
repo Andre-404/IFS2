@@ -29,6 +29,7 @@
 		TOKEN_PRINT, TOKEN_RETURN, TOKEN_SUPER, TOKEN_THIS,
 		TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE, TOKEN_HASHMAP, 
 		TOKEN_SWITCH, TOKEN_FOREACH, TOKEN_BREAK, TOKEN_CASE, TOKEN_DEFAULT,
+		TOKEN_IMPORT,
 
 		TOKEN_ERROR, TOKEN_EOF
 	};
@@ -56,7 +57,7 @@
 
 	class scanner {
 	public:
-		scanner(string src);
+		scanner(string path);
 		vector<Token>& getArr();
 	private:
 		string source;

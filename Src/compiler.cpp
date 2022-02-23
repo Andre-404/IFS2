@@ -10,6 +10,7 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 	//first slot is claimed for function name
 	upvalues = std::array<upvalue, UPVAL_MAX>();
 	hasReturn = false;
+	hasCapturedLocals = false;
 	localCount = 0;
 	scopeDepth = 0;
 	line = 0;
@@ -25,36 +26,35 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 }
 
 
-compiler::compiler(parser* _parser, funcType _type) {
-	Parser = _parser;
+compiler::compiler(string path, string fileName, funcType _type) {
+	parser Parser;
+	compilationUnit* startingUnit = Parser.parse(path, fileName);
+	vector<compilationUnit*> unitsToCompile = unitDFS(startingUnit);
 	compiled = true;
 	global::gc.compiling = this;
+
 	current = new compilerInfo(nullptr, funcType::TYPE_SCRIPT);
 	currentClass = nullptr;
-	//Don't compile if we had a parse error
-	if (Parser->hadError) {
-		//Do nothing
-		compiled = false;
-	}
-	else {
-		try {
-			for (int i = 0; i < Parser->statements.size(); i++) {
-				Parser->statements[i]->accept(this);
+	//If the parser had a error, make sure we don't run this bytecode
+	if (Parser.hadError) compiled = false;
+
+	for (compilationUnit* unit : unitsToCompile) {
+		for (int i = 0; i < unit->stmts.size(); i++) {
+			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
+			try {
+				unit->stmts[i]->accept(this);
+			}
+			catch (int e) {
+				compiled = false;
 			}
 		}
-		catch (int e) {
-			compiled = false;
-		}
 	}
-}
 
-compiler::~compiler() {
-	delete Parser;
+	for (compilationUnit* unit : unitsToCompile) delete unit;
 }
 
 void error(string message);
-
-bool identifiersEqual(std::string_view a, std::string_view b);
+bool identifiersEqual(const string& a, const string& b);
 
 
 void compiler::visitAssignmentExpr(ASTAssignmentExpr* expr) {
@@ -197,7 +197,6 @@ void compiler::visitGroupingExpr(ASTGroupingExpr* expr) {
 }
 
 void compiler::visitUnaryVarAlterExpr(ASTUnaryVarAlterExpr* expr) {
-	//TODO: this is horribly unoptimized in the postfix case, fix it using OP_PUSH_TOP to avoid compiling stuff like
 	//getting variables/making calls twice
 	if (expr->getIsPrefix()) {
 		expr->getIncrementExpr()->accept(this);
@@ -687,11 +686,7 @@ void compiler::emitLoop(int start) {
 
 #pragma region Variables
 
-bool identifiersEqual(string* a, string* b) {
-	return (a->compare(*b) == 0);
-}
-
-bool identifiersEqual(std::string_view a, std::string_view b) {
+bool identifiersEqual(const string& a, const string& b) {
 	return (a.compare(b) == 0);
 }
 
@@ -756,7 +751,7 @@ void compiler::declareVar(Token& name) {
 			break;
 		}
 		string str = string(name.lexeme);
-		if (identifiersEqual(&str, &_local->name)) {
+		if (identifiersEqual(str, _local->name)) {
 			error("Already a variable with this name in this scope.");
 		}
 	}
@@ -799,7 +794,7 @@ int compiler::resolveLocal(compilerInfo* func, Token& name) {
 	for (int i = func->localCount - 1; i >= 0; i--) {
 		local* _local = &func->locals[i];
 		string str = string(name.lexeme);
-		if (identifiersEqual(&str, &_local->name)) {
+		if (identifiersEqual(str, _local->name)) {
 			if (_local->depth == -1) {
 				error("Can't read local variable in its own initializer.");
 			}
@@ -1008,6 +1003,21 @@ objFunc* compiler::endFuncDecl() {
 //a little helper for updating the lines emitted by the compiler(used for displaying runtime errors)
 void compiler::updateLine(Token token) {
 	current->line = token.line;
+}
+
+//TODO: we can get a stack overflow if this goes into deep recursion, try making a iterative stack based DFS implementation
+void traverseUnit(compilationUnit* unit, vector<compilationUnit*>& compilationOrder) {
+	unit->traversed = true;
+	for (compilationUnit* dep : unit->deps) {
+		if (!dep->traversed) traverseUnit(dep, compilationOrder);
+	}
+	compilationOrder.push_back(unit);
+}
+
+vector<compilationUnit*> unitDFS(compilationUnit* startingUnit) {
+	vector<compilationUnit*> compilationOrder;
+	traverseUnit(startingUnit, compilationOrder);
+	return compilationOrder;
 }
 
 #pragma endregion

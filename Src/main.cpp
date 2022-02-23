@@ -16,42 +16,18 @@ hashTable global::internedStrings = hashTable();
 GC global::gc = GC();
 std::mt19937 global::rng(0);
 
-
-string readFile(string path) {
-	FILE* source;
-	errno_t err = fopen_s(&source, path.c_str(), "rb");
-	if (err != 0) {
-		fprintf(stderr, "Could not open file \"%s\".\n", path.c_str());
-		return "";
-	}
-	fseek(source, 0L, SEEK_END);
-	size_t fileSize = ftell(source);
-	rewind(source);
-
-	char* buffer = (char*)malloc(fileSize + 1);
-	if (buffer == NULL) {
-		fprintf(stderr, "Not enough memory to read \"%s\".\n", path.c_str());
-		exit(74);
-	}
-	size_t bytesRead = fread(buffer, sizeof(char), fileSize, source);
-	buffer[bytesRead] = '\0';
-
-	fclose(source);
-	string s(buffer);
-	free(buffer);
-	return s;
-}
-
-
 int main() {
 	cout << "Input filepath:\n";
 	string path;
 	cin >> path;
-	string source = readFile(path);
+	//doing this insanity to seperate the path to the file(which is needed for includes) and the name of the file to compile
+	string firstFileName;
+	firstFileName = path.substr(path.find_last_of('\\') + 1, path.size() - path.find_last_of('\\'));
+	firstFileName = firstFileName.substr(0, firstFileName.find(".txt"));
+	path = path.substr(0, path.find_last_of('\\') + 1);
 	cout << "Output:\n\n";
-	if (!source.empty()) {
-		parser* parse = new parser(source);
-		compiler* comp = new compiler(parse, funcType::TYPE_SCRIPT);
+	if (!path.empty()) {
+		compiler* comp = new compiler(path, firstFileName, funcType::TYPE_SCRIPT);
 		vm* newVm = new vm(comp);
 		delete newVm;
 	}

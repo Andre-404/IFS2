@@ -17,8 +17,8 @@ struct callFrame {
 	Value* slots;
 };
 
-#define FRAMES_MAX 64
-#define STACK_MAX (FRAMES_MAX * 255)
+#define FRAMES_MAX 128
+#define STACK_MAX (FRAMES_MAX * 512)
 
 class vm {
 public:

@@ -5,6 +5,7 @@
 #include "scanner.h"
 #include <initializer_list>
 #include <map>
+#include <unordered_map>
 
 class parser;
 
@@ -42,23 +43,30 @@ public:
 	int prec;
 };
 
-class compilationUnit {
-public:
+class assignmentExpr;
+class unaryExpr;
+class literalExpr;
+class unaryVarAlterPrefix;
+class unaryVarAlterPostfix;
+class binaryExpr;
+class callExpr;
+class conditionalExpr;
+
+struct compilationUnit {
 	vector<ASTNode*> stmts;
 	string name;
 	vector<compilationUnit*> deps;
-	vector<string> fileDeps;
-	compilationUnit(string _name) {
-		name = _name;
-	}
+	bool done;
+	bool traversed;
+	compilationUnit(string _name) : name(_name), done(false), traversed(false) {};
 };
 
 class parser {
 public:
-	parser(string source);
+	parser();
 	~parser();
-	vector<ASTNode*> statements;
 	bool hadError;
+	compilationUnit* parse(string source, string name);
 
 	//this is made public so that the parselets can access it
 	ASTNode* expression(int prec);
@@ -92,21 +100,38 @@ public:
 		int getPrec();
 	#pragma endregion
 private:
+	compilationUnit* currentUnit;
+	std::unordered_map<string, compilationUnit*> parsedUnits;
+	vector<Token> currentUnitDeps;
+
 	vector<Token> tokens;
 	uint16_t current;
+
 	int scopeDepth;
 	int loopDepth;
 	int switchDepth;
-	std::map<TokenType, prefixParselet*> prefixParselets;
-	std::map<TokenType, infixParselet*> infixParselets;
+
+	std::unordered_map<TokenType, prefixParselet*> prefixParselets;
+	std::unordered_map<TokenType, infixParselet*> infixParselets;
+
+
+	assignmentExpr* assignmentParselet;
+	unaryExpr* unaryParselet;
+	literalExpr* literalParselet;
+	unaryVarAlterPrefix* unaryVarAlterPrefixParselet;
+	unaryVarAlterPostfix* unaryVarAlterPostfixParselet;
+	binaryExpr* binaryParselet;
+	callExpr* callParselet;
+	conditionalExpr* conditionalParselet;
 
 	void addPrefix(TokenType type, prefixParselet* parselet, precedence prec);
 	void addInfix(TokenType type, infixParselet* parselet, precedence prec);
 
 	void reset(vector<Token> tokens);
-	void parse(string source);
+	
 
 	#pragma region Statements
+	void importStmt();
 	ASTNode* declaration();
 	ASTNode* varDecl();
 	ASTNode* funcDecl();

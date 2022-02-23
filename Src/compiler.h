@@ -72,12 +72,10 @@ public:
 	compilerInfo* current;
 	classCompilerInfo* currentClass;
 	bool compiled;
-	compiler(parser* Parser, funcType _type);//for compiling top level code
-	~compiler();
+	compiler(string path, string fileName, funcType _type);//for compiling top level code
 	chunk* getChunk();
 	objFunc* endFuncDecl();
 private:
-	parser* Parser;
 
 	#pragma region Helpers
 	//emitters
@@ -118,7 +116,7 @@ private:
 	#pragma endregion
 	
 
-	//Visitor pattern
+	#pragma region Visitor pattern
 	void visitAssignmentExpr(ASTAssignmentExpr* expr);
 	void visitSetExpr(ASTSetExpr* expr);
 	void visitConditionalExpr(ASTConditionalExpr* expr);
@@ -148,7 +146,10 @@ private:
 	void visitSwitchStmt(ASTSwitchStmt* stmt);
 	void visitCase(ASTCase* _case);
 	void visitReturnStmt(ASTReturn* stmt);
+	#pragma endregion 
 };
+
+vector<compilationUnit*> unitDFS(compilationUnit* startingUnit);
 
 
 #endif // !__IFS_COMPILER

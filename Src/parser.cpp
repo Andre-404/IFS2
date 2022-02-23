@@ -221,23 +221,24 @@ public:
 };
 #pragma endregion
 
-parser::parser(string source) {
+parser::parser() {
 	current = 0;
 	hadError = false;
 	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
+	currentUnit = nullptr;
 
 	#pragma region Parselets
 		//Parselets
-		assignmentExpr* assignmentParselet = new assignmentExpr;
-		unaryExpr* unaryParselet = new unaryExpr;
-		literalExpr* literalParselet = new literalExpr;
-		unaryVarAlterPrefix* unaryVarAlterPrefixParselet = new unaryVarAlterPrefix;
-		unaryVarAlterPostfix* unaryVarAlterPostfixParselet = new unaryVarAlterPostfix;
-		binaryExpr* binaryParselet = new binaryExpr;
-		callExpr* callParselet = new callExpr;
-		conditionalExpr* conditionalParselet = new conditionalExpr;
+		assignmentParselet				= new assignmentExpr;
+		unaryParselet					= new unaryExpr;
+		literalParselet					= new literalExpr;
+		unaryVarAlterPrefixParselet		= new unaryVarAlterPrefix;
+		unaryVarAlterPostfixParselet	= new unaryVarAlterPostfix;
+		binaryParselet					= new binaryExpr;
+		callParselet					= new callExpr;
+		conditionalParselet				= new conditionalExpr;
 
 		//Prefix
 		addPrefix(TOKEN_THIS, literalParselet, precedence::NONE);
@@ -262,19 +263,19 @@ parser::parser(string source) {
 		addPrefix(TOKEN_SUPER,			literalParselet, precedence::PRIMARY);
 
 		//Infix
-		addInfix(TOKEN_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_PLUS_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_MINUS_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_SLASH_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_STAR_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_PERCENTAGE_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_BITWISE_XOR_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_BITWISE_OR_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_BITWISE_AND_EQUAL, assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_EQUAL,				assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_PLUS_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_MINUS_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_SLASH_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_STAR_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_PERCENTAGE_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_XOR_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_OR_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_AND_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
 
 		addInfix(TOKEN_QUESTIONMARK, conditionalParselet, precedence::CONDITIONAL);
 
-		addInfix(TOKEN_OR, binaryParselet, precedence::OR);
+		addInfix(TOKEN_OR,	binaryParselet, precedence::OR);
 		addInfix(TOKEN_AND, binaryParselet, precedence::AND);
 
 		addInfix(TOKEN_BITWISE_OR,  binaryParselet, precedence::BIN_OR);
@@ -284,24 +285,24 @@ parser::parser(string source) {
 		addInfix(TOKEN_EQUAL_EQUAL, binaryParselet, precedence::EQUALITY);
 		addInfix(TOKEN_BANG_EQUAL, binaryParselet, precedence::EQUALITY);
 
-		addInfix(TOKEN_LESS,		binaryParselet, precedence::COMPARISON);
-		addInfix(TOKEN_LESS_EQUAL,	binaryParselet, precedence::COMPARISON);
-		addInfix(TOKEN_GREATER,		binaryParselet, precedence::COMPARISON);
-		addInfix(TOKEN_GREATER_EQUAL, binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_LESS,			binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_LESS_EQUAL,		binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER,			binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER_EQUAL,	binaryParselet, precedence::COMPARISON);
 
-		addInfix(TOKEN_BITSHIFT_LEFT, binaryParselet, precedence::BITSHIFT);
-		addInfix(TOKEN_BITSHIFT_RIGHT, binaryParselet, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_LEFT,	binaryParselet, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_RIGHT,	binaryParselet, precedence::BITSHIFT);
 
-		addInfix(TOKEN_PLUS, binaryParselet, precedence::SUM);
-		addInfix(TOKEN_MINUS, binaryParselet, precedence::SUM);
+		addInfix(TOKEN_PLUS,	binaryParselet, precedence::SUM);
+		addInfix(TOKEN_MINUS,	binaryParselet, precedence::SUM);
 
-		addInfix(TOKEN_SLASH, binaryParselet, precedence::FACTOR);
-		addInfix(TOKEN_STAR, binaryParselet, precedence::FACTOR);
-		addInfix(TOKEN_PERCENTAGE, binaryParselet, precedence::FACTOR);
+		addInfix(TOKEN_SLASH,		binaryParselet, precedence::FACTOR);
+		addInfix(TOKEN_STAR,		binaryParselet, precedence::FACTOR);
+		addInfix(TOKEN_PERCENTAGE,	binaryParselet, precedence::FACTOR);
 
-		addInfix(TOKEN_LEFT_PAREN, callParselet, precedence::CALL);
-		addInfix(TOKEN_LEFT_BRACKET, callParselet, precedence::CALL);
-		addInfix(TOKEN_DOT, callParselet, precedence::CALL);
+		addInfix(TOKEN_LEFT_PAREN,		callParselet, precedence::CALL);
+		addInfix(TOKEN_LEFT_BRACKET,	callParselet, precedence::CALL);
+		addInfix(TOKEN_DOT,				callParselet, precedence::CALL);
 
 		//Postfix
 		//postfix and mixfix operators get parsed with the infix parselets
@@ -309,7 +310,12 @@ parser::parser(string source) {
 		addInfix(TOKEN_DECREMENT, unaryVarAlterPostfixParselet, precedence::ALTER);
 	#pragma endregion
 
-	parse(source);
+	#ifdef DEBUG_PRINT_AST
+		//debugASTPrinter printer(statements);
+	#endif // DEBUG_PRINT_AST
+}
+
+parser::~parser() {
 	delete assignmentParselet;
 	delete unaryParselet;
 	delete binaryParselet;
@@ -317,23 +323,89 @@ parser::parser(string source) {
 	delete callParselet;
 	delete unaryVarAlterPrefixParselet;
 	delete unaryVarAlterPostfixParselet;
-	#ifdef DEBUG_PRINT_AST
-		//debugASTPrinter printer(statements);
-	#endif // DEBUG_PRINT_AST
 }
 
-parser::~parser() {
-	for (int i = 0; i < statements.size(); i++) {
-		delete statements[i];
+compilationUnit* parser::parse(string path, string name) {
+	compilationUnit* unit = new compilationUnit(name);
+	currentUnit = unit;
+	//even though this unit hasn't finished parsing, we push it so that we can detect cyclical imports
+	parsedUnits[name] = unit;
+	//TODO: maybe change how importing is handled?
+	scanner sc(path + name + ".txt");
+	reset(sc.getArr());
+	if (tokens.empty()) hadError = true;
+	else {
+		while (!isAtEnd()) {
+			try {
+				unit->stmts.push_back(declaration());
+			}
+			catch (int e) {
+				sync();
+			}
+		}
 	}
+	//have to make this a local because currentUnitDeps gets cleared in reset()
+	vector<Token> curUnitDeps = currentUnitDeps;
+	//TODO: what if this goes into deep recursion due to the amount of files and fails?
+	for (int i = curUnitDeps.size() - 1; i >= 0; i--) {
+		string& depName = curUnitDeps[i].lexeme;
+		//checks if we have already parsed this file
+		//or are in the process of parsing, in which case we have a cyclical reference and we report that
+		if (parsedUnits.count(depName) > 0) {
+			if (!parsedUnits[depName]->done) error(curUnitDeps[i], "Cyclical imports detected.");
+			else currentUnit->deps.push_back(parsedUnits[depName]);
+		}
+		else {
+			//if we didn't find the file, it's a new one and we parse it
+			unit->deps.push_back(parse(path, depName));
+		}
+	}
+	unit->done = true;
+	return unit;
+}
+
+ASTNode* parser::expression(int prec) {
+	Token token = advance();
+	//check if the token has a prefix function associated with it, if it does, parse with it
+	if (prefixParselets.count(token.type) == 0) {
+		throw error(token, "Expected expression.");
+	}
+	prefixParselet* prefix = prefixParselets[token.type];
+	ASTNode* left = prefix->parse(token);
+
+	//only compiles if the next token has a higher associativity than the current one
+	//eg. 1 + 2 compiles because the base prec is 0, and '+' is 9
+	//while loop handles continous use of ops, eg. 1 + 2 * 3
+	while (prec < getPrec()) {
+		token = advance();
+		if (infixParselets.count(token.type) == 0) {
+			throw error(token, "Expected expression.");
+		}
+		infixParselet* infix = infixParselets[token.type];
+		left = infix->parse(left, token, prec);
+	}
+	return left;
+}
+
+ASTNode* parser::expression() {
+	return expression(0);
 }
 
 #pragma region Statements and declarations
 ASTNode* parser::declaration() {
+	while (match({ TOKEN_IMPORT })) importStmt();
 	if (match({ TOKEN_VAR })) return varDecl();
 	else if (match({ TOKEN_CLASS })) return classDecl();
 	else if (match({ TOKEN_FUNC })) return funcDecl();
 	return statement();
+}
+
+void parser::importStmt() {
+	Token importName = consume(TOKEN_STRING, "Expected a module name.");
+	//this gets rid of the quotations 
+	importName.lexeme.erase(0, 1);
+	importName.lexeme.erase(importName.lexeme.size() - 1, importName.lexeme.size());
+	currentUnitDeps.push_back(importName);
 }
 
 ASTNode* parser::varDecl() {
@@ -545,33 +617,6 @@ ASTNode* parser::_return() {
 
 #pragma endregion
 
-ASTNode* parser::expression(int prec) {
-	Token token = advance();
-	//check if the token has a prefix function associated with it, if it does, parse with it
-	if (prefixParselets.count(token.type) == 0) {
-		throw error(token, "Expected expression.");
-	}
-	prefixParselet* prefix = prefixParselets[token.type];
-	ASTNode* left = prefix->parse(token);
-
-	//only compiles if the next token has a higher associativity than the current one
-	//eg. 1 + 2 compiles because the base prec is 0, and '+' is 9
-	//while loop handles continous use of ops, eg. 1 + 2 * 3
-	while (prec < getPrec()) {
-		token = advance();
-		if (infixParselets.count(token.type) == 0) {
-			throw error(token, "Expected expression.");
-		}
-		infixParselet* infix = infixParselets[token.type];
-		left = infix->parse(left, token, prec);
-	}
-	return left;
-}
-
-ASTNode* parser::expression() {
-	return expression(0);
-}
-
 #pragma region Helpers
 bool parser::match(const std::initializer_list<TokenType>& tokenTypes) {
 	for (TokenType type : tokenTypes) {
@@ -616,7 +661,7 @@ Token parser::consume(TokenType type, string msg) {
 }
 
 void parser::report(int line, string _where, string msg) {
-	std::cout << "[line " << line << "] Error" << _where << ": " << msg << "\n";
+	std::cout << "Error "<<"[line " << line << "]"<<" in "<<currentUnit->name <<" " << _where << ": " << msg << "\n";
 	hadError = true;
 }
 
@@ -692,22 +737,14 @@ int parser::getPrec() {
 	return infixParselets[token.type]->prec;
 }
 
-
-void parser::parse(string source) {
-	scanner sc(source);
-	reset(sc.getArr());
-	while (!isAtEnd()) {
-		try {
-			statements.push_back(declaration());
-		}
-		catch (int e) {
-			sync();
-		}
-	}
-}
-
+//called for every new unit we're compiling
 void parser::reset(vector<Token> _tokens) {
 	tokens = _tokens;
+	current = 0;
+	scopeDepth = 0;
+	loopDepth = 0;
+	switchDepth = 0;
+	currentUnitDeps.clear();
 }
 
 #pragma endregion
