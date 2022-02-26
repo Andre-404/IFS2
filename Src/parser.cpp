@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "AST.h"
 #include "debug.h"
+#include "preprocessor.h"
 
 //TODO: fix memory leak issues with AST nodes inside of expressions
 #pragma region Parselet
@@ -227,7 +228,7 @@ parser::parser() {
 	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
-	currentUnit = nullptr;
+	curUnit = nullptr;
 
 	#pragma region Parselets
 		//Parselets
@@ -325,43 +326,28 @@ parser::~parser() {
 	delete unaryVarAlterPostfixParselet;
 }
 
-compilationUnit* parser::parse(string path, string name) {
-	compilationUnit* unit = new compilationUnit(name);
-	currentUnit = unit;
-	//even though this unit hasn't finished parsing, we push it so that we can detect cyclical imports
-	parsedUnits[name] = unit;
-	//TODO: maybe change how importing is handled?
-	scanner sc(path + name + ".txt");
-	reset(sc.getArr());
-	if (tokens.empty()) hadError = true;
-	else {
-		while (!isAtEnd()) {
-			try {
-				unit->stmts.push_back(declaration());
-			}
-			catch (int e) {
-				sync();
-			}
-		}
-	}
-	//have to make this a local because currentUnitDeps gets cleared in reset()
-	vector<Token> curUnitDeps = currentUnitDeps;
-	//TODO: what if this goes into deep recursion due to the amount of files and fails?
-	for (int i = curUnitDeps.size() - 1; i >= 0; i--) {
-		string& depName = curUnitDeps[i].lexeme;
-		//checks if we have already parsed this file
-		//or are in the process of parsing, in which case we have a cyclical reference and we report that
-		if (parsedUnits.count(depName) > 0) {
-			if (!parsedUnits[depName]->done) error(curUnitDeps[i], "Cyclical imports detected.");
-			else currentUnit->deps.push_back(parsedUnits[depName]);
-		}
+vector<translationUnit*> parser::parse(string path, string name) {
+	preprocessor pp(path, name);
+	vector<preprocessUnit*> sortedUnits = pp.getSortedUnits();
+	if (pp.hadError) hadError = true;
+	for (preprocessUnit* pUnit : sortedUnits) {
+		translationUnit* unit = new translationUnit(pUnit->name);
+		units.push_back(unit);
+		curUnit = unit;
+		reset(pUnit->tokens);
+		if (tokens.empty()) hadError = true;
 		else {
-			//if we didn't find the file, it's a new one and we parse it
-			unit->deps.push_back(parse(path, depName));
+			while (!isAtEnd()) {
+				try {
+					unit->stmts.push_back(declaration());
+				}
+				catch (int e) {
+					sync();
+				}
+			}
 		}
 	}
-	unit->done = true;
-	return unit;
+	return units;
 }
 
 ASTNode* parser::expression(int prec) {
@@ -393,19 +379,10 @@ ASTNode* parser::expression() {
 
 #pragma region Statements and declarations
 ASTNode* parser::declaration() {
-	while (match({ TOKEN_IMPORT })) importStmt();
 	if (match({ TOKEN_VAR })) return varDecl();
 	else if (match({ TOKEN_CLASS })) return classDecl();
 	else if (match({ TOKEN_FUNC })) return funcDecl();
 	return statement();
-}
-
-void parser::importStmt() {
-	Token importName = consume(TOKEN_STRING, "Expected a module name.");
-	//this gets rid of the quotations 
-	importName.lexeme.erase(0, 1);
-	importName.lexeme.erase(importName.lexeme.size() - 1, importName.lexeme.size());
-	currentUnitDeps.push_back(importName);
 }
 
 ASTNode* parser::varDecl() {
@@ -661,7 +638,7 @@ Token parser::consume(TokenType type, string msg) {
 }
 
 void parser::report(int line, string _where, string msg) {
-	std::cout << "Error "<<"[line " << line << "]"<<" in "<<currentUnit->name <<" " << _where << ": " << msg << "\n";
+	std::cout << "Error "<<"[line " << line << "]"<<" in '"<<curUnit->name <<"' " << _where << ": " << msg << "\n";
 	hadError = true;
 }
 
@@ -744,7 +721,6 @@ void parser::reset(vector<Token> _tokens) {
 	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
-	currentUnitDeps.clear();
 }
 
 #pragma endregion

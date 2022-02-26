@@ -34,6 +34,7 @@
     <ClCompile Include="memory.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="parser.cpp" />
+    <ClCompile Include="preprocessor.cpp" />
     <ClCompile Include="scanner.cpp" />
     <ClCompile Include="switch.cpp" />
     <ClCompile Include="value.cpp" />
@@ -56,6 +57,7 @@
     <ClInclude Include="namespaces.h" />
     <ClInclude Include="object.h" />
     <ClInclude Include="parser.h" />
+    <ClInclude Include="preprocessor.h" />
     <ClInclude Include="scanner.h" />
     <ClInclude Include="switch.h" />
     <ClInclude Include="value.h" />

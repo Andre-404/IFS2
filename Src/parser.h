@@ -1,5 +1,4 @@
-#ifndef __IFS_PARSER
-#define __IFS_PARSER
+#pragma once
 #include "common.h"
 #include "AST.h"
 #include "scanner.h"
@@ -52,13 +51,10 @@ class binaryExpr;
 class callExpr;
 class conditionalExpr;
 
-struct compilationUnit {
+struct translationUnit {
 	vector<ASTNode*> stmts;
 	string name;
-	vector<compilationUnit*> deps;
-	bool done;
-	bool traversed;
-	compilationUnit(string _name) : name(_name), done(false), traversed(false) {};
+	translationUnit(string _name) : name(_name) {};
 };
 
 class parser {
@@ -66,7 +62,7 @@ public:
 	parser();
 	~parser();
 	bool hadError;
-	compilationUnit* parse(string source, string name);
+	vector<translationUnit*> parse(string path, string name);
 
 	//this is made public so that the parselets can access it
 	ASTNode* expression(int prec);
@@ -100,9 +96,8 @@ public:
 		int getPrec();
 	#pragma endregion
 private:
-	compilationUnit* currentUnit;
-	std::unordered_map<string, compilationUnit*> parsedUnits;
-	vector<Token> currentUnitDeps;
+	vector<translationUnit*> units;
+	translationUnit* curUnit;
 
 	vector<Token> tokens;
 	uint16_t current;
@@ -154,6 +149,3 @@ private:
 
 
 };
-
-
-#endif // !__IFS_PARSER

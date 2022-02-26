@@ -1,6 +1,4 @@
-#ifndef __IFS_HASH_TABLE
-
-#define __IFS_HASH_TABLE
+#pragma once
 
 #include "common.h"
 #include "value.h"
@@ -40,5 +38,3 @@ private:
 
 objString* findInternedString(hashTable* table, char* str, uInt length, uInt64 hash);
 
-
-#endif // !__IFS_HASH_TABLE

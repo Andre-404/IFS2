@@ -28,8 +28,7 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 
 compiler::compiler(string path, string fileName, funcType _type) {
 	parser Parser;
-	compilationUnit* startingUnit = Parser.parse(path, fileName);
-	vector<compilationUnit*> unitsToCompile = unitDFS(startingUnit);
+	vector<translationUnit*> sortedUnits = Parser.parse(path, fileName);
 	compiled = true;
 	global::gc.compiling = this;
 
@@ -38,7 +37,7 @@ compiler::compiler(string path, string fileName, funcType _type) {
 	//If the parser had a error, make sure we don't run this bytecode
 	if (Parser.hadError) compiled = false;
 
-	for (compilationUnit* unit : unitsToCompile) {
+	for (translationUnit* unit : sortedUnits) {
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
 			try {
@@ -50,7 +49,7 @@ compiler::compiler(string path, string fileName, funcType _type) {
 		}
 	}
 
-	for (compilationUnit* unit : unitsToCompile) delete unit;
+	for (translationUnit* unit : sortedUnits) delete unit;
 }
 
 void error(string message);
@@ -1004,20 +1003,4 @@ objFunc* compiler::endFuncDecl() {
 void compiler::updateLine(Token token) {
 	current->line = token.line;
 }
-
-//TODO: we can get a stack overflow if this goes into deep recursion, try making a iterative stack based DFS implementation
-void traverseUnit(compilationUnit* unit, vector<compilationUnit*>& compilationOrder) {
-	unit->traversed = true;
-	for (compilationUnit* dep : unit->deps) {
-		if (!dep->traversed) traverseUnit(dep, compilationOrder);
-	}
-	compilationOrder.push_back(unit);
-}
-
-vector<compilationUnit*> unitDFS(compilationUnit* startingUnit) {
-	vector<compilationUnit*> compilationOrder;
-	traverseUnit(startingUnit, compilationOrder);
-	return compilationOrder;
-}
-
 #pragma endregion

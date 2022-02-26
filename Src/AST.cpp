@@ -373,7 +373,6 @@ void ASTForeachStmt::accept(visitor* vis) {
 }
 #pragma endregion
 
-
 #pragma region Break stmt
 ASTBreakStmt::ASTBreakStmt(Token _token) {
 	token = _token;

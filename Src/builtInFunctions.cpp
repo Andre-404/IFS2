@@ -1,5 +1,6 @@
 #include "builtInFunction.h"
 #include "namespaces.h"
+#include "files.h"
 
 using namespace global;
 //throwing strings for errors that get caught in callValue()
@@ -74,6 +75,25 @@ Value nativeArrayLength(int argCount, Value* args) {
 }
 
 #pragma endregion
+
+#pragma region IO
+Value nativeFileRead(int argCount, Value* args) {
+	if (!IS_STRING(*args)) throw "Expected path name.";
+	string fileData = readFile(AS_STRING(*args)->str);
+	objString* str = copyString(fileData.c_str(), fileData.length());
+	return OBJ_VAL(str);
+}
+
+Value nativeInput(int argCount, Value* args) {
+	string input;
+	std::cin >> input;
+	objString* str = copyString(input.c_str(), input.length());
+	return OBJ_VAL(str);
+}
+
+
+#pragma endregion
+
 
 Value nativeClock(int argCount, Value* args) {
 	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);

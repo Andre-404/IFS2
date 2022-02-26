@@ -1,5 +1,4 @@
-#ifndef __IFS_AST
-#define __IFS_AST
+#pragma once
 
 #include "common.h"
 #include "scanner.h"
@@ -466,5 +465,3 @@ public:
 	bool inherits() { return _inherits; }
 };
 #pragma endregion
-
-#endif

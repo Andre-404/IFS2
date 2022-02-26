@@ -1,5 +1,5 @@
-#ifndef __IFS_OBJECT
-#define __IFS_OBJECT
+#pragma once
+
 #include "common.h"
 #include "value.h"
 #include "chunk.h"
@@ -182,6 +182,3 @@ objString* takeString(char* str, uInt length);
 
 void printObject(Value value);
 void freeObject(obj* object);
-
-
-#endif // !__IFS_OBJECT

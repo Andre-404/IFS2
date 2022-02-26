@@ -1,5 +1,4 @@
-#ifndef __IFS_VM
-#define __IFS_VM
+#pragma once
 
 #include "common.h"
 #include "compiler.h"
@@ -54,6 +53,3 @@ private:
 	bool invoke(objString* methodName, int argCount);
 	bool invokeFromClass(objClass* klass, objString* fieldName, int argCount);
 };
-
-
-#endif // !__IFS_VM

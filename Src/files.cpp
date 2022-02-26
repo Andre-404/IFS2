@@ -1,9 +1,10 @@
 #include "files.h"
 #include <stdio.h>
 
-string readFile(string& path) {
+
+string readFile(char* path) {
 	std::FILE* fp;
-	errno_t err = fopen_s(&fp, path.c_str(), "rb");
+	errno_t err = fopen_s(&fp, path, "rb");
 	if (err == 0)
 	{
 		std::string contents;
@@ -18,4 +19,10 @@ string readFile(string& path) {
 		std::cout << "Couldn't open file " << path << "\n";
 		return "";
 	}
+}
+string readFile(const char* path) {
+	return readFile((char*)path);
+}
+string readFile(string& path) {
+	return readFile(path.c_str());
 }

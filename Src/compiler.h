@@ -1,5 +1,4 @@
-#ifndef __IFS_COMPILER
-#define __IFS_COMPILER
+#pragma once
 
 #include "common.h"
 #include "parser.h"
@@ -149,8 +148,5 @@ private:
 	#pragma endregion 
 };
 
-vector<compilationUnit*> unitDFS(compilationUnit* startingUnit);
-
-
-#endif // !__IFS_COMPILER
+vector<translationUnit*> topsortUnits(translationUnit* startingUnit);
 

@@ -1,5 +1,4 @@
-#ifndef __IFS_DEBUG
-#define __IFS_DEBUG
+#pragma once
 #include "common.h"
 #include "AST.h"
 #include "chunk.h"
@@ -49,7 +48,4 @@ int disassembleInstruction(chunk* Chunk, int offset);
 //static int simpleInstruction(string name, int offset);
 //void printValue(Value value);
 #pragma endregion
-
-
-#endif // !__IFS_DEBUG
 

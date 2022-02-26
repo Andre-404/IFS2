@@ -1,5 +1,4 @@
-#ifndef __IFS_SWITCH
-#define __IFS_SWITCH
+#pragma once
 
 #include "common.h"
 #include "AST.h"
@@ -27,8 +26,3 @@ struct switchTable {
 	long getJump(int key);
 	long getJump(string& str);
 };
-
-
-
-
-#endif // !__IFS_SWITCH

@@ -1,5 +1,4 @@
-#ifndef __IFS_VALUE
-#define __IFS_VALUE
+#pragma once
 
 #include "common.h"
 
@@ -49,4 +48,3 @@ void printValue(Value value);
 //Using epsilon value because of floating point precision
 #define FLOAT_EQ(x,v) (fabs(x - v) <= DBL_EPSILON)
 
-#endif // !__IFS_VALUE

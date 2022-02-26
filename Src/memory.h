@@ -1,5 +1,4 @@
-#ifndef __IFS_MEMORY
-#define __IFS_MEMORY
+#pragma once
 
 #include "common.h"
 #include "heapBlock.h"
@@ -69,5 +68,3 @@ private:
 
 	void compact();
 };
-
-#endif // !__IFS_MEMORY
