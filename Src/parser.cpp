@@ -231,84 +231,74 @@ parser::parser() {
 	curUnit = nullptr;
 
 	#pragma region Parselets
-		//Parselets
-		assignmentParselet				= new assignmentExpr;
-		unaryParselet					= new unaryExpr;
-		literalParselet					= new literalExpr;
-		unaryVarAlterPrefixParselet		= new unaryVarAlterPrefix;
-		unaryVarAlterPostfixParselet	= new unaryVarAlterPostfix;
-		binaryParselet					= new binaryExpr;
-		callParselet					= new callExpr;
-		conditionalParselet				= new conditionalExpr;
-
 		//Prefix
-		addPrefix(TOKEN_THIS, literalParselet, precedence::NONE);
+		addPrefix(TOKEN_THIS, new literalExpr, precedence::NONE);
 
-		addPrefix(TOKEN_BANG,  unaryParselet, precedence::NOT);
-		addPrefix(TOKEN_MINUS, unaryParselet, precedence::NOT);
-		addPrefix(TOKEN_TILDA, unaryParselet, precedence::NOT);
+		addPrefix(TOKEN_BANG,  new unaryExpr, precedence::NOT);
+		addPrefix(TOKEN_MINUS, new unaryExpr, precedence::NOT);
+		addPrefix(TOKEN_TILDA, new unaryExpr, precedence::NOT);
 
-		addPrefix(TOKEN_INCREMENT, unaryVarAlterPrefixParselet, precedence::ALTER);
-		addPrefix(TOKEN_DECREMENT, unaryVarAlterPrefixParselet, precedence::ALTER);
+		addPrefix(TOKEN_INCREMENT, new unaryVarAlterPrefix, precedence::ALTER);
+		addPrefix(TOKEN_DECREMENT, new unaryVarAlterPrefix, precedence::ALTER);
 
 
-		addPrefix(TOKEN_IDENTIFIER,		literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_STRING,			literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_NUMBER,			literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_TRUE,			literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_FALSE,			literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_NIL,			literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_LEFT_PAREN,		literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_LEFT_BRACKET,	literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_LEFT_BRACE,		literalParselet, precedence::PRIMARY);
-		addPrefix(TOKEN_SUPER,			literalParselet, precedence::PRIMARY);
+		addPrefix(TOKEN_IDENTIFIER,		new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_STRING,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_NUMBER,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_TRUE,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_FALSE,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_NIL,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_PAREN,		new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_BRACKET,	new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_LEFT_BRACE,		new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_SUPER,			new literalExpr, precedence::PRIMARY);
 
 		//Infix
-		addInfix(TOKEN_EQUAL,				assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_PLUS_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_MINUS_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_SLASH_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_STAR_EQUAL,			assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_PERCENTAGE_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_BITWISE_XOR_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_BITWISE_OR_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
-		addInfix(TOKEN_BITWISE_AND_EQUAL,	assignmentParselet, precedence::ASSIGNMENT);
+		addInfix(TOKEN_EQUAL,				new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_PLUS_EQUAL,			new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_MINUS_EQUAL,			new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_SLASH_EQUAL,			new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_STAR_EQUAL,			new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_PERCENTAGE_EQUAL,	new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_XOR_EQUAL,	new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_OR_EQUAL,	new assignmentExpr, precedence::ASSIGNMENT);
+		addInfix(TOKEN_BITWISE_AND_EQUAL,	new assignmentExpr, precedence::ASSIGNMENT);
 
-		addInfix(TOKEN_QUESTIONMARK, conditionalParselet, precedence::CONDITIONAL);
+		addInfix(TOKEN_QUESTIONMARK, new conditionalExpr, precedence::CONDITIONAL);
 
-		addInfix(TOKEN_OR,	binaryParselet, precedence::OR);
-		addInfix(TOKEN_AND, binaryParselet, precedence::AND);
+		addInfix(TOKEN_OR,	new binaryExpr, precedence::OR);
+		addInfix(TOKEN_AND, new binaryExpr, precedence::AND);
 
-		addInfix(TOKEN_BITWISE_OR,  binaryParselet, precedence::BIN_OR);
-		addInfix(TOKEN_BITWISE_XOR, binaryParselet, precedence::BIN_XOR);
-		addInfix(TOKEN_BITWISE_AND, binaryParselet, precedence::BIN_AND);
+		addInfix(TOKEN_BITWISE_OR,  new binaryExpr, precedence::BIN_OR);
+		addInfix(TOKEN_BITWISE_XOR, new binaryExpr, precedence::BIN_XOR);
+		addInfix(TOKEN_BITWISE_AND, new binaryExpr, precedence::BIN_AND);
 
-		addInfix(TOKEN_EQUAL_EQUAL, binaryParselet, precedence::EQUALITY);
-		addInfix(TOKEN_BANG_EQUAL, binaryParselet, precedence::EQUALITY);
+		addInfix(TOKEN_EQUAL_EQUAL, new binaryExpr, precedence::EQUALITY);
+		addInfix(TOKEN_BANG_EQUAL,  new binaryExpr, precedence::EQUALITY);
 
-		addInfix(TOKEN_LESS,			binaryParselet, precedence::COMPARISON);
-		addInfix(TOKEN_LESS_EQUAL,		binaryParselet, precedence::COMPARISON);
-		addInfix(TOKEN_GREATER,			binaryParselet, precedence::COMPARISON);
-		addInfix(TOKEN_GREATER_EQUAL,	binaryParselet, precedence::COMPARISON);
+		addInfix(TOKEN_LESS,			new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_LESS_EQUAL,		new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER,			new binaryExpr, precedence::COMPARISON);
+		addInfix(TOKEN_GREATER_EQUAL,	new binaryExpr, precedence::COMPARISON);
 
-		addInfix(TOKEN_BITSHIFT_LEFT,	binaryParselet, precedence::BITSHIFT);
-		addInfix(TOKEN_BITSHIFT_RIGHT,	binaryParselet, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_LEFT,	new binaryExpr, precedence::BITSHIFT);
+		addInfix(TOKEN_BITSHIFT_RIGHT,	new binaryExpr, precedence::BITSHIFT);
 
-		addInfix(TOKEN_PLUS,	binaryParselet, precedence::SUM);
-		addInfix(TOKEN_MINUS,	binaryParselet, precedence::SUM);
+		addInfix(TOKEN_PLUS,	new binaryExpr, precedence::SUM);
+		addInfix(TOKEN_MINUS,	new binaryExpr, precedence::SUM);
 
-		addInfix(TOKEN_SLASH,		binaryParselet, precedence::FACTOR);
-		addInfix(TOKEN_STAR,		binaryParselet, precedence::FACTOR);
-		addInfix(TOKEN_PERCENTAGE,	binaryParselet, precedence::FACTOR);
+		addInfix(TOKEN_SLASH,		new binaryExpr, precedence::FACTOR);
+		addInfix(TOKEN_STAR,		new binaryExpr, precedence::FACTOR);
+		addInfix(TOKEN_PERCENTAGE,	new binaryExpr, precedence::FACTOR);
 
-		addInfix(TOKEN_LEFT_PAREN,		callParselet, precedence::CALL);
-		addInfix(TOKEN_LEFT_BRACKET,	callParselet, precedence::CALL);
-		addInfix(TOKEN_DOT,				callParselet, precedence::CALL);
+		addInfix(TOKEN_LEFT_PAREN,		new callExpr, precedence::CALL);
+		addInfix(TOKEN_LEFT_BRACKET,	new callExpr, precedence::CALL);
+		addInfix(TOKEN_DOT,				new callExpr, precedence::CALL);
 
 		//Postfix
 		//postfix and mixfix operators get parsed with the infix parselets
-		addInfix(TOKEN_INCREMENT, unaryVarAlterPostfixParselet, precedence::ALTER);
-		addInfix(TOKEN_DECREMENT, unaryVarAlterPostfixParselet, precedence::ALTER);
+		addInfix(TOKEN_INCREMENT, new unaryVarAlterPostfix, precedence::ALTER);
+		addInfix(TOKEN_DECREMENT, new unaryVarAlterPostfix, precedence::ALTER);
 	#pragma endregion
 
 	#ifdef DEBUG_PRINT_AST
@@ -317,13 +307,8 @@ parser::parser() {
 }
 
 parser::~parser() {
-	delete assignmentParselet;
-	delete unaryParselet;
-	delete binaryParselet;
-	delete literalParselet;
-	delete callParselet;
-	delete unaryVarAlterPrefixParselet;
-	delete unaryVarAlterPostfixParselet;
+	for (auto it : prefixParselets) delete it.second;
+	for (auto it : infixParselets) delete it.second;
 }
 
 vector<translationUnit*> parser::parse(string path, string name) {

@@ -850,7 +850,6 @@ interpretResult vm::run() {
 				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
 				if (index < 0 || index > arr->values.count() - 1)
 					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, arr->values.count() - 1);
-
 				arr->values[(uInt64)index] = val;
 				break;
 				}

@@ -48,6 +48,7 @@ public:
 class objArray : public obj {
 public:
 	gcVector<Value> values;
+
 	objArray();
 	objArray(size_t size);
 

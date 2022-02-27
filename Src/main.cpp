@@ -31,10 +31,6 @@ int main() {
 		vm* newVm = new vm(comp);
 		delete newVm;
 	}
-	while (true) {
-		cin >> path;
-		return 0;
-	}
 	cin.get();
 	return 0;
 }

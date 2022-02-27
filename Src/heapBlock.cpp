@@ -4,7 +4,7 @@
 #include "object.h"
 
 void updateVal(Value* val) {
-	if (val->type == VAL_OBJ) val->as.object = reinterpret_cast<obj*>(val->as.object->moveTo);
+	if (val->type == VAL_OBJ) val->as.object = (obj*)(val->as.object->moveTo);
 }
 
 void updateTable(hashTable* table) {
@@ -64,7 +64,7 @@ bool heapBlock::canShrink(size_t size) {
 
 void heapBlock::resize(size_t size) {
 	//Amortized size to reduce the number of future resizes
-	size_t newHeapSize = (1ll << (64 - _lzcnt_u64((heapTop - heapBuffer) + size - 1)));
+	size_t newHeapSize = (1ll << (64 - _lzcnt_u64(heapSize + size - 1)));
 	oldHeapBuffer = heapBuffer;
 	try {
 		heapBuffer = new byte[newHeapSize];
@@ -144,9 +144,7 @@ void heapBlock::clearFlags() {
 
 	while (current < heapTop) {
 		managed* temp = reinterpret_cast<managed*>(current);
-		if (forwardAddress(temp)) {
-			temp->moveTo = nullptr;
-		}
+		temp->moveTo = nullptr;
 		current += temp->getSize();
 	}
 }

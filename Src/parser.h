@@ -109,16 +109,6 @@ private:
 	std::unordered_map<TokenType, prefixParselet*> prefixParselets;
 	std::unordered_map<TokenType, infixParselet*> infixParselets;
 
-
-	assignmentExpr* assignmentParselet;
-	unaryExpr* unaryParselet;
-	literalExpr* literalParselet;
-	unaryVarAlterPrefix* unaryVarAlterPrefixParselet;
-	unaryVarAlterPostfix* unaryVarAlterPostfixParselet;
-	binaryExpr* binaryParselet;
-	callExpr* callParselet;
-	conditionalExpr* conditionalParselet;
-
 	void addPrefix(TokenType type, prefixParselet* parselet, precedence prec);
 	void addInfix(TokenType type, infixParselet* parselet, precedence prec);
 
