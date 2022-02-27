@@ -5,7 +5,6 @@
 
 //handpicked values, need adjusting
 #define HEAP_START_SIZE (16384*16)
-#define HEAP_MAX 1
 
 
 class vm;

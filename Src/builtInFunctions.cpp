@@ -16,12 +16,16 @@ Value nativeArrayCreate(int argCount, Value* args) {
 }
 Value nativeArrayCopy(int argCount, Value* args) {
 	if(!IS_ARRAY(*args)) throw "Expected array for array argument.";
-	objArray* dstArr = new objArray(AS_ARRAY(*args)->values.capacity());
+	objArray* dstArr = new objArray();
 	objArray* srcArr = AS_ARRAY(*args);
 
 	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
 	dstArr->numOfHeapPtr = srcArr->numOfHeapPtr;
+
+	//dstArray is not a cached ptr
+	gc.cachePtr(dstArr);
 	dstArr->values.addAll(srcArr->values);
+	gc.getCachedPtr();
 	return OBJ_VAL(dstArr);
 }
 Value nativeArrayResize(int argCount, Value* args) {

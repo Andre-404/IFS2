@@ -322,7 +322,7 @@ objArray::objArray() {
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
 	numOfHeapPtr = 0;
-	values = gcVector<Value>(16);
+	values = gcVector<Value>();
 }
 
 objArray::objArray(size_t size) {
@@ -337,20 +337,20 @@ void objArray::move(byte* to) {
 }
 
 void objArray::trace(std::vector<managed*>& stack) {
-	if (numOfHeapPtr > 0) {
+	//if (numOfHeapPtr > 0) {
 		for (int i = 0; i < values.count(); i++) {
 			markVal(stack, values[i]);
 		}
-	}
+	//}
 	values.mark();
 }
 
 void objArray::updatePtrs() {
-	if (numOfHeapPtr > 0) {
+	//if (numOfHeapPtr > 0) {
 		for (int i = 0; i < values.count(); i++) {
 			updateVal(&values[i]);
 		}
-	}
+	//}
 	values.update();
 }
 #pragma endregion
