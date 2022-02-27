@@ -44,11 +44,10 @@ public:
 	void trace(std::vector<managed*>& stack) {};
 };
 //Actual objects
-
 class objArray : public obj {
 public:
 	gcVector<Value> values;
-
+	uInt numOfHeapPtr;
 	objArray();
 	objArray(size_t size);
 

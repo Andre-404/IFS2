@@ -761,7 +761,11 @@ interpretResult vm::run() {
 			objArray* arr = new objArray(size);
 			while (i < size) {
 				//size-i to because the values on the stack are in reverse order compared to how they're supposed to be in a array
-				arr->values[size - i - 1] = pop();
+				Value val = pop();
+				//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+				if (IS_OBJ(val)) arr->numOfHeapPtr++;
+
+				arr->values[size - i - 1] = val;
 				i++;
 			}
 			push(OBJ_VAL(arr));
@@ -850,6 +854,10 @@ interpretResult vm::run() {
 				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
 				if (index < 0 || index > arr->values.count() - 1)
 					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, arr->values.count() - 1);
+
+				//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+				if (IS_OBJ(val)) arr->numOfHeapPtr++;
+				else if (IS_OBJ(arr->values[index])) arr->numOfHeapPtr--;
 				arr->values[(uInt64)index] = val;
 				break;
 				}

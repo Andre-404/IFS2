@@ -18,6 +18,9 @@ Value nativeArrayCopy(int argCount, Value* args) {
 	if(!IS_ARRAY(*args)) throw "Expected array for array argument.";
 	objArray* dstArr = new objArray(AS_ARRAY(*args)->values.capacity());
 	objArray* srcArr = AS_ARRAY(*args);
+
+	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+	dstArr->numOfHeapPtr = srcArr->numOfHeapPtr;
 	dstArr->values.addAll(srcArr->values);
 	return OBJ_VAL(dstArr);
 }
@@ -29,6 +32,10 @@ Value nativeArrayResize(int argCount, Value* args) {
 	objArray* arr = AS_ARRAY(*args);
 
 	arr->values.resize(newSize);
+	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+	arr->numOfHeapPtr = 0;
+	for (int i = 0; i < arr->values.count(); i++) if (IS_OBJ(arr->values[i])) arr->numOfHeapPtr++;
+
 	return NIL_VAL();
 }
 
@@ -36,6 +43,9 @@ Value nativeArrayPush(int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
 	if (valuesEqual(*args, *(args + 1))) throw "Can't push a reference to self";
 	objArray* arr = AS_ARRAY(*args);
+
+	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+	if (IS_OBJ(*(args + 1))) arr->numOfHeapPtr++;
 	arr->values.push(*(args + 1));
 	
 	return NIL_VAL();
@@ -44,7 +54,12 @@ Value nativeArrayPop(int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw "Expected array for array argument.";
 	gcVector<Value>& vals = AS_ARRAY(*args)->values;
 	if (vals.count() == 0) throw "Can't pop from empty array.";
-	return vals.pop();
+
+	Value val = vals.pop();
+	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+	if (IS_OBJ(val)) AS_ARRAY(*args)->numOfHeapPtr--;
+
+	return val;
 }
 
 Value nativeArrayInsert(int argCount, Value* args) {
@@ -53,6 +68,8 @@ Value nativeArrayInsert(int argCount, Value* args) {
 	objArray* arr = AS_ARRAY(*args);
 	double index = AS_NUMBER(*(args + 1));
 
+	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+	if (IS_OBJ(*(args + 2))) arr->numOfHeapPtr++;
 	arr->values.insert(*(args + 2), index);
 
 	return NIL_VAL();
@@ -64,6 +81,9 @@ Value nativeArrayDelete(int argCount, Value* args) {
 	objArray* arr = AS_ARRAY(*args);
 	double index = AS_NUMBER(*(args + 1));
 	Value val = arr->values.removeAt(index);
+
+	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
+	if (IS_OBJ(val)) arr->numOfHeapPtr--;
 	return val;
 }
 

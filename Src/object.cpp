@@ -321,6 +321,7 @@ void objUpval::updatePtrs() {
 objArray::objArray() {
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
+	numOfHeapPtr = 0;
 	values = gcVector<Value>(16);
 }
 
@@ -328,6 +329,7 @@ objArray::objArray(size_t size) {
 	values = gcVector<Value>(size);
 	type = OBJ_ARRAY;
 	moveTo = nullptr;
+	numOfHeapPtr = 0;
 }
 
 void objArray::move(byte* to) {
@@ -335,15 +337,19 @@ void objArray::move(byte* to) {
 }
 
 void objArray::trace(std::vector<managed*>& stack) {
-	for (int i = 0; i < values.count(); i++) {
-		markVal(stack, values[i]);
+	if (numOfHeapPtr > 0) {
+		for (int i = 0; i < values.count(); i++) {
+			markVal(stack, values[i]);
+		}
 	}
 	values.mark();
 }
 
 void objArray::updatePtrs() {
-	for (int i = 0; i < values.count(); i++) {
-		updateVal(&values[i]);
+	if (numOfHeapPtr > 0) {
+		for (int i = 0; i < values.count(); i++) {
+			updateVal(&values[i]);
+		}
 	}
 	values.update();
 }
