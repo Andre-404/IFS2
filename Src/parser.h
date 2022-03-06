@@ -64,37 +64,6 @@ public:
 	bool hadError;
 	vector<translationUnit*> parse(string path, string name);
 
-	//this is made public so that the parselets can access it
-	ASTNode* expression(int prec);
-	ASTNode* expression();
-	#pragma region Helpers
-
-		bool match(const std::initializer_list<TokenType>& tokenTypes);
-
-		bool isAtEnd();
-
-		bool check(TokenType type);
-
-		Token advance();
-
-		Token peek();
-
-		Token peekNext();
-
-		Token previous();
-
-		Token consume(TokenType type, string msg);
-
-		int error(Token token, string msg);
-
-		void report(int line, string _where, string msg);
-
-		void sync();
-
-		ASTCallExpr* finishCall(ASTNode* callee);
-
-		int getPrec();
-	#pragma endregion
 private:
 	vector<translationUnit*> units;
 	translationUnit* curUnit;
@@ -102,7 +71,6 @@ private:
 	vector<Token> tokens;
 	uint16_t current;
 
-	int scopeDepth;
 	int loopDepth;
 	int switchDepth;
 
@@ -113,11 +81,27 @@ private:
 	void addInfix(TokenType type, infixParselet* parselet, precedence prec);
 
 	void reset(vector<Token> tokens);
-	
+
+	#pragma region Expressions
+	ASTNode* parseAssign(ASTNode* left, Token op);
+	ASTNode* expression(int prec);
+	ASTNode* expression();
+
+	//doing this mess because friendships isn't inherited
+	friend class fiberRunExpr;
+	friend class fieldAccessExpr;
+	friend class callExpr;
+	friend class unaryVarAlterPostfix;
+	friend class binaryExpr;
+	friend class conditionalExpr;
+	friend class assignmentExpr;
+	friend class unaryVarAlterPrefix;
+	friend class literalExpr;
+	friend class unaryExpr;
+	#pragma endregion
 
 	#pragma region Statements
-	void importStmt();
-	ASTNode* declaration();
+	ASTNode* declaration();//had to make this part of the public api because 
 	ASTNode* varDecl();
 	ASTNode* funcDecl();
 	ASTNode* classDecl();
@@ -135,7 +119,35 @@ private:
 	ASTNode* _case();
 	ASTNode* _return();
 
-#pragma endregion
+	#pragma endregion
 
+	#pragma region Helpers
+
+	bool match(const std::initializer_list<TokenType>& tokenTypes);
+
+	bool isAtEnd();
+
+	bool check(TokenType type);
+
+	Token advance();
+
+	Token peek();
+
+	Token peekNext();
+
+	Token previous();
+
+	Token consume(TokenType type, string msg);
+
+	int error(Token token, string msg);
+
+	void report(int line, string _where, string msg);
+
+	void sync();
+
+	ASTCallExpr* finishCall(ASTNode* callee);
+
+	int getPrec();
+	#pragma endregion
 
 };

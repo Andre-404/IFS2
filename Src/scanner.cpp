@@ -218,7 +218,14 @@ TokenType scanner::identifierType() {
 	case 'n': return checkKeyword(1, 2, "il", TOKEN_NIL);
 	case 'o': return checkKeyword(1, 1, "r", TOKEN_OR);
 	case 'p': return checkKeyword(1, 4, "rint", TOKEN_PRINT);
-	case 'r': return checkKeyword(1, 5, "eturn", TOKEN_RETURN);
+	case 'r': 
+		if (current - start > 1) {
+			switch (source[start + 1]) {
+			case 'e': return checkKeyword(2, 4, "turn", TOKEN_RETURN);
+			case 'u': return checkKeyword(2, 1, "n", TOKEN_RUN);
+			}
+		}
+		break;
 	case 's':
 		if (current - start > 1) {
 			switch (source[start + 1]) {
@@ -240,6 +247,7 @@ TokenType scanner::identifierType() {
 				}
 				return checkKeyword(2, 1, "r", TOKEN_FOR);
 			case 'u': return checkKeyword(2, 2, "nc", TOKEN_FUNC);
+			case 'i': return checkKeyword(2, 3, "ber", TOKEN_FIBER);
 			}
 		}
 		break;
@@ -251,6 +259,8 @@ TokenType scanner::identifierType() {
 			}
 		}
 		break;
+	case 'y':
+		return checkKeyword(1, 4, "ield", TOKEN_YIELD);
 	}
 	return TOKEN_IDENTIFIER;
 }

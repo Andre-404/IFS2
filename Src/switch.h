@@ -3,6 +3,8 @@
 #include "common.h"
 #include "AST.h"
 #include <unordered_map>
+#include "gcVector.h"
+#include "hashTable.h"
 
 
 //this is for the when we have a switch full of numbers
@@ -17,7 +19,7 @@ struct switchTable {
 	//long is offset in bytecode(ip)
 	//optimization, use a union?
 	std::unordered_map<string, long>* table;
-	std::vector<switchPairNum>* arr;
+	std::vector<switchPairNum> arr;
 	switchType type;
 	long defaultJump;
 	switchTable(switchType _type, int size);

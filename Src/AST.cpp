@@ -194,6 +194,43 @@ void ASTSuperExpr::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Yield expr
+ASTYieldExpr::ASTYieldExpr(ASTNode* _expr) {
+	expr = _expr;
+}
+
+void ASTYieldExpr::accept(visitor* vis) {
+	vis->visitYieldExpr(this);
+}
+
+
+#pragma endregion
+
+#pragma region Fiber literal
+ASTFiberLiteral::ASTFiberLiteral(vector<Token>& _startParams, int _arity, ASTNode* _body) {
+	startParams = _startParams;
+	arity = _arity;
+	body = _body;
+}
+
+void ASTFiberLiteral::accept(visitor* vis) {
+	vis->visitFiberLiteralExpr(this);
+}
+
+#pragma endregion
+
+#pragma region Fiber run
+ASTFiberRunExpr::ASTFiberRunExpr(vector<ASTNode*>& _args) {
+	args = _args;
+}
+
+void ASTFiberRunExpr::accept(visitor* vis) {
+	vis->visitFiberRunExpr(this);
+}
+#pragma endregion
+
+
+
 
 
 #pragma region Var decl

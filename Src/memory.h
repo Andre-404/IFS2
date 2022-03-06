@@ -4,7 +4,7 @@
 #include "heapBlock.h"
 
 //handpicked values, need adjusting
-#define HEAP_START_SIZE (16384*16)
+#define HEAP_START_SIZE (16384*32)//Starting size of both heaps are 512KB(1MB in total)
 
 
 class vm;
@@ -16,7 +16,8 @@ class compiler;
 //
 //if every type of data was allocated on a single heap, no allocation could happen in constructors(or methods) as it would risk moving
 //the object that called the constructor/method
-//Possible change: save yourself the trouble and go with a in-place GC(something akin to a Boehm-Demers-Weiser collector) for the small objs
+//It also uses a single static heap for fibers, as moving them in memory would be very hard
+//Possible change(Andrea): save yourself the trouble and go with a in-place GC(something akin to a Boehm-Demers-Weiser collector) for the small objs
 //and then use a mark compact for arrays and strings
 class GC {
 public:
@@ -24,15 +25,17 @@ public:
 	vm* VM;
 	compiler* compiling;
 	void* allocRaw(size_t size, bool shouldLOHAlloc);
+	void* allocRawStatic(size_t size);
 	void clear();
 	void cachePtr(managed* ptr);
 	managed* getCachedPtr();
 private:
 	//LOH is used for arrays/strings, normal heap is used for obj* objects
-	heapBlock normalHeap;
-	heapBlock LOH;
-	heapBlock* activeHeap;
-	heapBlock* inactiveHeap;
+	movingHeapBlock normalHeap;
+	movingHeapBlock LOH;
+	movingHeapBlock* activeHeap;
+	movingHeapBlock* inactiveHeap;
+	staticHeapBlock staticHeap;
 
 	bool collecting;
 	//used to prevent deep recursion

@@ -170,18 +170,12 @@ static int byteInstruction(const char* name, chunk* Chunk, int offset) {
 }
 static int constantInstruction(string name, chunk* Chunk, int offset, bool isLong) {
 	uInt constant = 0;
-	if(!isLong) constant = Chunk->code[offset + 1];
-	else constant = (Chunk->code[offset + 1] | Chunk->code[offset + 2] | (Chunk->code[offset + 3] << 16));
+	if (!isLong) constant = Chunk->code[offset + 1];
+	else constant = ((Chunk->code[offset + 1] << 8) | Chunk->code[offset + 2]);
 	printf("%-16s %4d '", name.c_str(), constant);//have to use printf because of string spacing
 	printValue(Chunk->constants[constant]);
 	printf("'\n");
-	return offset + (isLong ? 4 : 2);
-}
-
-static int longInstruction(const char* name, chunk* Chunk, int offset) {
-	uInt slot = (uInt)(Chunk->code[offset] | Chunk->code[offset + 1] | (Chunk->code[offset + 2] << 16));
-	printf("%-16s %4d\n", name, slot);
-	return offset + 4;
+	return offset + (isLong ? 3 : 2);
 }
 
 static int jumpInstruction(const char* name, int sign, chunk* Chunk, int offset) {
@@ -328,7 +322,7 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return byteInstruction("OP SET", Chunk, offset);
 	case OP_CLOSURE: {
 		offset++;
-		uint8_t constant = Chunk->code[offset++];
+		uInt constant = Chunk->code[offset++];
 		printf("%-16s %4d ", "OP CLOSURE", constant);
 		printValue(Chunk->constants[constant]);
 		printf("\n");
@@ -343,8 +337,8 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	}
 	case OP_CLOSURE_LONG: {
 		offset++;
-		uint8_t constant = (Chunk->code[offset] | Chunk->code[offset + 1] | (Chunk->code[offset + 2] << 16));
-		offset += 3;
+		uInt constant = ((Chunk->code[offset] << 8) | Chunk->code[offset + 1]);
+		offset += 2;
 		printf("%-16s %4d ", "OP CLOSURE LONG", constant);
 		printValue(Chunk->constants[constant]);
 		printf("\n");
@@ -390,9 +384,9 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		printf("%-16s %4d ", "OP CREATE STRUCT", fieldNum);
 		printf("\n");
 		for (int i = 0; i < fieldNum; i++) {
-			uInt constant = (Chunk->code[offset] | Chunk->code[offset + 1] | (Chunk->code[offset + 2] << 16));
+			uInt constant = ((Chunk->code[offset] << 8) | Chunk->code[offset + 1]);;
 			printf("%04d    | %-16s %4d\n", offset, "FIELD CONSTANT", constant);
-			offset += 3;
+			offset += 2;
 		}
 		return offset;
 	}
@@ -415,7 +409,19 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	case OP_SUBTRACT_1:
 		return simpleInstruction("OP SUBTRACT 1", offset);
 	case OP_ADD_1:
-		return simpleInstruction("OP_ADD_1", offset);
+		return simpleInstruction("OP ADD 1", offset);
+	case OP_FIBER_YIELD:
+		return simpleInstruction("OP FIBER YIELD", offset);
+	case OP_FIBER_RUN:
+		return byteInstruction("OP FIBER RUN", Chunk, offset);
+	case OP_FIBER_CREATE: {
+		offset++;
+		uInt constant = ((Chunk->code[offset] << 8) | Chunk->code[offset + 1]);;
+		Value val = Chunk->constants[constant];
+		uInt argCount = Chunk->code[offset + 3];
+		printf("%-16s %4d arg count: %d\n", "OP FIBER CREATE", constant, argCount);
+		return offset + 3;
+	}
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

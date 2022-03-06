@@ -14,9 +14,9 @@ void chunk::writeData(uint8_t opCode, int line) {
 //adds the constant to the array and returns it's index, which is used in conjuction with OP_CONSTANT
 //since we're constrained to 256 constants per chunk, this helps keep the count low
 uInt chunk::addConstant(Value val) {
-	for (uInt i = 0; i < constants.count(); i++) {
-		if (valuesEqual(constants[i], val)) return i;
-	}
+	//for (uInt i = 0; i < constants.count(); i++) {
+		//if (valuesEqual(constants[i], val)) return i;
+	//}
 	uInt size = constants.count();
 	constants.push(val);
 	return size;

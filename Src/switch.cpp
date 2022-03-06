@@ -1,7 +1,5 @@
 #include "switch.h"
-
-
-using std::vector;
+#include "object.h"
 
 //based on the type we create either a hash map or array on the heap(to save space), and leave the other as null
 switchTable::switchTable(switchType _type, int size) {
@@ -12,28 +10,23 @@ switchTable::switchTable(switchType _type, int size) {
 	case switchType::STRING:
 		table = new std::unordered_map<string, long>;
 		table->reserve(size);
-		arr = NULL;
 		break;
 	case switchType::NUM:
-		arr = new vector<switchPairNum>;
-		arr->reserve(size);
+		arr.reserve(size);
 		table = NULL;
 		break;
 	case switchType::MIXED:
 		table = new std::unordered_map<string, long>;
 		table->reserve(size);
-		arr = NULL;
 		break;
 	default:
 		table = NULL;
-		arr = NULL;
 		break;
 	}
 }
 
 //insertion sort for the last element of the array
-void insertSorted(vector<switchPairNum>* _arr, switchPairNum _el) {
-	vector<switchPairNum>& arr = *_arr;
+void insertSorted(vector<switchPairNum>& arr, switchPairNum _el) {
 	int i = arr.size();
 	int j = i - 1;
 	switchPairNum element = _el;
@@ -60,8 +53,24 @@ int binarySearch(vector<switchPairNum>* arr, int key, int start, int end) {
 	return -1;
 }
 
+int binarySearch(vector<switchPairNum>& arr, int key) {
+	int l = 0;
+	int r = arr.size();
+
+	while (l <= r) {
+		int mid = (l + r) / 2;
+		if (arr[mid].key < key) {
+			l = mid + 1;
+		}
+		else if (arr[mid].key > key) {
+			r = mid - 1;
+		}
+		else return mid;
+	}
+	return -1;
+}
+
 void switchTable::addToArr(int key, long ip) {
-	if (arr == NULL) exit(64);
 	insertSorted(arr, switchPairNum(key, ip));
 }
 
@@ -76,7 +85,7 @@ long switchTable::getJump(string& str) {
 }
 
 long switchTable::getJump(int key) {
-	int pos = binarySearch(arr, key, 0, arr->size() - 1);
+	int pos = binarySearch(arr, key);
 	if (pos == -1) return -1;
-	return arr->at(pos).ip;
+	return arr[pos].ip;
 }

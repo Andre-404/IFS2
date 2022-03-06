@@ -9,8 +9,8 @@ using std::string;
 
 typedef unsigned int uInt;
 typedef unsigned long long uInt64;
+typedef unsigned short uInt16;
 typedef char byte;
-#define UINT_24_MAX 0b1000000000000000000000000
 
 namespace global {
 		

@@ -31,7 +31,7 @@ bool forwardAddress(managed* ptr) {
 	return ptr->moveTo != nullptr;
 }
 
-heapBlock::heapBlock() {
+movingHeapBlock::movingHeapBlock() {
 	try {
 		heapBuffer = new byte[HEAP_START_SIZE];
 	}catch (std::bad_alloc& ba) {
@@ -43,17 +43,17 @@ heapBlock::heapBlock() {
 	heapSize = HEAP_START_SIZE;
 }
 
-void* heapBlock::allocate(size_t size) {
+void* movingHeapBlock::allocate(size_t size) {
 	void* ptr = heapTop;
 	heapTop += size;
 	return ptr;
 }
 
-bool heapBlock::canAllocate(size_t size) {
+bool movingHeapBlock::canAllocate(size_t size) {
 	return heapTop + size < heapBuffer + heapSize;
 }
 
-bool heapBlock::canShrink(size_t size) {
+bool movingHeapBlock::canShrink(size_t size) {
 	size_t sizeAfterAllocation = (heapTop + size)-heapBuffer;
 	double heapTaken = ((double)sizeAfterAllocation) / ((double)heapSize);
 	if (heapTaken < .25 && heapSize > HEAP_START_SIZE * 2) {
@@ -62,7 +62,7 @@ bool heapBlock::canShrink(size_t size) {
 	return false;
 }
 
-void heapBlock::resize(size_t size) {
+void movingHeapBlock::resize(size_t size) {
 	//Amortized size to reduce the number of future resizes
 	size_t newHeapSize = (1ll << (64 - _lzcnt_u64(heapSize + size - 1)));
 	oldHeapBuffer = heapBuffer;
@@ -74,7 +74,7 @@ void heapBlock::resize(size_t size) {
 	heapSize = newHeapSize;
 }
 
-void heapBlock::shrink() {
+void movingHeapBlock::shrink() {
 	size_t newHeapSize = (heapSize >> 2);
 	std::cout << "Heap shrank from: "<<heapSize<<" to: "<<newHeapSize<<"\n";
 	oldHeapBuffer = heapBuffer;
@@ -87,7 +87,7 @@ void heapBlock::shrink() {
 	heapSize = newHeapSize;
 }
 
-void heapBlock::clear() {
+void movingHeapBlock::clear() {
 	byte* it = heapBuffer;
 
 	//we need to explicitly call the destructor for each object to handle things like STL containers
@@ -105,7 +105,7 @@ void heapBlock::clear() {
 	oldHeapBuffer = nullptr;
 }
 
-void heapBlock::computeAddress() {
+void movingHeapBlock::computeAddress() {
 	//we scan the heap linearly, for each marked object(those whose moveTo field isn't null), we calculate a new(compacted) position
 	//"to" can point either to start of the same memory block, or to a entirely memory block
 	if (oldHeapBuffer == nullptr) oldHeapBuffer = heapBuffer;
@@ -125,7 +125,7 @@ void heapBlock::computeAddress() {
 	}
 }
 
-void heapBlock::updatePtrs() {
+void movingHeapBlock::updatePtrs() {
 	//sort of like marking, we scan the heap lineraly, and for each marked object we update it's pointers
 	byte* current = oldHeapBuffer == nullptr ? heapBuffer : oldHeapBuffer;
 
@@ -138,7 +138,7 @@ void heapBlock::updatePtrs() {
 	}
 }
 
-void heapBlock::clearFlags() {
+void movingHeapBlock::clearFlags() {
 	//sort of like marking, we scan the heap lineraly, and for each marked object we update it's pointers
 	byte* current = oldHeapBuffer == nullptr ? heapBuffer : oldHeapBuffer;
 
@@ -149,7 +149,7 @@ void heapBlock::clearFlags() {
 	}
 }
 
-void heapBlock::compact() {
+void movingHeapBlock::compact() {
 	//heap can be either the same memory buffer, or a completely different one
 	//we're always copy FROM old heap
 	byte* from = oldHeapBuffer;
@@ -181,7 +181,7 @@ void heapBlock::compact() {
 	#endif // DEBUG_GC
 }
 
-void heapBlock::dump(bool isPost) {
+void movingHeapBlock::dump(bool isPost) {
 	byte* from = isPost ? heapBuffer : oldHeapBuffer;
 	byte* inc = from;
 
@@ -195,4 +195,56 @@ void heapBlock::dump(bool isPost) {
 
 	std::cout << "\nWent through: " << inc - from << " out of: " << heapSize;
 	std::cout << "\n";
+}
+
+
+void* staticHeapBlock::allocate(size_t size){
+	sinceLastClear++;
+	if (freeBlocks.count > 0) {
+		for (int i = 0; i < freeBlocks.count; i++) {
+			if (size == freeBlocks[i].size) {
+				memset(freeBlocks[i].block, 0, size);
+				objects.push_back(freeBlocks[i]);
+				freeBlocks.count--;
+				return freeBlocks[i].block;
+			}
+		}
+	}
+	memBlock block(size);
+	objects.push_back(block);
+	return block.block;
+}
+
+void staticHeapBlock::clear() {
+	for (int i = 0; i < objects.size(); i++) delete(objects[i].block);
+	objects.clear();
+}
+
+void staticHeapBlock::clearFlags() {
+	for (int i = 0; i < objects.size(); i++) objects[i].block->moveTo = nullptr;
+}
+
+void staticHeapBlock::updatePtrs() {
+	for (int i = 0; i < objects.size(); i++) if(objects[i].block->moveTo != nullptr) objects[i].block->updatePtrs();
+}
+
+bool staticHeapBlock::shouldSweep() {
+	if (sinceLastClear > 10) return true;
+	return false;
+}
+
+void staticHeapBlock::sweep() {
+	for (int i = objects.size(); i >= 0; i--) {
+		if (objects[i].block->moveTo == nullptr) {
+			if (freeBlocks.count < 10) {
+				freeBlocks[freeBlocks.count] = objects[i];
+				objects.erase(objects.begin() + i);
+				freeBlocks.count++;
+			}else {
+				delete objects[i].block;
+				objects.erase(objects.begin() + i);
+			}
+		}
+		else objects[i].block->moveTo = nullptr;
+	}
 }

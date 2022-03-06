@@ -29,7 +29,6 @@ int main() {
 	if (!path.empty()) {
 		compiler* comp = new compiler(path, firstFileName, funcType::TYPE_SCRIPT);
 		vm* newVm = new vm(comp);
-		delete newVm;
 	}
 	cin.get();
 	return 0;

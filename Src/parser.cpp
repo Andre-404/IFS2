@@ -6,8 +6,8 @@
 //TODO: fix memory leak issues with AST nodes inside of expressions
 #pragma region Parselet
 //used for parsing assignment tokens(eg. =, +=, *=...)
-ASTNode* parseAssign(parser* _parser, ASTNode* left, Token op) {
-	ASTNode* right = _parser->expression();
+ASTNode* parser::parseAssign(ASTNode* left, Token op) {
+	ASTNode* right = expression();
 	switch (op.type) {
 	case TOKEN_EQUAL: {
 		break;
@@ -95,6 +95,42 @@ class literalExpr : public prefixParselet {
 			cur->consume(TOKEN_RIGHT_BRACE, "Expect '}' after struct literal.");
 			return new ASTStructLiteral(entries);
 		}
+		case TOKEN_YIELD: {
+			ASTNode* expr = nullptr;
+			if (cur->peek().type == TOKEN_COLON) {
+				expr = cur->expression();
+			}
+			return new ASTYieldExpr(expr);
+		}
+		case TOKEN_FIBER: {
+			//the depths are used for throwing errors for switch and loops stmts, and since a function can be declared inside a loop we need to account
+			//for that
+			int tempLoopDepth = cur->loopDepth;
+			cur->loopDepth = 0;
+			int tempSwitchDepth = cur->switchDepth;
+			cur->switchDepth = 0;
+
+			cur->consume(TOKEN_LEFT_PAREN, "Expect '(' for fiber starting parameters.");
+			vector<Token> args;
+			int arity = 0;
+			if (!cur->check(TOKEN_RIGHT_PAREN)) {
+				do {
+					Token arg = cur->consume(TOKEN_IDENTIFIER, "Expect argument name");
+					args.push_back(arg);
+					arity++;
+					if (arity > 255) {
+						throw cur->error(arg, "Fibers can't have more than 255 starting params.");
+					}
+				} while (cur->match({ TOKEN_COMMA }));
+			}
+			cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments");
+			cur->consume(TOKEN_LEFT_BRACE, "Expect '{' after arguments.");
+			ASTNode* body = cur->blockStmt();
+
+			cur->loopDepth = tempLoopDepth;
+			cur->switchDepth = tempSwitchDepth;
+			return new ASTFiberLiteral(args, arity, body);
+		}
 		default:
 			return new ASTLiteralExpr(token);
 		}
@@ -133,7 +169,7 @@ class unaryVarAlterPrefix : public prefixParselet {
 class assignmentExpr : public infixParselet {
 	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		//makes it right associative
-		ASTNode* right = parseAssign(cur, left, token);
+		ASTNode* right = cur->parseAssign(left, token);
 		if (left->type != ASTType::LITERAL && ((ASTLiteralExpr*)left)->getToken().type != TOKEN_IDENTIFIER) {
 			throw cur->error(token, "Left side is not assignable");
 		}
@@ -190,16 +226,21 @@ class callExpr : public infixParselet {
 public:
 	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
 		vector<ASTNode*> args;
-		if(token.type == TOKEN_LEFT_PAREN) {//function call
-			if (!cur->check(TOKEN_RIGHT_PAREN)) {
-				do {
-					args.push_back(cur->expression());
-				} while (cur->match({ TOKEN_COMMA }));
-			}
-			cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
-			return new ASTCallExpr(left, token, args);
+		if (!cur->check(TOKEN_RIGHT_PAREN)) {
+			do {
+				args.push_back(cur->expression());
+			} while (cur->match({ TOKEN_COMMA }));
 		}
-		else if (token.type == TOKEN_LEFT_BRACKET) {//array/struct with string access
+		cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
+		return new ASTCallExpr(left, token, args);
+	}
+};
+
+class fieldAccessExpr : public infixParselet {
+public:
+	ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) {
+		vector<ASTNode*> args;
+		if (token.type == TOKEN_LEFT_BRACKET) {//array/struct with string access
 			args.push_back(cur->expression());
 			cur->consume(TOKEN_RIGHT_BRACKET, "Expect ']' after array/map access.");
 		}
@@ -213,19 +254,36 @@ public:
 		//the huge match() covers every possible type of assignment
 		if (surroundingPrec <= (int)precedence::ASSIGNMENT && cur->match({ TOKEN_EQUAL, TOKEN_PLUS_EQUAL, TOKEN_MINUS_EQUAL, TOKEN_SLASH_EQUAL,
 				TOKEN_STAR_EQUAL, TOKEN_BITWISE_XOR_EQUAL, TOKEN_BITWISE_AND_EQUAL, TOKEN_BITWISE_OR_EQUAL, TOKEN_PERCENTAGE_EQUAL })) {
-			ASTNode* val = parseAssign(cur, new ASTCallExpr(left, token, args), cur->previous());
+			ASTNode* val = cur->parseAssign(new ASTCallExpr(left, token, args), cur->previous());
 			//args[0] because there is only every 1 argument inside [ ] when accessing/setting a field
 			return new ASTSetExpr(left, args[0], token, val);
 		}
 		return new ASTCallExpr(left, token, args);
 	}
 };
+
+class fiberRunExpr : public prefixParselet {
+	ASTNode* parse(Token token) {
+		vector<ASTNode*> args;
+		cur->consume(TOKEN_LEFT_PAREN, "Expect '(' after run.");
+		if (!cur->check(TOKEN_RIGHT_PAREN)) {
+			do {
+				args.push_back(cur->expression());
+			} while (cur->match({ TOKEN_COMMA }));
+		}
+		cur->consume(TOKEN_RIGHT_PAREN, "Expect ')' after call expression.");
+		if (args.size() == 0) {
+			throw cur->error(token, "Expect atleast one argument for run(a fiber).");
+		}
+		return new ASTFiberRunExpr(args);
+	}
+};
+
 #pragma endregion
 
 parser::parser() {
 	current = 0;
 	hadError = false;
-	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
 	curUnit = nullptr;
@@ -252,6 +310,9 @@ parser::parser() {
 		addPrefix(TOKEN_LEFT_BRACKET,	new literalExpr, precedence::PRIMARY);
 		addPrefix(TOKEN_LEFT_BRACE,		new literalExpr, precedence::PRIMARY);
 		addPrefix(TOKEN_SUPER,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_YIELD,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_FIBER,			new literalExpr, precedence::PRIMARY);
+		addPrefix(TOKEN_RUN, 			new fiberRunExpr, precedence::PRIMARY);
 
 		//Infix
 		addInfix(TOKEN_EQUAL,				new assignmentExpr, precedence::ASSIGNMENT);
@@ -292,8 +353,8 @@ parser::parser() {
 		addInfix(TOKEN_PERCENTAGE,	new binaryExpr, precedence::FACTOR);
 
 		addInfix(TOKEN_LEFT_PAREN,		new callExpr, precedence::CALL);
-		addInfix(TOKEN_LEFT_BRACKET,	new callExpr, precedence::CALL);
-		addInfix(TOKEN_DOT,				new callExpr, precedence::CALL);
+		addInfix(TOKEN_LEFT_BRACKET,	new fieldAccessExpr, precedence::CALL);
+		addInfix(TOKEN_DOT,				new fieldAccessExpr, precedence::CALL);
 
 		//Postfix
 		//postfix and mixfix operators get parsed with the infix parselets
@@ -381,10 +442,14 @@ ASTNode* parser::varDecl() {
 }
 
 ASTNode* parser::funcDecl() {
+	//the depths are used for throwing errors for switch and loops stmts, and since a function can be declared inside a loop we need to account
+	//for that
+	int tempLoopDepth = loopDepth;
+	loopDepth = 0;
+	int tempSwitchDepth = switchDepth;
+	switchDepth = 0;
+
 	Token name = consume(TOKEN_IDENTIFIER, "Expected a function name.");
-	if (scopeDepth > 0) {
-		//throw error(name, "Can't declare a function outside of global scope.");
-	}
 	consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
 	vector<Token> args;
 	int arity = 0;
@@ -401,6 +466,9 @@ ASTNode* parser::funcDecl() {
 	consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments");
 	consume(TOKEN_LEFT_BRACE, "Expect '{' after arguments.");
 	ASTNode* body = blockStmt();
+
+	loopDepth = tempLoopDepth;
+	switchDepth = tempSwitchDepth;
 	return new ASTFunc(name, args, arity, body);
 }
 
@@ -449,12 +517,10 @@ ASTNode* parser::exprStmt() {
 
 ASTNode* parser::blockStmt() {
 	vector<ASTNode*> stmts;
-	scopeDepth++;
 	while (!check(TOKEN_RIGHT_BRACE)) {
 		stmts.push_back(declaration());
 	}
 	consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
-	scopeDepth--;
 	return new ASTBlockStmt(stmts);
 }
 
@@ -656,6 +722,7 @@ void parser::sync() {
 		case TOKEN_RETURN:
 		case TOKEN_SWITCH:
 		case TOKEN_FOREACH:
+		case TOKEN_RIGHT_BRACE:
 			return;
 		}
 
@@ -703,7 +770,6 @@ int parser::getPrec() {
 void parser::reset(vector<Token> _tokens) {
 	tokens = _tokens;
 	current = 0;
-	scopeDepth = 0;
 	loopDepth = 0;
 	switchDepth = 0;
 }

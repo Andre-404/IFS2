@@ -309,7 +309,7 @@ void objUpval::move(byte* to) {
 }
 
 void objUpval::trace(std::vector<managed*>& stack) {
-	markVal(stack, closed);
+	if(!isOpen) markVal(stack, closed);
 }
 
 void objUpval::updatePtrs() {

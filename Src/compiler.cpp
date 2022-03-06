@@ -78,7 +78,7 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 		expr->getValue()->accept(this);
 		uInt name = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
 		if (name < UINT8_MAX) emitBytes(OP_SET_PROPERTY, name);
-		else emitByteAnd24Bit(OP_SET_PROPERTY_LONG, name);
+		else emitByteAnd16Bit(OP_SET_PROPERTY_LONG, name);
 		break;
 	}
 	}
@@ -186,7 +186,7 @@ void compiler::visitCallExpr(ASTCallExpr* expr) {
 	case TOKEN_DOT:
 		uInt name = identifierConstant(((ASTLiteralExpr*)expr->getArgs()[0])->getToken());
 		if(name < UINT8_MAX) emitBytes(OP_GET_PROPERTY, name);
-		else emitByteAnd24Bit(OP_GET_PROPERTY_LONG, name);
+		else emitByteAnd16Bit(OP_GET_PROPERTY_LONG, name);
 		break;
 	}
 }
@@ -230,7 +230,7 @@ void compiler::visitStructLiteralExpr(ASTStructLiteral* expr) {
 		for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
 	}else {
 		emitBytes(OP_CREATE_STRUCT_LONG, constants.size());
-		for (int i = constants.size() - 1; i >= 0; i--) emit24Bit(constants[i]);
+		for (int i = constants.size() - 1; i >= 0; i--) emit16Bit(constants[i]);
 	}
 }
 
@@ -247,7 +247,7 @@ void compiler::visitSuperExpr(ASTSuperExpr* expr) {
 	namedVar(syntheticToken("this"), false);
 	namedVar(syntheticToken("super"), false);
 	if (name < UINT8_MAX) emitBytes(OP_GET_SUPER, name);
-	else emitByteAnd24Bit(OP_GET_SUPER_LONG, name);
+	else emitByteAnd16Bit(OP_GET_SUPER_LONG, name);
 }
 
 void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
@@ -286,6 +286,34 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	}
 }
 
+void compiler::visitYieldExpr(ASTYieldExpr* expr) {
+	if (expr->getExpr() == nullptr) emitByte(OP_NIL);
+	else expr->getExpr()->accept(this);
+	emitByte(OP_FIBER_YIELD);
+}
+
+void compiler::visitFiberLiteralExpr(ASTFiberLiteral* expr) {
+	current = new compilerInfo(current, funcType::TYPE_FIBER);
+	beginScope();
+	for (Token& var : expr->getStartParams()) {
+		updateLine(var);
+		uint8_t constant = parseVar(var);
+		defineVar(constant);
+	}
+	expr->getBody()->accept(this);
+	objFunc* fiberBody = endFuncDecl();
+	uInt constant = makeConstant(OBJ_VAL(fiberBody));
+	emitByteAnd16Bit(OP_FIBER_CREATE, constant);
+	emitByte(expr->getArity());
+}
+
+void compiler::visitFiberRunExpr(ASTFiberRunExpr* expr) {
+	for (int i = expr->getArgs().size() - 1; i >= 0; i--) {
+		expr->getArgs()[i]->accept(this);
+	}
+	emitBytes(OP_FIBER_RUN, expr->getArgs().size() - 1);
+}
+
 
 
 void compiler::visitVarDecl(ASTVarDecl* decl) {
@@ -306,7 +334,7 @@ void compiler::visitVarDecl(ASTVarDecl* decl) {
 
 void compiler::visitFuncDecl(ASTFunc* decl) {
 	updateLine(decl->getName());
-	uint8_t name = parseVar(decl->getName());
+	uInt name = parseVar(decl->getName());
 	markInit();
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
@@ -329,13 +357,11 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
-	//doing this because func is now a cached ptr
 	objFunc* func = endFuncDecl();
-	global::gc.cachePtr(func);
 	uInt constant = makeConstant(OBJ_VAL(func));
+
 	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
-	else emitByteAnd24Bit(OP_CLOSURE_LONG, constant);
-	global::gc.getCachedPtr();
+	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
@@ -348,10 +374,10 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 void compiler::visitClassDecl(ASTClass* decl) {
 	Token className = decl->getName();
 	updateLine(className);
-	int constant = identifierConstant(className);
+	uInt constant = identifierConstant(className);
 	declareVar(className);
 
-	emitByteAnd24Bit(OP_CLASS, constant);
+	emitByteAnd16Bit(OP_CLASS, constant);
 	
 	//define the class here, so that we can use it inside it's own methods
 	defineVar(constant);
@@ -615,27 +641,25 @@ void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
 	emitByte(byte2);
 }
 
-void compiler::emit16Bit(unsigned short number) {
+void compiler::emit16Bit(uInt16 number) {
+	//Big endian
 	emitBytes((number >> 8) & 0xff, number & 0xff);
 }
 
-void compiler::emit24Bit(uInt number) {
-	emitBytes(number & 0xff, (number >> 8) & 0xff);
-	emitByte((number >> 16) & 0xff);
+void compiler::emitByteAnd16Bit(uint8_t byte, uInt num) {
+	emitByte(byte);
+	emit16Bit(num);
 }
 
-void compiler::emitByteAnd24Bit(uint8_t byte, uInt num) {
-	emitByte(byte);
-	emit24Bit(num);
-}
 uInt compiler::makeConstant(Value value) {
 	if (IS_OBJ(value)) gc.cachePtr(AS_OBJ(value));
 	uInt constant = getChunk()->addConstant(value);
-	if (constant > UINT_24_MAX) {
+	if (constant > UINT16_MAX) {
 		error("Too many constants in one chunk.");
 		return 0;
 	}
-	if (IS_OBJ(value)) gc.getCachedPtr();
+	//since the pointer in value is now a cached ptr, it doesn't change if a resize/collection occurs, so we need to take care of that
+	if (IS_OBJ(value)) AS_OBJ(getChunk()->constants[constant]) =  dynamic_cast<obj*>(gc.getCachedPtr());
 	return (uInt)constant;
 }
 
@@ -643,9 +667,7 @@ void compiler::emitConstant(Value value) {
 	//shorthand for adding a constant to the chunk and emitting it
 	uInt constant = makeConstant(value);
 	if (constant < 256) emitBytes(OP_CONSTANT, constant);
-	else {
-		emitByteAnd24Bit(OP_CONSTANT_LONG, constant);
-	}
+	else emitByteAnd16Bit(OP_CONSTANT_LONG, constant);
 }
 
 
@@ -705,7 +727,7 @@ void compiler::defineVar(uInt name) {
 	}
 	if(name < UINT8_MAX) emitBytes(OP_DEFINE_GLOBAL, name);
 	else {
-		emitByteAnd24Bit(OP_DEFINE_GLOBAL_LONG, name);
+		emitByteAnd16Bit(OP_DEFINE_GLOBAL_LONG, name);
 	}
 }
 
@@ -713,7 +735,7 @@ void compiler::namedVar(Token token, bool canAssign) {
 	updateLine(token);
 	uint8_t getOp;
 	uint8_t setOp;
-	int arg = resolveLocal(token);
+	uInt arg = resolveLocal(token);
 	if (arg != -1) {
 		getOp = OP_GET_LOCAL;
 		setOp = OP_SET_LOCAL;
@@ -727,7 +749,7 @@ void compiler::namedVar(Token token, bool canAssign) {
 		if (arg > UINT8_MAX) {
 			getOp = OP_GET_GLOBAL_LONG;
 			setOp = OP_SET_GLOBAL_LONG;
-			emitByteAnd24Bit(canAssign ? setOp : getOp, arg);
+			emitByteAnd16Bit(canAssign ? setOp : getOp, arg);
 			return;
 		}
 	}
@@ -817,7 +839,7 @@ int compiler::resolveUpvalue(compilerInfo* func, Token& name) {
 		func->enclosing->hasCapturedLocals = true;
 		return addUpvalue((uint8_t)local, true);
 	}
-
+	if (func->type == funcType::TYPE_FIBER) return -1;
 	int upvalue = resolveUpvalue(func->enclosing, name);
 	if (upvalue != -1) {
 		return addUpvalue((uint8_t)upvalue, false);
@@ -906,18 +928,16 @@ void compiler::method(ASTFunc* _method, Token className) {
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
-	//func is now only exists as a cached ptr, so we need to account for that when emitting bytes(since they can cause a reallocation)
-	global::gc.cachePtr(func);
 	uInt constant = makeConstant(OBJ_VAL(func));
+
 	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
-	else emitByteAnd24Bit(OP_CLOSURE_LONG, constant);
-	global::gc.getCachedPtr();
+	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
 
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);
 	}
-	emitByteAnd24Bit(OP_METHOD, name);
+	emitByteAnd16Bit(OP_METHOD, name);
 }
 
 bool compiler::invoke(ASTCallExpr* expr) {
@@ -929,7 +949,7 @@ bool compiler::invoke(ASTCallExpr* expr) {
 		if (_call->getAccessor().type != TOKEN_DOT) return false;
 
 		_call->getCallee()->accept(this);
-		int field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
+		uInt field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
 		int argCount = 0;
 		for (ASTNode* arg : expr->getArgs()) {
 			arg->accept(this);
@@ -940,7 +960,7 @@ bool compiler::invoke(ASTCallExpr* expr) {
 			emitByte(argCount);
 		}
 		else {
-			emitByteAnd24Bit(OP_INVOKE_LONG, field);
+			emitByteAnd16Bit(OP_INVOKE_LONG, field);
 			emitByte(argCount);
 		}
 		return true;
@@ -968,9 +988,10 @@ bool compiler::invoke(ASTCallExpr* expr) {
 			emitByte(argCount);
 		}
 		else {
-			emitByteAnd24Bit(OP_SUPER_INVOKE_LONG, name);
+			emitByteAnd16Bit(OP_SUPER_INVOKE_LONG, name);
 			emitByte(argCount);
 		}
+		return true;
 	}
 	return false;
 }

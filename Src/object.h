@@ -7,6 +7,7 @@
 #include "managed.h"
 #include "gcVector.h"
 
+
 enum objType {
 	OBJ_STRING,
 	OBJ_FUNC,
@@ -17,6 +18,7 @@ enum objType {
 	OBJ_CLASS,
 	OBJ_INSTANCE,
 	OBJ_BOUND_METHOD,
+	OBJ_FIBER
 };
 
 //pointer to a native function
@@ -29,7 +31,6 @@ public:
 };
 
 //Headers
-
 class objString : public obj {
 public:
 	char* str;
@@ -43,6 +44,8 @@ public:
 	void updatePtrs();
 	void trace(std::vector<managed*>& stack) {};
 };
+
+
 //Actual objects
 class objArray : public obj {
 public:
@@ -148,6 +151,8 @@ public:
 	void trace(std::vector<managed*>& stack);
 };
 
+class objFiber;
+
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 
@@ -160,10 +165,10 @@ static inline bool isObjType(Value value, objType type) {
 #define IS_NATIVE(value)       isObjType(value, OBJ_NATIVE)
 #define IS_ARRAY(value)		   isObjType(value, OBJ_ARRAY)
 #define IS_CLOSURE(value)	   isObjType(value, OBJ_CLOSURE)
-#define IS_ARR_HEADER(value)   isObjType(value, OBJ_ARR_HEADER)
 #define IS_CLASS(value)        isObjType(value, OBJ_CLASS)
 #define IS_INSTANCE(value)     isObjType(value, OBJ_INSTANCE)
 #define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
+#define	IS_FIBER(value)		   isObjType(value, OBJ_FIBER)
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -171,10 +176,10 @@ static inline bool isObjType(Value value, objType type) {
 #define AS_NATIVE(value) 	   (((objNativeFn*)AS_OBJ(value)))
 #define AS_ARRAY(value)		   (((objArray*)AS_OBJ(value)))
 #define AS_CLOSURE(value)	   (((objClosure*)AS_OBJ(value)))
-#define AS_ARRHEADER(value)    (((objArrayHeader*)AS_OBJ(value)))
 #define AS_CLASS(value)        ((objClass*)AS_OBJ(value))
 #define AS_INSTANCE(value)     ((objInstance*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value) ((objBoundMethod*)AS_OBJ(value))
+#define AS_FIBER(value)		   ((objFiber*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
 objString* copyString(const char* str, uInt length);
@@ -182,3 +187,8 @@ objString* takeString(char* str, uInt length);
 
 void printObject(Value value);
 void freeObject(obj* object);
+
+void setMarked(obj* ptr);
+void markObj(std::vector<managed*>& stack, obj* ptr);
+void markVal(std::vector<managed*>& stack, Value& val);
+void markTable(std::vector<managed*>& stack, hashTable& table);

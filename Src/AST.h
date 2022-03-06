@@ -14,6 +14,9 @@ class ASTGroupingExpr;
 class ASTUnaryVarAlterExpr;
 class ASTStructLiteral;
 class ASTLiteralExpr;
+class ASTYieldExpr;
+class ASTFiberRunExpr;
+class ASTFiberLiteral;
 class ASTSuperExpr;
 
 class ASTVarDecl;
@@ -46,6 +49,9 @@ enum class ASTType {
 	CALL,
 	STRUCT_LITERAL,
 	LITERAL,
+	YIELD,
+	RUN_FIBER,
+	FIBER_LITERAL,
 	SUPER,
 	VAR_DECL,
 	PRINT_STMT,
@@ -86,6 +92,9 @@ public:
 	virtual void visitArrayDeclExpr(ASTArrayDeclExpr* expr) = 0;
 	virtual void visitStructLiteralExpr(ASTStructLiteral* expr) = 0;
 	virtual void visitLiteralExpr(ASTLiteralExpr* expr) = 0;
+	virtual void visitYieldExpr(ASTYieldExpr* expr) = 0;
+	virtual void visitFiberRunExpr(ASTFiberRunExpr* expr) = 0;
+	virtual void visitFiberLiteralExpr(ASTFiberLiteral* expr) = 0;
 	virtual void visitSuperExpr(ASTSuperExpr* expr) = 0;
 
 	virtual void visitVarDecl(ASTVarDecl* decl) = 0;
@@ -277,6 +286,43 @@ public:
 	vector<structEntry>& getEntries() { return fields; }
 };
 
+class ASTYieldExpr : public ASTNode {
+private:
+	ASTNode* expr;
+public:
+	ASTYieldExpr(ASTNode* _expr);
+
+	void accept(visitor* vis);
+
+	ASTNode* getExpr() { return expr; }
+};
+
+class ASTFiberLiteral : public ASTNode {
+private:
+	vector<Token> startParams;
+	int arity;
+	ASTNode* body;
+public:
+	ASTFiberLiteral(vector<Token>& _startParams, int arity, ASTNode* _body);
+
+	void accept(visitor* vis);
+
+	int getArity() { return arity; }
+	vector<Token> getStartParams() { return startParams; }
+	ASTNode* getBody() { return body; }
+};
+
+class ASTFiberRunExpr : public ASTNode {
+private:
+	vector<ASTNode*> args;
+public:
+	ASTFiberRunExpr(vector<ASTNode*>& _args);
+
+	void accept(visitor* vis);
+
+	vector<ASTNode*> getArgs() { return args; }
+};
+
 #pragma endregion
 
 #pragma region Statements
@@ -429,9 +475,11 @@ private:
 	ASTNode* body;
 	Token name;
 public:
-	ASTFunc(Token _name, vector<Token>& _args, int arity, ASTNode* _body);
+	ASTFunc(Token _name, vector<Token>& _args, int _arity, ASTNode* _body);
 	~ASTFunc();
+
 	void accept(visitor* vis);
+
 	int getArity() { return arity; }
 	vector<Token> getArgs() { return args; }
 	ASTNode* getBody() { return body; }

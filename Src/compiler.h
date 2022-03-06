@@ -7,14 +7,15 @@
 #include <array>
 
 
-#define LOCAL_MAX 256
+#define LOCAL_MAX 512
 #define UPVAL_MAX 256
 
 enum class funcType {
 	TYPE_FUNC,
 	TYPE_METHOD,
 	TYPE_CONSTRUCTOR,
-	TYPE_SCRIPT
+	TYPE_SCRIPT,
+	TYPE_FIBER
 };
 
 struct local {
@@ -80,9 +81,8 @@ private:
 	//emitters
 	void emitByte(uint8_t byte);
 	void emitBytes(uint8_t byte1, uint8_t byte2);
-	void emit16Bit(unsigned short number);
-	void emit24Bit(uInt num);
-	void emitByteAnd24Bit(uint8_t byte, uInt num);
+	void emit16Bit(uInt16 number);
+	void emitByteAnd16Bit(uint8_t byte, uInt num);
 	void emitConstant(Value value);
 	void emitReturn();
 	//control flow
@@ -128,6 +128,9 @@ private:
 	void visitStructLiteralExpr(ASTStructLiteral* expr);
 	void visitSuperExpr(ASTSuperExpr* expr);
 	void visitLiteralExpr(ASTLiteralExpr* expr);
+	void visitYieldExpr(ASTYieldExpr* expr);
+	void visitFiberLiteralExpr(ASTFiberLiteral* expr);
+	void visitFiberRunExpr(ASTFiberRunExpr* expr);
 	
 
 	void visitVarDecl(ASTVarDecl* decl);

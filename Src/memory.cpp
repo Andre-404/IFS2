@@ -52,6 +52,16 @@ void* GC::allocRaw(size_t size, bool shouldLOHAlloc) {
 	return activeHeap->allocate(size);
 }
 
+void* GC::allocRawStatic(size_t size) {
+	if (staticHeap.shouldSweep()) {
+		mark();
+		staticHeap.sweep();
+		LOH.clearFlags();
+		normalHeap.clearFlags();
+	}
+	return staticHeap.allocate(size);
+}
+
 void GC::collect() {
 	if (collecting || (VM == nullptr && compiling == nullptr)) return;
 	collecting = true;
@@ -146,16 +156,8 @@ void GC::markTable(hashTable* table) {
 void GC::markRoots() {
 	global::internedStrings.entries.mark();
 	if (VM != nullptr) {
-		for (Value* val = VM->stack; val < VM->stackTop; val++) {
-			markVal(val);
-		}
+		markObj(VM->curFiber);
 		markTable(&VM->globals);
-		for (int i = 0; i < VM->frameCount; i++) {
-			markObj(VM->frames[i].closure);
-		}
-		for (int i = 0; i < VM->openUpvals.size(); i++) {
-			markObj(VM->openUpvals[i]);
-		}
 	}
 	//since a GC collection can be triggered during the compilation, we must also mark all function which are currently being compiled
 	if (compiling != nullptr) {
@@ -210,16 +212,8 @@ void GC::updateRootPtrs() {
 	//if no reference to a string exists, there's no point in keeping it in memory
 	updateTable(&global::internedStrings);
 	if (VM != nullptr) {
-		for (Value* val = VM->stack; val < VM->stackTop; val++) {
-			updateVal(val);
-		}
+		if(VM->curFiber != nullptr) VM->curFiber = reinterpret_cast<objFiber*>(VM->curFiber->moveTo);
 		updateTable(&VM->globals);
-		for (int i = 0; i < VM->frameCount; i++) {
-			VM->frames[i].closure = reinterpret_cast<objClosure*>(VM->frames[i].closure->moveTo);
-		}
-		for (int i = 0; i < VM->openUpvals.size(); i++) {
-			VM->openUpvals[i] = reinterpret_cast<objUpval*>(VM->openUpvals[i]->moveTo);
-		}
 	}
 	//the GC can also be called during the compilation process, so we need to update it's compiler info
 	if (compiling != nullptr) {
@@ -234,12 +228,14 @@ void GC::updateRootPtrs() {
 void GC::updateHeapPtrs() {
 	normalHeap.updatePtrs();
 	LOH.updatePtrs();
+	staticHeap.updatePtrs();
 }
 
 
 void GC::compact() {
 	activeHeap->compact();
 	inactiveHeap->clearFlags();
+	staticHeap.clearFlags();
 }
 
 

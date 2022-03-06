@@ -90,6 +90,11 @@ enum OpCode {
 	OP_GET_SUPER_LONG,
 	OP_SUPER_INVOKE,
 	OP_SUPER_INVOKE_LONG,
+
+	//fibers
+	OP_FIBER_CREATE,
+	OP_FIBER_RUN,
+	OP_FIBER_YIELD,
 };
 
 //disassemble is here, but the functions it calls are in debug.cpp
