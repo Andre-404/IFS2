@@ -104,7 +104,7 @@ public:
 	gcVector<uint8_t> code;
 	gcVector<Value> constants;
 	vector<switchTable> switchTables;
-	chunk();
+	chunk() {};
 	void writeData(uint8_t opCode, int line);
 	void disassemble(string name);
 	uInt addConstant(Value val);

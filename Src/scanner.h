@@ -32,24 +32,59 @@ enum TokenType {
 	TOKEN_NEWLINE, TOKEN_ERROR, TOKEN_EOF
 };
 
+
+struct file {
+	string sourceFile;
+	std::vector<uInt> lines;
+	file(string& src) : sourceFile(src) {};
+};
+
+struct span {
+	uInt64 line;
+	uInt64 column;
+	uInt64 length;
+	file* sourceFile;
+	span() {
+		line = 0;
+		column = 0;
+		length = 0;
+		sourceFile = nullptr;
+	}
+	span(uInt64 _line, uInt64 _column, uInt64 _len, file* _src) : line(_line), column(_column), length(_len), sourceFile(_src) {};
+	string getStr();
+};
+
 struct Token {
 	TokenType type;
-	std::string lexeme;
-	int line;
+	span str;
+	//for things like synthetic tokens and expanded macros
+	long long line;
+	
+	bool isSynthetic;
+	const char* ptr;
+	
 	Token() {
+		isSynthetic = false;
+		ptr = nullptr;
 		line = -1;
-		lexeme = "";
 		type = TOKEN_LEFT_PAREN;
 	}
-	Token(char* ptr, int _line, TokenType _type) {
-		line = _line;
-		lexeme = string(ptr);
+	Token(span _str, TokenType _type) {
+		isSynthetic = false;
+		line = _str.line;
+		ptr = nullptr;
+		str = _str;
 		type = _type;
 	}
-	Token(const char* ptr, int _line, TokenType _type) {
-		line = _line;
-		lexeme = string(ptr);
+	Token(const char* _ptr, uInt64 _line, TokenType _type) {
+		ptr = _ptr;
+		isSynthetic = true;
 		type = _type;
+		line = _line;
+	}
+	string getLexeme() {
+		if (isSynthetic) return string(ptr);
+		return str.getStr();
 	}
 };
 
@@ -58,8 +93,9 @@ class scanner {
 public:
 	scanner(string source);
 	vector<Token> getArr();
+	file* getFile() { return curFile; }
 private:
-	string source;
+	file* curFile;
 	int line;
 	int start;
 	int current;
@@ -90,4 +126,6 @@ private:
 	bool isPreprocessDirective(char c);
 	TokenType directiveType();
 };
+
+void report(file* src, Token& token, string msg);
 

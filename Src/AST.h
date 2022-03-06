@@ -489,11 +489,14 @@ public:
 class ASTReturn : public ASTNode {
 private:
 	ASTNode* expr;
+	//for error reporting
+	Token keyword;
 public:
-	ASTReturn(ASTNode* _expr);
+	ASTReturn(ASTNode* _expr, Token keyword);
 	~ASTReturn();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return expr; }
+	Token getKeyword() { return keyword; }
 };
 
 class ASTClass : public ASTNode {

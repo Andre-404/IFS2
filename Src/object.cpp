@@ -238,6 +238,9 @@ void objFunc::trace(std::vector<managed*>& stack) {
 	body.constants.mark();
 	body.code.mark();
 	body.lines.mark();
+	for (int i = 0; i < body.switchTables.size(); i++) {
+		body.switchTables[i].arr.mark();
+	}
 }
 
 void objFunc::updatePtrs() {
@@ -249,6 +252,9 @@ void objFunc::updatePtrs() {
 	body.constants.update();
 	body.code.update();
 	body.lines.update();
+	for (int i = 0; i < body.switchTables.size(); i++) {
+		body.switchTables[i].arr.update();
+	}
 }
 #pragma endregion
 

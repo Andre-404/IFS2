@@ -54,7 +54,9 @@ class conditionalExpr;
 struct translationUnit {
 	vector<ASTNode*> stmts;
 	string name;
-	translationUnit(string _name) : name(_name) {};
+	file* src;
+	translationUnit(string _name, file* _src) : name(_name), src(_src) {};
+	~translationUnit() { delete src; }
 };
 
 class parser {
@@ -140,8 +142,6 @@ private:
 	Token consume(TokenType type, string msg);
 
 	int error(Token token, string msg);
-
-	void report(int line, string _where, string msg);
 
 	void sync();
 

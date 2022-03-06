@@ -28,7 +28,7 @@ preprocessUnit* preprocessor::scanFile(string unitName) {
 	string fullPath = filepath + unitName + ".txt";
 
 	scanner sc(readFile(fullPath));
-	preprocessUnit* unit = new preprocessUnit(unitName, sc.getArr());
+	preprocessUnit* unit = new preprocessUnit(unitName, sc.getArr(), sc.getFile());
 	curUnit = unit;
 	allUnits[unitName] = unit;
 	//detects #macro and import, and gets rid of newline tokens
@@ -37,18 +37,19 @@ preprocessUnit* preprocessor::scanFile(string unitName) {
 	vector<Token> depsToParse = unitsToParse;
 	for (Token dep : depsToParse) {
 		//since import names are strings, we get rid of ""
-		dep.lexeme.erase(0, 1);
-		dep.lexeme.erase(dep.lexeme.size() - 1, dep.lexeme.size());
+		string depName = dep.getLexeme();
+		depName.erase(0, 1);
+		depName.erase(depName.size() - 1, depName.size());
 		//if we detect a cyclical import we still continue parsing other files to detect as many errors as possible
-		if (allUnits.count(dep.lexeme) > 0) {
-			if (!allUnits[dep.lexeme]->scanned) {
+		if (allUnits.count(depName) > 0) {
+			if (!allUnits[depName]->scanned) {
 				error(dep, "Cyclical importing detected.");
 				continue;
 			}
-			unit->deps.push_back(allUnits[dep.lexeme]);
+			unit->deps.push_back(allUnits[depName]);
 			continue;
 		}
-		unit->deps.push_back(scanFile(dep.lexeme));
+		unit->deps.push_back(scanFile(depName));
 	}
 	unit->scanned = true;
 	return unit;
@@ -75,7 +76,7 @@ bool isAtEnd(vector<Token>& tokens, int pos) {
 
 bool containsMacro(vector<macro>& macros, macro& _macro) {
 	for (int i = 0; i < macros.size(); i++) {
-		if (macros[i].name.lexeme == _macro.name.lexeme) return true;
+		if (macros[i].name.getLexeme() == _macro.name.getLexeme()) return true;
 	}
 	return false;
 }
@@ -88,7 +89,7 @@ vector<Token> replaceFuncMacroParams(macro& toExpand, vector<vector<Token>>& arg
 		Token& token = fin[i];
 		if (token.type == TOKEN_IDENTIFIER) {
 			for (int j = 0; j < toExpand.params.size(); j++) {
-				if (token.lexeme == toExpand.params[j].lexeme) {
+				if (token.getLexeme() == toExpand.params[j].getLexeme()) {
 					fin.erase(fin.begin() + i);
 					fin.insert(fin.begin() + i, args[j].begin(), args[j].end());
 					i--;
@@ -123,11 +124,11 @@ int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int p
 void preprocessor::expandMacros() {
 	for (preprocessUnit* unit : sortedUnits) {
 		for (macro& _macro : unit->localMacros) {
-			if (macros.count(_macro.name.lexeme) > 0) {
+			if (macros.count(_macro.name.getLexeme()) > 0) {
 				error(_macro.name, "Macro redefinition not allowed.");
 				continue;
 			}
-			macros[_macro.name.lexeme] = _macro;
+			macros[_macro.name.getLexeme()] = _macro;
 		}
 		replaceMacros(unit);
 	}
@@ -138,10 +139,10 @@ vector<Token> preprocessor::expandMacro(macro& toExpand) {
 	for (int i = 0; i < tokens.size(); i++) {
 		Token& token = tokens[i];
 		if (token.type != TOKEN_IDENTIFIER) continue;
-		if (macros.count(token.lexeme) == 0) continue;
+		if (macros.count(token.getLexeme()) == 0) continue;
 
 		//if the macro is already on the stack, it's a recursion
-		macro& _macro = macros[token.lexeme];
+		macro& _macro = macros[token.getLexeme()];
 		if (containsMacro(macroStack, _macro) > 0) {
 			error(_macro.name, "Recursive macro expansion detected.");
 			tokens.clear();
@@ -197,9 +198,9 @@ vector<Token> preprocessor::expandMacro(macro& toExpand, vector<Token>& callToke
 	for (int i = 0; i < tokens.size(); i++) {
 		Token& token = tokens[i];
 		if (token.type != TOKEN_IDENTIFIER) continue;
-		if (macros.count(token.lexeme) == 0) continue;
+		if (macros.count(token.getLexeme()) == 0) continue;
 
-		macro& _macro = macros[token.lexeme];
+		macro& _macro = macros[token.getLexeme()];
 		if (containsMacro(macroStack, _macro) > 0) {
 			error(_macro.name, "Recursive macro expansion detected.");
 			tokens.clear();
@@ -236,8 +237,8 @@ void preprocessor::replaceMacros(preprocessUnit* unit) {
 	for (int i = 0; i < unit->tokens.size(); i++) {
 		Token& token = unit->tokens[i];
 		if (token.type != TOKEN_IDENTIFIER) continue;
-		if (macros.count(token.lexeme) == 0) continue;
-		macro& _macro = macros[token.lexeme];
+		if (macros.count(token.getLexeme()) == 0) continue;
+		macro& _macro = macros[token.getLexeme()];
 		
 		//if a function is macro like we need to parse it's arguments and replace the params inside the macro body with the provided args
 		//this is a simple token replacement
@@ -292,7 +293,7 @@ void preprocessor::processDirectives(preprocessUnit* unit) {
 					Token& arg = tokens[++i];
 					//checking if we already have a param of the same name
 					for (int j = 0; j < curMacro.params.size(); j++) {
-						if (arg.lexeme == curMacro.params[j].lexeme) {
+						if (arg.getLexeme() == curMacro.params[j].getLexeme()) {
 							error(arg, "Cannot have 2 or more arguments of the same name.");
 							break;
 						}
@@ -342,18 +343,8 @@ void preprocessor::processDirectives(preprocessUnit* unit) {
 	}
 }
 
-
-void preprocessor::report(int line, string _where, string msg) {
-	std::cout << "Error " << "[line " << line << "]" << " in '" << curUnit->name << "' " << _where << ": " << msg << "\n";
-	hadError = true;
-}
-
 void preprocessor::error(Token token, string msg) {
-	if (token.type == TOKEN_EOF) {
-		report(token.line, " at end", msg);
-	}
-	else {
-		//have to do this so we can concat strings(can't concat string_view
-		report(token.line, " at '" + string(token.lexeme) + "'", msg);
-	}
+	hadError = true;
+	std::cout << "Error " << "[line " << token.line << "]" << " in '" << curUnit->name << "':" << "\n";
+	report(curUnit->srcFile, token, msg);
 }

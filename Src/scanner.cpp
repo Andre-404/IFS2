@@ -1,14 +1,20 @@
 #include "scanner.h"
 #include "files.h"
 
+string span::getStr() {
+	uInt start = sourceFile->lines[line - 1] + column;
+	return sourceFile->sourceFile.substr(start, length);
+}
+
 scanner::scanner(string _source) {
+	curFile = new file(_source);
 	line = 1;
-	source = _source;
 	start = 0;
 	current = start;
+	curFile->lines.push_back(0);
+	hadError = false;
 
-
-	if (source != "") {
+	if (_source != "") {
 		Token token = scanToken();
 		tokens.push_back(token);
 		while (token.type != TOKEN_EOF) {
@@ -24,19 +30,19 @@ vector<Token> scanner::getArr() {
 
 #pragma region Helpers
 bool scanner::isAtEnd() {
-	return current >= source.size();
+	return current >= curFile->sourceFile.size();
 }
 
 //if matched we consume the token
 bool scanner::match(char expected) {
 	if (isAtEnd()) return false;
-	if (source[current] != expected) return false;
+	if (curFile->sourceFile[current] != expected) return false;
 	current++;
 	return true;
 }
 
 char scanner::advance() {
-	return source[current++];
+	return curFile->sourceFile[current++];
 }
 
 Token scanner::scanToken() {
@@ -82,37 +88,33 @@ Token scanner::scanToken() {
 	case ':': return makeToken(TOKEN_COLON);
 	case '?': return makeToken(TOKEN_QUESTIONMARK);
 	case '\n':
+		curFile->lines.push_back(current);
 		line++;
 		return makeToken(TOKEN_NEWLINE);
 	}
 
 	return errorToken("Unexpected character.");
 }
-//creates a string_view to save memory, points back to source
+
 Token scanner::makeToken(TokenType type) {
-	Token token;
-	token.type = type;
-	token.lexeme = string(source.c_str() + start, current - start);
-	token.line = line;
+	span newSpan(line, start - curFile->lines[curFile->lines.size() - 1], current - start, curFile);
+	Token token(newSpan, type);
+	string str = token.getLexeme();
 	return token;
 }
 
 Token scanner::errorToken(const char* message) {
-	Token token;
-	token.type = TOKEN_ERROR;
-	token.lexeme = std::string_view(message);
-	token.line = line;
-	return token;
+	return Token(message, line, TOKEN_ERROR);
 }
 
 char scanner::peek() {
 	if (isAtEnd()) return '\0';
-	return source[current];
+	return curFile->sourceFile[current];
 }
 
 char scanner::peekNext() {
 	if (isAtEnd()) return '\0';
-	return source[current + 1];
+	return curFile->sourceFile[current + 1];
 }
 
 void scanner::skipWhitespace() {
@@ -132,7 +134,10 @@ void scanner::skipWhitespace() {
 			else if (peekNext() == '*') {
 				advance();
 				while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
-					if (peek() == '\n') line++;
+					if (peek() == '\n') {
+						line++;
+						curFile->lines.push_back(current);
+					}
 					advance();
 				}
 				if (!isAtEnd()) {
@@ -152,7 +157,10 @@ void scanner::skipWhitespace() {
 
 Token scanner::string_() {
 	while (peek() != '"' && !isAtEnd()) {
-		if (peek() == '\n') line++;
+		if (peek() == '\n') {
+			line++;
+			curFile->lines.push_back(current);
+		}
 		advance();
 	}
 
@@ -194,6 +202,7 @@ Token scanner::identifier() {
 
 //trie implementation
 TokenType scanner::identifierType() {
+	string& source = curFile->sourceFile;
 	switch (source[start]) {
 	case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
 	case 'b': return checkKeyword(1, 4, "reak", TOKEN_BREAK);
@@ -267,7 +276,7 @@ TokenType scanner::identifierType() {
 
 //is string.compare fast enough?
 TokenType scanner::checkKeyword(int strt, int length, const char* rest, TokenType type) {
-	if (current - start == strt + length && source.substr(start + strt, length).compare(rest) == 0) {
+	if (current - start == strt + length && curFile->sourceFile.substr(start + strt, length).compare(rest) == 0) {
 		return type;
 	}
 
@@ -283,10 +292,33 @@ bool scanner::isPreprocessDirective(char c) {
 
 TokenType scanner::directiveType() {
 	while (isAlpha(peek()) || isDigit(peek())) advance();
-	switch (source[start + 1]) {
+	switch (curFile->sourceFile[start + 1]) {
 	case 'm': return checkKeyword(2, 4, "acro", TOKEN_MACRO) == TOKEN_IDENTIFIER ? TOKEN_ERROR : TOKEN_MACRO;
 	case 'i': return checkKeyword(2, 5, "mport", TOKEN_IMPORT) == TOKEN_IDENTIFIER ? TOKEN_ERROR : TOKEN_IMPORT;
 	}
 }
 #pragma endregion
+
+
+void report(file* src, Token& token, string msg) {
+	if (token.type == TOKEN_EOF) {
+		std::cout << "End of file. \n" << msg;
+		return;
+	}
+	uInt64 lineStart = src->lines[token.str.line - 1];
+	uInt64 lineEnd = 0;
+
+	if (src->lines.size() - 1 == token.str.line - 1) lineEnd = src->sourceFile.size();
+	else lineEnd = src->lines[token.str.line];
+
+	std::cout << src->sourceFile.substr(lineStart, lineEnd - lineStart);
+	string temp = "";
+	uInt64 tempN = 0;
+	for (; tempN < token.str.column; tempN++) temp.append(" ");
+	for (; tempN < token.str.column + token.str.length; tempN++) temp.append("^");
+	temp.append("\n");
+	std::cout << temp;
+	std::cout << msg;
+	std::cout << "\n";
+}
 

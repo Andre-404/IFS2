@@ -4,7 +4,7 @@
 #include "heapBlock.h"
 
 //handpicked values, need adjusting
-#define HEAP_START_SIZE (16384*32)//Starting size of both heaps are 512KB(1MB in total)
+#define HEAP_START_SIZE (1024)//Starting size of both heaps are 512KB(1MB in total)
 
 
 class vm;

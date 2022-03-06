@@ -308,7 +308,7 @@ interpretResult objFiber::execute() {
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			return runtimeError("Operands must be numbers."); \
+			throw runtimeError("Operands must be numbers."); \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -603,26 +603,31 @@ interpretResult objFiber::execute() {
 			if (!isFalsey(peek(0))) frame->ip += offset;
 			break;
 		}
+
 		case OP_JUMP_IF_FALSE: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(peek(0))) frame->ip += offset;
 			break;
 		}
+
 		case OP_JUMP_IF_FALSE_POP: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(pop())) frame->ip += offset;
 			break;
 		}
+
 		case OP_JUMP: {
 			uint16_t offset = READ_SHORT();
 			frame->ip += offset;
 			break;
 		}
+
 		case OP_LOOP: {
 			uint16_t offset = READ_SHORT();
 			frame->ip -= offset;
 			break;
 		}
+
 		case OP_BREAK: {
 			uint16_t toPop = READ_SHORT();
 			int i = 0;
@@ -634,6 +639,7 @@ interpretResult objFiber::execute() {
 			frame->ip += offset;
 			break;
 		}
+
 		case OP_SWITCH: {
 			if (IS_STRING(peek(0)) || IS_NUMBER(peek(0))) {
 				int pos = READ_BYTE();
@@ -713,6 +719,7 @@ interpretResult objFiber::execute() {
 				Value val = pop();
 				//implcit yielding once a fiber has finished running through all it's code
 				if (prevFiber != nullptr) {
+					transferValue(prevFiber, NIL_VAL());
 					VM->switchToFiber(prevFiber);
 					//overwrites the paused state set by switchToFiber, this flag means that if we try to run this fiber again we get nil back
 					state = fiberState::FINSIHED;

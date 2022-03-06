@@ -377,7 +377,7 @@ vector<translationUnit*> parser::parse(string path, string name) {
 	vector<preprocessUnit*> sortedUnits = pp.getSortedUnits();
 	if (pp.hadError) hadError = true;
 	for (preprocessUnit* pUnit : sortedUnits) {
-		translationUnit* unit = new translationUnit(pUnit->name);
+		translationUnit* unit = new translationUnit(pUnit->name, pUnit->srcFile);
 		units.push_back(unit);
 		curUnit = unit;
 		reset(pUnit->tokens);
@@ -636,11 +636,12 @@ ASTNode* parser::_case() {
 
 ASTNode* parser::_return() {
 	ASTNode* expr = NULL;
+	Token keyword = previous();
 	if (!match({ TOKEN_SEMICOLON })) {
 		expr = expression();
 		consume(TOKEN_SEMICOLON, "Expect ';' at the end of return.");
 	}
-	return new ASTReturn(expr);
+	return new ASTReturn(expr, previous());
 }
 
 #pragma endregion
@@ -688,19 +689,10 @@ Token parser::consume(TokenType type, string msg) {
 	throw error(peek(), msg);
 }
 
-void parser::report(int line, string _where, string msg) {
-	std::cout << "Error "<<"[line " << line << "]"<<" in '"<<curUnit->name <<"' " << _where << ": " << msg << "\n";
-	hadError = true;
-}
-
 int parser::error(Token token, string msg) {
-	if (token.type == TOKEN_EOF) {
-		report(token.line, " at end", msg);
-	}
-	else {
-		//have to do this so we can concat strings(can't concat string_view
-		report(token.line, " at '" + string(token.lexeme) + "'", msg);
-	}
+	std::cout << "Error " << "[line " << token.line << "]" << " in '" << curUnit->name << "': \n";
+	hadError = true;
+	report(curUnit->src, token, msg);
 	return 0;
 }
 
@@ -723,6 +715,7 @@ void parser::sync() {
 		case TOKEN_SWITCH:
 		case TOKEN_FOREACH:
 		case TOKEN_RIGHT_BRACE:
+		case TOKEN_LEFT_BRACE:
 			return;
 		}
 

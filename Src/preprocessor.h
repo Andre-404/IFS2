@@ -17,10 +17,13 @@ struct preprocessUnit {
 	std::vector<macro> localMacros;
 	std::vector<Token> tokens;
 	std::vector<preprocessUnit*> deps;
+
+	file* srcFile;
+
 	string name;
 	bool traversed;
 	bool scanned;
-	preprocessUnit(string _name, vector<Token> _tokens) : name(_name), traversed(false), scanned(false), tokens(_tokens) {};
+	preprocessUnit(string _name, vector<Token> _tokens, file* _src) : name(_name), traversed(false), scanned(false), tokens(_tokens), srcFile(_src) {};
 };
 
 class preprocessor {
@@ -53,5 +56,4 @@ private:
 	void topsort(preprocessUnit* unit);
 
 	void error(Token token, string msg);
-	void report(int line, string _where, string msg);
 };

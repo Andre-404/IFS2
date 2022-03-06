@@ -467,8 +467,9 @@ void ASTCase::accept(visitor* vis) {
 #pragma endregion
 
 #pragma region Return
-ASTReturn::ASTReturn(ASTNode* _expr) {
+ASTReturn::ASTReturn(ASTNode* _expr, Token _keyword) {
 	expr = _expr;
+	keyword = _keyword;
 	type = ASTType::RETURN;
 }
 ASTReturn::~ASTReturn() {

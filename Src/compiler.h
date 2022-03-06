@@ -77,12 +77,14 @@ public:
 	objFunc* endFuncDecl();
 private:
 
+	translationUnit* curUnit;
+
 	#pragma region Helpers
 	//emitters
 	void emitByte(uint8_t byte);
 	void emitBytes(uint8_t byte1, uint8_t byte2);
 	void emit16Bit(uInt16 number);
-	void emitByteAnd16Bit(uint8_t byte, uInt num);
+	void emitByteAnd16Bit(uint8_t byte, uInt16 num);
 	void emitConstant(Value value);
 	void emitReturn();
 	//control flow
@@ -90,12 +92,12 @@ private:
 	void patchJump(int offset);
 	void emitLoop(int start);
 	void patchBreak();
-	uInt makeConstant(Value value);
+	uInt16 makeConstant(Value value);
 	//variables
-	uInt identifierConstant(Token name);
-	void defineVar(uInt name);
+	uInt16 identifierConstant(Token name);
+	void defineVar(uInt16 name);
 	void namedVar(Token token, bool canAssign);
-	uInt parseVar(Token name);
+	uInt16 parseVar(Token name);
 	//locals
 	void declareVar(Token& name);
 	void addLocal(Token name);
@@ -112,6 +114,8 @@ private:
 	Token syntheticToken(const char* str);
 	//misc
 	void updateLine(Token token);
+	void error(Token token, string msg);
+	void error(string message);
 	#pragma endregion
 	
 

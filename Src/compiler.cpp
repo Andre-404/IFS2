@@ -38,6 +38,7 @@ compiler::compiler(string path, string fileName, funcType _type) {
 	if (Parser.hadError) compiled = false;
 
 	for (translationUnit* unit : sortedUnits) {
+		curUnit = unit;
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
 			try {
@@ -52,7 +53,6 @@ compiler::compiler(string path, string fileName, funcType _type) {
 	for (translationUnit* unit : sortedUnits) delete unit;
 }
 
-void error(string message);
 bool identifiersEqual(const string& a, const string& b);
 
 
@@ -76,7 +76,7 @@ void compiler::visitSetExpr(ASTSetExpr* expr) {
 	case TOKEN_DOT: {
 		expr->getCallee()->accept(this);
 		expr->getValue()->accept(this);
-		uInt name = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
+		uInt16 name = identifierConstant(((ASTLiteralExpr*)expr->getField())->getToken());
 		if (name < UINT8_MAX) emitBytes(OP_SET_PROPERTY, name);
 		else emitByteAnd16Bit(OP_SET_PROPERTY_LONG, name);
 		break;
@@ -184,7 +184,7 @@ void compiler::visitCallExpr(ASTCallExpr* expr) {
 		break;
 	}
 	case TOKEN_DOT:
-		uInt name = identifierConstant(((ASTLiteralExpr*)expr->getArgs()[0])->getToken());
+		uInt16 name = identifierConstant(((ASTLiteralExpr*)expr->getArgs()[0])->getToken());
 		if(name < UINT8_MAX) emitBytes(OP_GET_PROPERTY, name);
 		else emitByteAnd16Bit(OP_GET_PROPERTY_LONG, name);
 		break;
@@ -238,10 +238,10 @@ void compiler::visitSuperExpr(ASTSuperExpr* expr) {
 	updateLine(expr->getName());
 	int name = identifierConstant(expr->getName());
 	if (currentClass == nullptr) {
-		error("Can't use 'super' outside of a class.");
+		error(expr->getName(), "Can't use 'super' outside of a class.");
 	}
 	else if (!currentClass->hasSuperclass) {
-		error("Can't use 'super' in a class with no superclass.");
+		error(expr->getName(), "Can't use 'super' in a class with no superclass.");
 	}
 	//we use syntethic tokens since we know that 'super' and 'this' are defined if we're currently compiling a class method
 	namedVar(syntheticToken("this"), false);
@@ -255,7 +255,7 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	updateLine(token);
 	switch (token.type) {
 	case TOKEN_NUMBER: {
-		double num = std::stod(token.lexeme);//doing this becuase stod doesn't accept string_view
+		double num = std::stod(token.getLexeme());//doing this becuase stod doesn't accept string_view
 		emitConstant(NUMBER_VAL(num));
 		break;
 	}
@@ -264,15 +264,16 @@ void compiler::visitLiteralExpr(ASTLiteralExpr* expr) {
 	case TOKEN_NIL: emitByte(OP_NIL); break;
 	case TOKEN_STRING: {
 		//this gets rid of quotes, eg. ""Hello world""->"Hello world"
-		token.lexeme.erase(0, 1);
-		token.lexeme.erase(token.lexeme.size() - 1, 1);
-		emitConstant(OBJ_VAL(copyString((char*)token.lexeme.c_str(), token.lexeme.length())));
+		string temp = token.getLexeme();
+		temp.erase(0, 1);
+		temp.erase(temp.size() - 1, 1);
+		emitConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
 		break;
 	}
 
 	case TOKEN_THIS: {
 		if (currentClass == nullptr) {
-			error("Can't use 'this' outside of a class.");
+			error(token, "Can't use 'this' outside of a class.");
 			break;
 		}
 		//'this' get implicitly defined by the compiler
@@ -302,7 +303,7 @@ void compiler::visitFiberLiteralExpr(ASTFiberLiteral* expr) {
 	}
 	expr->getBody()->accept(this);
 	objFunc* fiberBody = endFuncDecl();
-	uInt constant = makeConstant(OBJ_VAL(fiberBody));
+	uInt16 constant = makeConstant(OBJ_VAL(fiberBody));
 	emitByteAnd16Bit(OP_FIBER_CREATE, constant);
 	emitByte(expr->getArity());
 }
@@ -319,7 +320,7 @@ void compiler::visitFiberRunExpr(ASTFiberRunExpr* expr) {
 void compiler::visitVarDecl(ASTVarDecl* decl) {
 	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
 	updateLine(decl->getToken());
-	uInt global = parseVar(decl->getToken());
+	uInt16 global = parseVar(decl->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = decl->getExpr();
 	if (expr == NULL) {
@@ -334,7 +335,7 @@ void compiler::visitVarDecl(ASTVarDecl* decl) {
 
 void compiler::visitFuncDecl(ASTFunc* decl) {
 	updateLine(decl->getName());
-	uInt name = parseVar(decl->getName());
+	uInt16 name = parseVar(decl->getName());
 	markInit();
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
@@ -352,13 +353,13 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	decl->getBody()->accept(this);
 	current->func->arity = decl->getArgs().size();
 	//could get away with using string instead of objString?
-	string str(decl->getName().lexeme);
+	string str = decl->getName().getLexeme();
 	current->func->name = copyString((char*)str.c_str(), str.length());
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
-	uInt constant = makeConstant(OBJ_VAL(func));
+	uInt16 constant = makeConstant(OBJ_VAL(func));
 
 	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
 	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
@@ -374,7 +375,7 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 void compiler::visitClassDecl(ASTClass* decl) {
 	Token className = decl->getName();
 	updateLine(className);
-	uInt constant = identifierConstant(className);
+	uInt16 constant = identifierConstant(className);
 	declareVar(className);
 
 	emitByteAnd16Bit(OP_CLASS, constant);
@@ -389,8 +390,8 @@ void compiler::visitClassDecl(ASTClass* decl) {
 		//if the class does inherit from some other class, we load the parent class and declare 'super' as a local variable
 		//which holds said class
 		namedVar(decl->getInherited(), false);
-		if (identifiersEqual(className.lexeme, decl->getInherited().lexeme)) {
-			error("A class can't inherit from itself.");
+		if (identifiersEqual(className.getLexeme(), decl->getInherited().getLexeme())) {
+			error(decl->getInherited(), "A class can't inherit from itself.");
 		}
 		beginScope();
 		addLocal(syntheticToken("super"));
@@ -496,7 +497,7 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	beginScope();
 	//the name of the variable is starts with "0" because no user defined variable can start with a number,
 	//and we don't want the underlying code to clash with some user defined variables
-	Token iterator = syntheticToken("0iterator");
+	Token iterator = syntheticToken("0iterable");
 	//get the iterator
 	stmt->getCollection()->accept(this);
 	int name = identifierConstant(syntheticToken("begin"));
@@ -569,7 +570,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
 				updateLine(expr->getToken());
 				//TODO: round this?
-				int key = std::stoi(string(expr->getToken().lexeme));
+				int key = std::stoi(string(expr->getToken().getLexeme()));
 				long _ip = getChunk()->code.count() - start;
 
 				table.addToArr(key, _ip);
@@ -582,7 +583,7 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 				updateLine(expr->getToken());
 				long _ip = getChunk()->code.count() - start;
 				//converts string_view to string and get's rid of ""
-				string _temp(expr->getToken().lexeme);
+				string _temp(expr->getToken().getLexeme());
 				if (expr->getToken().type == TOKEN_STRING) {
 					_temp.erase(0, 1);
 					_temp.erase(_temp.size() - 1, 1);
@@ -614,14 +615,14 @@ void compiler::visitCase(ASTCase* stmt) {
 
 void compiler::visitReturnStmt(ASTReturn* stmt) {
 	if (current->type == funcType::TYPE_SCRIPT) {
-		error("Can't return from top-level code.");
+		error(stmt->getKeyword(), "Can't return from top-level code.");
 	}
 	if (stmt->getExpr() == NULL) {
 		emitReturn();
 		return;
 	}
 	if (current->type == funcType::TYPE_CONSTRUCTOR) {
-		error("Can't return a value from an constructor.");
+		error(stmt->getKeyword(), "Can't return a value from an constructor.");
 	}
 	stmt->getExpr()->accept(this);
 	emitByte(OP_RETURN);
@@ -642,32 +643,33 @@ void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
 }
 
 void compiler::emit16Bit(uInt16 number) {
-	//Big endian
+	//Little endian
 	emitBytes((number >> 8) & 0xff, number & 0xff);
 }
 
-void compiler::emitByteAnd16Bit(uint8_t byte, uInt num) {
+void compiler::emitByteAnd16Bit(uint8_t byte, uInt16 num) {
 	emitByte(byte);
 	emit16Bit(num);
 }
 
-uInt compiler::makeConstant(Value value) {
+uInt16 compiler::makeConstant(Value value) {
 	if (IS_OBJ(value)) gc.cachePtr(AS_OBJ(value));
-	uInt constant = getChunk()->addConstant(value);
+	uInt16 constant = getChunk()->addConstant(value);
 	if (constant > UINT16_MAX) {
 		error("Too many constants in one chunk.");
 		return 0;
 	}
 	//since the pointer in value is now a cached ptr, it doesn't change if a resize/collection occurs, so we need to take care of that
 	if (IS_OBJ(value)) AS_OBJ(getChunk()->constants[constant]) =  dynamic_cast<obj*>(gc.getCachedPtr());
-	return (uInt)constant;
+	return constant;
 }
 
 void compiler::emitConstant(Value value) {
 	//shorthand for adding a constant to the chunk and emitting it
-	uInt constant = makeConstant(value);
+	uInt16 constant = makeConstant(value);
 	if (constant < 256) emitBytes(OP_CONSTANT, constant);
-	else emitByteAnd16Bit(OP_CONSTANT_LONG, constant);
+	else if (constant < 1 << 15) emitByteAnd16Bit(OP_CONSTANT_LONG, constant);
+	else error("Constants overflow.");
 }
 
 
@@ -711,15 +713,15 @@ bool identifiersEqual(const string& a, const string& b) {
 	return (a.compare(b) == 0);
 }
 
-uInt compiler::identifierConstant(Token name) {
-	string temp(name.lexeme);
+uInt16 compiler::identifierConstant(Token name) {
+	string temp = name.getLexeme();
 	//since str is a cached pointer(a collection may occur while resizing the chunk constants array, we need to treat it as a cached ptr
-	uInt index = makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
+	uInt16 index = makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
 
 	return index;
 }
 
-void compiler::defineVar(uInt name) {
+void compiler::defineVar(uInt16 name) {
 	//if this is a local var, mark it as ready and then bail out
 	if (current->scopeDepth > 0) { 
 		markInit();
@@ -735,7 +737,7 @@ void compiler::namedVar(Token token, bool canAssign) {
 	updateLine(token);
 	uint8_t getOp;
 	uint8_t setOp;
-	uInt arg = resolveLocal(token);
+	int arg = resolveLocal(token);
 	if (arg != -1) {
 		getOp = OP_GET_LOCAL;
 		setOp = OP_SET_LOCAL;
@@ -756,7 +758,7 @@ void compiler::namedVar(Token token, bool canAssign) {
 	emitBytes(canAssign ? setOp : getOp, arg);
 }
 
-uInt compiler::parseVar(Token name) {
+uInt16 compiler::parseVar(Token name) {
 	updateLine(name);
 	declareVar(name);
 	if (current->scopeDepth > 0) return 0;
@@ -771,9 +773,9 @@ void compiler::declareVar(Token& name) {
 		if (_local->depth != -1 && _local->depth < current->scopeDepth) {
 			break;
 		}
-		string str = string(name.lexeme);
+		string str = name.getLexeme();
 		if (identifiersEqual(str, _local->name)) {
-			error("Already a variable with this name in this scope.");
+			error(name, "Already a variable with this name in this scope.");
 		}
 	}
 	addLocal(name);
@@ -782,11 +784,11 @@ void compiler::declareVar(Token& name) {
 void compiler::addLocal(Token name) {
 	updateLine(name);
 	if (current->localCount == LOCAL_MAX) {
-		error("Too many local variables in function.");
+		error(name, "Too many local variables in function.");
 		return;
 	}
 	local* _local = &current->locals[current->localCount++];
-	_local->name = name.lexeme;
+	_local->name = name.getLexeme();
 	_local->depth = -1;
 }
 
@@ -814,10 +816,10 @@ int compiler::resolveLocal(compilerInfo* func, Token& name) {
 	updateLine(name);
 	for (int i = func->localCount - 1; i >= 0; i--) {
 		local* _local = &func->locals[i];
-		string str = string(name.lexeme);
+		string str = name.getLexeme();
 		if (identifiersEqual(str, _local->name)) {
 			if (_local->depth == -1) {
-				error("Can't read local variable in its own initializer.");
+				error(name, "Can't read local variable in its own initializer.");
 			}
 			return i;
 		}
@@ -893,22 +895,19 @@ void compiler::patchBreak() {
 }
 
 Token compiler::syntheticToken(const char* str) {
-	Token token;
-	token.lexeme = str;
-	token.line = current->line;
-	return token;
+	return Token(str, current->line, TOKEN_IDENTIFIER);
 }
 
 #pragma endregion
 
 #pragma region Classes and methods
 void compiler::method(ASTFunc* _method, Token className) {
-	uInt name = identifierConstant(_method->getName());
+	uInt16 name = identifierConstant(_method->getName());
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
 	funcType type = funcType::TYPE_METHOD;
 	//constructors are treated separatly, but are still methods
-	if (_method->getName().lexeme.compare(className.lexeme) == 0) type = funcType::TYPE_CONSTRUCTOR;
+	if (_method->getName().getLexeme().compare(className.getLexeme()) == 0) type = funcType::TYPE_CONSTRUCTOR;
 	current = new compilerInfo(current, type);
 	//->func = new objFunc();
 	//no need for a endScope, since returning from the function discards the entire callstack
@@ -916,19 +915,19 @@ void compiler::method(ASTFunc* _method, Token className) {
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
 	//we just assign those positions to each arg
 	for (Token& var : _method->getArgs()) {
-		uInt constant = parseVar(var);
+		uInt16 constant = parseVar(var);
 		defineVar(constant);
 	}
 	_method->getBody()->accept(this);
 	current->func->arity = _method->getArgs().size();
-	//could get away with using string instead of objString?
-	string str(_method->getName().lexeme);
+
+	string str = _method->getName().getLexeme();
 	current->func->name = copyString((char*)str.c_str(), str.length());
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
-	uInt constant = makeConstant(OBJ_VAL(func));
+	uInt16 constant = makeConstant(OBJ_VAL(func));
 
 	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
 	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
@@ -949,7 +948,7 @@ bool compiler::invoke(ASTCallExpr* expr) {
 		if (_call->getAccessor().type != TOKEN_DOT) return false;
 
 		_call->getCallee()->accept(this);
-		uInt field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
+		uInt16 field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
 		int argCount = 0;
 		for (ASTNode* arg : expr->getArgs()) {
 			arg->accept(this);
@@ -969,10 +968,10 @@ bool compiler::invoke(ASTCallExpr* expr) {
 		int name = identifierConstant(_superCall->getName());
 
 		if (currentClass == nullptr) {
-			error("Can't use 'super' outside of a class.");
+			error(_superCall->getName(), "Can't use 'super' outside of a class.");
 		}
 		else if (!currentClass->hasSuperclass) {
-			error("Can't use 'super' in a class with no superclass.");
+			error(_superCall->getName(), "Can't use 'super' in a class with no superclass.");
 		}
 
 		namedVar(syntheticToken("this"), false);
@@ -1002,8 +1001,14 @@ chunk* compiler::getChunk() {
 	return &current->func->body;
 }
 
-void error(string message) {
-	std::cout << "Compile error: " << message << "\n";
+void compiler::error(string message) {
+	std::cout << "Compile error [line " << current->line << "] in '" << curUnit->name << "': \n" << message << "\n";
+	throw 20;
+}
+
+void compiler::error(Token token, string msg) {
+	std::cout << "Compile error [line " << current->line << "] in '" << curUnit->name << "': \n";
+	report(curUnit->src, token, msg);
 	throw 20;
 }
 
