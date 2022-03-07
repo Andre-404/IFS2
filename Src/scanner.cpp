@@ -6,8 +6,8 @@ string span::getStr() {
 	return sourceFile->sourceFile.substr(start, length);
 }
 
-scanner::scanner(string _source) {
-	curFile = new file(_source);
+scanner::scanner(string _source, string _sourceName) {
+	curFile = new file(_source, _sourceName);
 	line = 1;
 	start = 0;
 	current = start;
@@ -299,26 +299,50 @@ TokenType scanner::directiveType() {
 }
 #pragma endregion
 
+//name:line:column: error: msg
+//line
+//which part
+//symbol: token.getLexeme()
+
+const string cyan = "\u001b[38;5;117m";
+const string black = "\u001b[0m";
+const string red = "\u001b[38;5;196m";
+const string yellow = "\u001b[38;5;220m";
+
+void underlineToken(span symbol) {
+	file* src = symbol.sourceFile;
+	uInt64 lineStart = src->lines[symbol.line - 1];
+	uInt64 lineEnd = 0;
+
+	if (src->lines.size() - 1 == symbol.line - 1) lineEnd = src->sourceFile.size();
+	else lineEnd = src->lines[symbol.line];
+
+	string line = std::to_string(symbol.line);
+	std::cout << yellow + src->name + black + ":" + cyan + line + " | " + black;
+	std::cout << src->sourceFile.substr(lineStart, lineEnd - lineStart);
+
+	string temp = "";
+	temp.insert(0, src->name.size() + line.size() + 4, ' ');
+	uInt64 tempN = 0;
+	for (; tempN < symbol.column; tempN++) temp.append(" ");
+	for (; tempN < symbol.column + symbol.length; tempN++) temp.append("^");
+
+	std::cout << red + temp + black + "\n";
+}
 
 void report(file* src, Token& token, string msg) {
 	if (token.type == TOKEN_EOF) {
 		std::cout << "End of file. \n" << msg;
 		return;
 	}
-	uInt64 lineStart = src->lines[token.str.line - 1];
-	uInt64 lineEnd = 0;
+	string name = "\u001b[38;5;220m" + src->name + black;
+	std::cout << red + "error: " + black + msg + "\n";
 
-	if (src->lines.size() - 1 == token.str.line - 1) lineEnd = src->sourceFile.size();
-	else lineEnd = src->lines[token.str.line];
+	if (token.partOfMacro) {
+		underlineToken(token.macro);
+	}
 
-	std::cout << src->sourceFile.substr(lineStart, lineEnd - lineStart);
-	string temp = "";
-	uInt64 tempN = 0;
-	for (; tempN < token.str.column; tempN++) temp.append(" ");
-	for (; tempN < token.str.column + token.str.length; tempN++) temp.append("^");
-	temp.append("\n");
-	std::cout << temp;
-	std::cout << msg;
+	underlineToken(token.str);
 	std::cout << "\n";
 }
 

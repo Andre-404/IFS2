@@ -690,7 +690,6 @@ Token parser::consume(TokenType type, string msg) {
 }
 
 int parser::error(Token token, string msg) {
-	std::cout << "Error " << "[line " << token.line << "]" << " in '" << curUnit->name << "': \n";
 	hadError = true;
 	report(curUnit->src, token, msg);
 	return 0;

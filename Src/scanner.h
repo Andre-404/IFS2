@@ -34,9 +34,10 @@ enum TokenType {
 
 
 struct file {
+	string name;
 	string sourceFile;
 	std::vector<uInt> lines;
-	file(string& src) : sourceFile(src) {};
+	file(string& src, string& _name) : sourceFile(src), name(_name) {};
 };
 
 struct span {
@@ -59,6 +60,8 @@ struct Token {
 	span str;
 	//for things like synthetic tokens and expanded macros
 	long long line;
+	bool partOfMacro;
+	span macro;
 	
 	bool isSynthetic;
 	const char* ptr;
@@ -67,6 +70,7 @@ struct Token {
 		isSynthetic = false;
 		ptr = nullptr;
 		line = -1;
+		partOfMacro = false;
 		type = TOKEN_LEFT_PAREN;
 	}
 	Token(span _str, TokenType _type) {
@@ -75,12 +79,14 @@ struct Token {
 		ptr = nullptr;
 		str = _str;
 		type = _type;
+		partOfMacro = false;
 	}
 	Token(const char* _ptr, uInt64 _line, TokenType _type) {
 		ptr = _ptr;
 		isSynthetic = true;
 		type = _type;
 		line = _line;
+		partOfMacro = false;
 	}
 	string getLexeme() {
 		if (isSynthetic) return string(ptr);
@@ -91,7 +97,7 @@ struct Token {
 
 class scanner {
 public:
-	scanner(string source);
+	scanner(string source, string _sourceName);
 	vector<Token> getArr();
 	file* getFile() { return curFile; }
 private:

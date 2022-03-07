@@ -1007,7 +1007,6 @@ void compiler::error(string message) {
 }
 
 void compiler::error(Token token, string msg) {
-	std::cout << "Compile error [line " << current->line << "] in '" << curUnit->name << "': \n";
 	report(curUnit->src, token, msg);
 	throw 20;
 }

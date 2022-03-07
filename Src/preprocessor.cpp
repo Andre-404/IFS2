@@ -27,7 +27,7 @@ preprocessUnit* preprocessor::scanFile(string unitName) {
 	reset();
 	string fullPath = filepath + unitName + ".txt";
 
-	scanner sc(readFile(fullPath));
+	scanner sc(readFile(fullPath), unitName);
 	preprocessUnit* unit = new preprocessUnit(unitName, sc.getArr(), sc.getFile());
 	curUnit = unit;
 	allUnits[unitName] = unit;
@@ -235,7 +235,7 @@ vector<Token> preprocessor::expandMacro(macro& toExpand, vector<Token>& callToke
 void preprocessor::replaceMacros(preprocessUnit* unit) {
 	auto it = unit->tokens.begin();
 	for (int i = 0; i < unit->tokens.size(); i++) {
-		Token& token = unit->tokens[i];
+		Token token = unit->tokens[i];
 		if (token.type != TOKEN_IDENTIFIER) continue;
 		if (macros.count(token.getLexeme()) == 0) continue;
 		macro& _macro = macros[token.getLexeme()];
@@ -251,7 +251,11 @@ void preprocessor::replaceMacros(preprocessUnit* unit) {
 			vector<Token> expanded = expandMacro(_macro, unit->tokens, i - 1);
 			macroStack.pop_back();
 			//for better error detection
-			for (Token expandedToken : expanded) expandedToken.line = token.line;
+			for (Token& expandedToken : expanded) {
+				expandedToken.line = token.line;
+				expandedToken.partOfMacro = true;
+				expandedToken.macro = token.str;
+			}
 			//insert the macro body with the params replaced by args
 			it = unit->tokens.begin();
 			unit->tokens.insert(it + i, expanded.begin(), expanded.end());
@@ -260,6 +264,11 @@ void preprocessor::replaceMacros(preprocessUnit* unit) {
 		}
 		macroStack.push_back(_macro);
 		vector<Token> expanded = expandMacro(_macro);
+		for (Token& expandedToken : expanded) {
+			expandedToken.line = token.line;
+			expandedToken.partOfMacro = true;
+			expandedToken.macro = token.str;
+		}
 		macroStack.pop_back();
 		//get rid of macro name
 		unit->tokens.erase(it + i);
@@ -345,6 +354,5 @@ void preprocessor::processDirectives(preprocessUnit* unit) {
 
 void preprocessor::error(Token token, string msg) {
 	hadError = true;
-	std::cout << "Error " << "[line " << token.line << "]" << " in '" << curUnit->name << "':" << "\n";
 	report(curUnit->srcFile, token, msg);
 }
