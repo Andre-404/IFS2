@@ -309,7 +309,7 @@ const string black = "\u001b[0m";
 const string red = "\u001b[38;5;196m";
 const string yellow = "\u001b[38;5;220m";
 
-void underlineToken(span symbol) {
+void underlineSymbol(span symbol) {
 	file* src = symbol.sourceFile;
 	uInt64 lineStart = src->lines[symbol.line - 1];
 	uInt64 lineEnd = 0;
@@ -339,10 +339,10 @@ void report(file* src, Token& token, string msg) {
 	std::cout << red + "error: " + black + msg + "\n";
 
 	if (token.partOfMacro) {
-		underlineToken(token.macro);
+		underlineSymbol(token.macro);
 	}
 
-	underlineToken(token.str);
+	underlineSymbol(token.str);
 	std::cout << "\n";
 }
 

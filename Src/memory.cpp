@@ -268,3 +268,10 @@ managed* GC::getCachedPtr() {
 	cachedPtrs.pop_back();
 	return ptr;
 }
+
+void GC::clearASTNodes() {
+	for (ASTNode* node : ast) {
+		delete node;
+	}
+	ast.clear();
+}

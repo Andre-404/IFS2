@@ -1,4 +1,7 @@
 #include "AST.h"
+#include "namespaces.h"
+
+using namespace global;
 
 /*
 accept methods invoke the specific visitor functions for each node type
@@ -9,10 +12,7 @@ ASTAssignmentExpr::ASTAssignmentExpr(Token _name, ASTNode* _value) {
 	name = _name;
 	value = _value;
 	type = ASTType::ASSINGMENT;
-}
-
-ASTAssignmentExpr::~ASTAssignmentExpr() {
-	delete value;
+	gc.addASTNode(this);
 }
 
 void ASTAssignmentExpr::accept(visitor* vis) {
@@ -28,12 +28,7 @@ ASTSetExpr::ASTSetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, ASTNo
 	field = _field;
 	accessor = _accessor;
 	value = _val;
-}
-
-ASTSetExpr::~ASTSetExpr() {
-	delete callee;
-	delete field;
-	delete value;
+	gc.addASTNode(this);
 }
 
 void ASTSetExpr::accept(visitor* vis) {
@@ -49,6 +44,7 @@ ASTConditionalExpr::ASTConditionalExpr(ASTNode* _condition, ASTNode* _thenBranch
 	thenBranch = _thenBranch;
 	elseBranch = _elseBranch;
 	type = ASTType::CONDITIONAL;
+	gc.addASTNode(this);
 }
 
 void ASTConditionalExpr::accept(visitor* vis) {
@@ -63,11 +59,7 @@ ASTBinaryExpr::ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
 	left = _left;
 	right = _right;
 	type = ASTType::BINARY;
-}
-
-ASTBinaryExpr::~ASTBinaryExpr() {
-	//delete left;
-	//delete right;
+	gc.addASTNode(this);
 }
 
 void ASTBinaryExpr::accept(visitor* vis) {
@@ -80,10 +72,7 @@ ASTUnaryExpr::ASTUnaryExpr(Token _op, ASTNode* _right) {
 	op = _op;
 	right = _right;
 	type = ASTType::UNARY;
-}
-
-ASTUnaryExpr::~ASTUnaryExpr() {
-	delete right;
+	gc.addASTNode(this);
 }
 
 void ASTUnaryExpr::accept(visitor* vis) {
@@ -96,11 +85,7 @@ ASTArrayDeclExpr::ASTArrayDeclExpr(vector<ASTNode*>& _members) {
 	members = _members;
 	size = members.size();
 	type = ASTType::ARRAY;
-}
-ASTArrayDeclExpr::~ASTArrayDeclExpr() {
-	for (ASTNode* member : members) {
-		delete member;
-	}
+	gc.addASTNode(this);
 }
 
 void ASTArrayDeclExpr::accept(visitor* vis) {
@@ -115,12 +100,7 @@ ASTCallExpr::ASTCallExpr(ASTNode* _callee, Token _accessor, vector<ASTNode*>& _a
 	args = _args;
 	type = ASTType::CALL;
 	accessor = _accessor;
-}
-ASTCallExpr::~ASTCallExpr() {
-	delete callee;
-	for (ASTNode* node : args) {
-		delete node;
-	}
+	gc.addASTNode(this);
 }
 
 void ASTCallExpr::accept(visitor* vis) {
@@ -133,10 +113,7 @@ void ASTCallExpr::accept(visitor* vis) {
 ASTGroupingExpr::ASTGroupingExpr(ASTNode* _expr) {
 	expr = _expr;
 	ASTType::GROUPING;
-}
-
-ASTGroupingExpr::~ASTGroupingExpr() {
-	delete expr;
+	gc.addASTNode(this);
 }
 
 void ASTGroupingExpr::accept(visitor* vis) {
@@ -150,13 +127,11 @@ ASTUnaryVarAlterExpr::ASTUnaryVarAlterExpr(ASTNode* _incrementExpr, bool _isPref
 	incrementExpr = _incrementExpr;
 	isPrefix = _isPrefix;
 	type = ASTType::VAR_ALTER;
+	gc.addASTNode(this);
 }
 
 void ASTUnaryVarAlterExpr::accept(visitor* vis) {
 	vis->visitUnaryVarAlterExpr(this);
-}
-ASTUnaryVarAlterExpr::~ASTUnaryVarAlterExpr() {
-	delete incrementExpr;
 }
 #pragma endregion
 
@@ -164,12 +139,7 @@ ASTUnaryVarAlterExpr::~ASTUnaryVarAlterExpr() {
 ASTStructLiteral::ASTStructLiteral(vector<structEntry> _fields) {
 	fields = _fields;
 	type = ASTType::STRUCT_LITERAL;
-}
-
-ASTStructLiteral::~ASTStructLiteral() {
-	for (structEntry entry : fields) {
-		delete entry.expr;
-	}
+	gc.addASTNode(this);
 }
 
 void ASTStructLiteral::accept(visitor* vis) {
@@ -181,6 +151,7 @@ void ASTStructLiteral::accept(visitor* vis) {
 ASTLiteralExpr::ASTLiteralExpr(Token _token) {
 	token = _token;
 	type = ASTType::LITERAL;
+	gc.addASTNode(this);
 }
 
 void ASTLiteralExpr::accept(visitor* vis) {
@@ -189,6 +160,12 @@ void ASTLiteralExpr::accept(visitor* vis) {
 #pragma endregion
 
 #pragma region Super literal
+ASTSuperExpr::ASTSuperExpr(Token _methodName) {
+	type = ASTType::SUPER;
+	methodName = _methodName;
+	gc.addASTNode(this);
+}
+
 void ASTSuperExpr::accept(visitor* vis) {
 	vis->visitSuperExpr(this);
 }
@@ -197,6 +174,7 @@ void ASTSuperExpr::accept(visitor* vis) {
 #pragma region Yield expr
 ASTYieldExpr::ASTYieldExpr(ASTNode* _expr) {
 	expr = _expr;
+	gc.addASTNode(this);
 }
 
 void ASTYieldExpr::accept(visitor* vis) {
@@ -211,6 +189,7 @@ ASTFiberLiteral::ASTFiberLiteral(vector<Token>& _startParams, int _arity, ASTNod
 	startParams = _startParams;
 	arity = _arity;
 	body = _body;
+	gc.addASTNode(this);
 }
 
 void ASTFiberLiteral::accept(visitor* vis) {
@@ -222,6 +201,7 @@ void ASTFiberLiteral::accept(visitor* vis) {
 #pragma region Fiber run
 ASTFiberRunExpr::ASTFiberRunExpr(vector<ASTNode*>& _args) {
 	args = _args;
+	gc.addASTNode(this);
 }
 
 void ASTFiberRunExpr::accept(visitor* vis) {
@@ -238,10 +218,7 @@ ASTVarDecl::ASTVarDecl(Token _name, ASTNode* _setExpr) {
 	name = _name;
 	setExpr = _setExpr;
 	type = ASTType::VAR_DECL;
-}
-
-ASTVarDecl::~ASTVarDecl() {
-	if(setExpr != NULL) delete setExpr;
+	gc.addASTNode(this);
 }
 
 void ASTVarDecl::accept(visitor* vis) {
@@ -258,9 +235,7 @@ ASTFunc::ASTFunc(Token _name, vector<Token>& _args, int _arity, ASTNode* _body) 
 	body = _body;
 	type = ASTType::FUNC;
 	name = _name;
-}
-ASTFunc::~ASTFunc() {
-	delete body;
+	gc.addASTNode(this);
 }
 
 void ASTFunc::accept(visitor* vis) {
@@ -275,12 +250,7 @@ ASTClass::ASTClass(Token _name, vector<ASTNode*> _methods, Token _inheritedClass
 	type = ASTType::CLASS;
 	_inherits = __inherits;
 	inheritedClass = _inheritedClassName;
-}
-
-ASTClass::~ASTClass() {
-	for (ASTNode* method : methods) {
-		delete method;
-	}
+	gc.addASTNode(this);
 }
 
 void ASTClass::accept(visitor* vis) {
@@ -294,10 +264,7 @@ void ASTClass::accept(visitor* vis) {
 ASTPrintStmt::ASTPrintStmt(ASTNode* _expr) {
 	expr = _expr;
 	type = ASTType::PRINT_STMT;
-}
-
-ASTPrintStmt::~ASTPrintStmt() {
-	delete expr;
+	gc.addASTNode(this);
 }
 
 void ASTPrintStmt::accept(visitor* vis) {
@@ -309,10 +276,7 @@ void ASTPrintStmt::accept(visitor* vis) {
 ASTExprStmt::ASTExprStmt(ASTNode* _expr) {
 	expr = _expr;
 	ASTType::EXPR_STMT;
-}
-
-ASTExprStmt::~ASTExprStmt() {
-	delete expr;
+	gc.addASTNode(this);
 }
 
 void ASTExprStmt::accept(visitor* vis) {
@@ -326,12 +290,7 @@ void ASTExprStmt::accept(visitor* vis) {
 ASTBlockStmt::ASTBlockStmt(vector<ASTNode*>& _statements) {
 	statements = _statements;
 	type = ASTType::BLOCK_STMT;
-}
-
-ASTBlockStmt::~ASTBlockStmt() {
-	for (ASTNode* node : statements) {
-		delete node;
-	}
+	gc.addASTNode(this);
 }
 
 void ASTBlockStmt::accept(visitor* vis) {
@@ -347,11 +306,7 @@ ASTIfStmt::ASTIfStmt(ASTNode* _then, ASTNode* _else, ASTNode* _condition) {
 	elseBranch = _else;
 	condition = _condition;
 	type = ASTType::IF_STMT;
-}
-ASTIfStmt::~ASTIfStmt() {
-	delete thenBranch;
-	delete elseBranch;
-	delete condition;
+	gc.addASTNode(this);
 }
 
 void ASTIfStmt::accept(visitor* vis) {
@@ -366,11 +321,9 @@ ASTWhileStmt::ASTWhileStmt(ASTNode* _body, ASTNode* _condition) {
 	body = _body;
 	condition = _condition;
 	type = ASTType::WHILE_STMT;
+	gc.addASTNode(this);
 }
-ASTWhileStmt::~ASTWhileStmt() {
-	delete body;
-	delete condition;
-}
+
 void ASTWhileStmt::accept(visitor* vis) {
 	vis->visitWhileStmt(this);
 }
@@ -383,13 +336,7 @@ ASTForStmt::ASTForStmt(ASTNode* _init, ASTNode* _condition, ASTNode* _increment,
 	increment = _increment;
 	body = _body;
 	type = ASTType::FOR_STMT;
-}
-
-ASTForStmt::~ASTForStmt() {
-	delete init;
-	delete condition;
-	delete increment;
-	delete body;
+	gc.addASTNode(this);
 }
 
 void ASTForStmt::accept(visitor* vis) {
@@ -403,6 +350,7 @@ ASTForeachStmt::ASTForeachStmt(Token _varName, ASTNode* _collection, ASTNode* _b
 	collection = _collection;
 	body = _body;
 	type = ASTType::FOREACH_STMT;
+	gc.addASTNode(this);
 }
 
 void ASTForeachStmt::accept(visitor* vis) {
@@ -414,6 +362,7 @@ void ASTForeachStmt::accept(visitor* vis) {
 ASTBreakStmt::ASTBreakStmt(Token _token) {
 	token = _token;
 	type = ASTType::BREAK_STMT;
+	gc.addASTNode(this);
 }
 void ASTBreakStmt::accept(visitor* vis) {
 	vis->visitBreakStmt(this);
@@ -428,12 +377,7 @@ ASTSwitchStmt::ASTSwitchStmt(ASTNode* _expr, vector<ASTNode*>& _cases, switchTyp
 	casesType = _type;
 	numCases = cases.size();
 	hasDefault = _hasDefault;
-}
-ASTSwitchStmt::~ASTSwitchStmt() {
-	delete expr;
-	for (ASTNode* _case : cases) {
-		delete _case;
-	}
+	gc.addASTNode(this);
 }
 
 void ASTSwitchStmt::accept(visitor* vis) {
@@ -454,13 +398,9 @@ ASTCase::ASTCase(ASTNode* _expr, vector<ASTNode*>& _stmts, bool _isDefault) {
 	stmts = _stmts;
 	type = ASTType::CASE;
 	isDefault = _isDefault;
+	gc.addASTNode(this);
 }
-ASTCase::~ASTCase() {
-	delete expr;
-	for (ASTNode* stmt : stmts) {
-		delete stmt;
-	}
-}
+
 void ASTCase::accept(visitor* vis) {
 	vis->visitCase(this);
 }
@@ -471,9 +411,7 @@ ASTReturn::ASTReturn(ASTNode* _expr, Token _keyword) {
 	expr = _expr;
 	keyword = _keyword;
 	type = ASTType::RETURN;
-}
-ASTReturn::~ASTReturn() {
-	delete expr;
+	gc.addASTNode(this);
 }
 
 void ASTReturn::accept(visitor* vis) {

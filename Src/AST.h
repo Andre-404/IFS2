@@ -129,7 +129,6 @@ private:
 	ASTNode* value;
 public:
 	ASTAssignmentExpr(Token _name, ASTNode* _value);
-	~ASTAssignmentExpr();
 	void accept(visitor* vis);
 
 	Token getToken() { return name; }
@@ -144,7 +143,6 @@ private:
 	ASTNode* value;
 public:
 	ASTSetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, ASTNode* _val);
-	~ASTSetExpr();
 	void accept(visitor* vis);
 	
 	ASTNode* getCallee() { return callee; }
@@ -174,7 +172,6 @@ private:
 	ASTNode* right;
 public:
 	ASTBinaryExpr(ASTNode* _left, Token _op, ASTNode* _right);
-	~ASTBinaryExpr();
 	void accept(visitor* vis);
 
 	Token getToken() { return op; }
@@ -188,7 +185,6 @@ private:
 	ASTNode* right;
 public:
 	ASTUnaryExpr(Token _op, ASTNode* _right);
-	~ASTUnaryExpr();
 	void accept(visitor* vis);
 
 	Token getToken() { return op; }
@@ -201,7 +197,6 @@ private:
 	int size;
 public:
 	ASTArrayDeclExpr(vector<ASTNode*>& _members);
-	~ASTArrayDeclExpr();
 	void accept(visitor* vis);
 	vector<ASTNode*> getMembers() { return members; }
 	int getSize() { return size; }
@@ -214,7 +209,6 @@ private:
 	vector<ASTNode*> args;
 public:
 	ASTCallExpr(ASTNode* _callee, Token _accessor, vector<ASTNode*>& _args);
-	~ASTCallExpr();
 	void accept(visitor* vis);
 	ASTNode* getCallee() { return callee; }
 	vector<ASTNode*> getArgs() { return args; }
@@ -225,9 +219,7 @@ class ASTSuperExpr : public ASTNode {
 private:
 	Token methodName;
 public:
-	ASTSuperExpr(Token _methodName) : methodName(_methodName) {
-		type = ASTType::SUPER;
-	};
+	ASTSuperExpr(Token _methodName);
 
 	void accept(visitor* vis);
 	Token getName() { return methodName; }
@@ -238,7 +230,6 @@ private:
 	ASTNode* expr;
 public:
 	ASTGroupingExpr(ASTNode* _expr);
-	~ASTGroupingExpr();
 	void accept(visitor* vis);
 
 	ASTNode* getExpr() { return expr; }
@@ -251,7 +242,6 @@ private:
 	bool isPrefix;
 public:
 	ASTUnaryVarAlterExpr(ASTNode* _incrementExpr, bool _isPrefix, bool _isPositive);
-	~ASTUnaryVarAlterExpr();
 	void accept(visitor* vis);
 
 	bool getIsPositive() { return isPositive; }
@@ -280,7 +270,6 @@ private:
 	vector<structEntry> fields;
 public:
 	ASTStructLiteral(vector<structEntry> _fields);
-	~ASTStructLiteral();
 
 	void accept(visitor* vis);
 	vector<structEntry>& getEntries() { return fields; }
@@ -332,7 +321,6 @@ private:
 	ASTNode* expr;
 public:
 	ASTPrintStmt(ASTNode* _expr);
-	~ASTPrintStmt();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return expr; }
 };
@@ -342,7 +330,6 @@ private :
 	ASTNode* expr;
 public:
 	ASTExprStmt(ASTNode* _expr);
-	~ASTExprStmt();
 	void accept(visitor* vis);
 
 	ASTNode* getExpr() { return expr; }
@@ -354,7 +341,6 @@ private:
 	Token name;
 public:
 	ASTVarDecl(Token _name, ASTNode* _setExpr);
-	~ASTVarDecl();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return setExpr; }
 	Token getToken() { return name; }
@@ -365,7 +351,6 @@ private:
 	vector<ASTNode*> statements;
 public:
 	ASTBlockStmt(vector<ASTNode*>& _statements);
-	~ASTBlockStmt();
 	void accept(visitor* vis);
 	vector<ASTNode*> getStmts() { return statements; }
 };
@@ -377,7 +362,6 @@ private:
 	ASTNode* condition;
 public:
 	ASTIfStmt(ASTNode* _then, ASTNode* _else, ASTNode* _condition);
-	~ASTIfStmt();
 	void accept(visitor* vis);
 	ASTNode* getCondition() { return condition; }
 	ASTNode* getThen() { return thenBranch; }
@@ -390,7 +374,6 @@ private:
 	ASTNode* condition;
 public:
 	ASTWhileStmt(ASTNode* _body, ASTNode* _condition);
-	~ASTWhileStmt();
 	void accept(visitor* vis);
 	ASTNode* getCondition() { return condition; }
 	ASTNode* getBody() { return body; }
@@ -404,7 +387,6 @@ private:
 	ASTNode* increment;
 public:
 	ASTForStmt(ASTNode* _init, ASTNode* _condition, ASTNode* _increment, ASTNode* _body);
-	~ASTForStmt();
 	void accept(visitor* vis);
 	ASTNode* getCondition() { return condition; }
 	ASTNode* getBody() { return body; }
@@ -444,7 +426,6 @@ private:
 	bool hasDefault;
 public:
 	ASTSwitchStmt(ASTNode* _expr, vector<ASTNode*>& _cases, switchType _type, bool _hasDefault);
-	~ASTSwitchStmt();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return expr; }
 	vector<ASTNode*> getCases() { return cases; }
@@ -459,7 +440,6 @@ private:
 	bool isDefault;
 public:
 	ASTCase(ASTNode* _expr, vector<ASTNode*>& _stmts, bool _isDefault);
-	~ASTCase();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return expr; }
 	vector<ASTNode*> getStmts() { return stmts; }
@@ -476,7 +456,6 @@ private:
 	Token name;
 public:
 	ASTFunc(Token _name, vector<Token>& _args, int _arity, ASTNode* _body);
-	~ASTFunc();
 
 	void accept(visitor* vis);
 
@@ -493,7 +472,6 @@ private:
 	Token keyword;
 public:
 	ASTReturn(ASTNode* _expr, Token keyword);
-	~ASTReturn();
 	void accept(visitor* vis);
 	ASTNode* getExpr() { return expr; }
 	Token getKeyword() { return keyword; }
@@ -507,7 +485,6 @@ private:
 	bool _inherits;
 public:
 	ASTClass(Token _name, vector<ASTNode*> _methods, Token _inheritedClass, bool __inherits);
-	~ASTClass();
 	void accept(visitor* vis);
 
 	Token getName() { return name; }

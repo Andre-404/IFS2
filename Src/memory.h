@@ -9,6 +9,7 @@
 
 class vm;
 class compiler;
+class ASTNode;
 
 //Lisp 2 style mark-compact GC,
 //utilizes 2 heaps, one for small objects(defined in  object.h) and one(LOH) for (potentially)larger objects such as strings and arrays
@@ -28,6 +29,8 @@ public:
 	void* allocRawStatic(size_t size);
 	void clear();
 	void cachePtr(managed* ptr);
+	void addASTNode(ASTNode* _node) { ast.push_back(_node); }
+	void clearASTNodes();
 	managed* getCachedPtr();
 private:
 	//LOH is used for arrays/strings, normal heap is used for obj* objects
@@ -43,6 +46,9 @@ private:
 
 	//these are all the cached pointers to heap objects that need to be updated, works like a stack
 	std::vector<managed*> cachedPtrs;
+
+	//gets populated during the parsing phase and cleared out after compilation is done
+	std::vector<ASTNode*> ast;
 
 	//debug stuff
 	#ifdef DEBUG_GC

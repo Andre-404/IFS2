@@ -51,6 +51,7 @@ compiler::compiler(string path, string fileName, funcType _type) {
 	}
 
 	for (translationUnit* unit : sortedUnits) delete unit;
+	gc.clearASTNodes();
 }
 
 bool identifiersEqual(const string& a, const string& b);
