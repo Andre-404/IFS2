@@ -1,6 +1,7 @@
 #include "fiber.h"
 #include "namespaces.h"
 #include "VM.h"
+#include "debug.h"
 #include <stdarg.h>
 
 
@@ -88,19 +89,27 @@ Value objFiber::peek(int depth) {
 }
 
 interpretResult objFiber::runtimeError(const char* format, ...) {
+	const string cyan = "\u001b[38;5;117m";
+	const string black = "\u001b[0m";
+	const string red = "\u001b[38;5;196m";
+	const string yellow = "\u001b[38;5;220m";
+
+	std::cout << red + "runtime error: \n" + black;
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fputs("\n", stderr);
-
 	//prints callstack
 	for (int i = frameCount - 1; i >= 0; i--) {
 		callFrame* frame = &frames[i];
 		objFunc* function = frame->closure->func;
-		size_t instruction = frame->ip - 1;
-		fprintf(stderr, "[line %d] in ", function->body.lines[instruction]);
-		std::cout << (function->name == NULL ? "script" : function->name->str) << "()\n";
+		uInt64 instruction = frame->ip - 1;
+		codeLine line = function->body.getLine(instruction);
+		//fileName:line | in <func name>()
+		string temp = yellow + line.name + black + ":" + cyan + std::to_string(line.line) + " | " + black;
+		std::cout << temp<<"in ";
+		std::cout << (function->name == nullptr ? "script" : function->name->str) << "()\n";
 	}
 	resetStack();
 	return RUNTIME_ERROR;
@@ -135,7 +144,7 @@ bool objFiber::callValue(Value callee, int argCount) {
 		case OBJ_NATIVE: {
 			int arity = AS_NATIVE(callee)->arity;
 			if (argCount != arity) {
-				runtimeError("Expected %d arguments but got %d.", arity, argCount);
+				runtimeError("Expected %d arguments for function call but got %d.", arity, argCount);
 				return false;
 			}
 			NativeFn native = AS_NATIVE(callee)->func;
@@ -164,13 +173,13 @@ bool objFiber::callValue(Value callee, int argCount) {
 				return call(AS_CLOSURE(initializer), argCount);
 			}
 			else if (argCount != 0) {
-				runtimeError("Expected 0 arguments for class initalization but got %d.", argCount);
+				runtimeError("Class constructor expects 0 arguments but got %d.", argCount);
 				return false;
 			}
 			return true;
 		}
 		case OBJ_BOUND_METHOD: {
-			//puts the receiver instance in the 0th slot('this' points to the 0th slot)
+			//puts the receiver instance in the 0th slot of the current callframe('this' points to the 0th slot)
 			objBoundMethod* bound = AS_BOUND_METHOD(callee);
 			stackTop[-argCount - 1] = bound->receiver;
 			return call(bound->method, argCount);
@@ -185,7 +194,7 @@ bool objFiber::callValue(Value callee, int argCount) {
 
 bool objFiber::call(objClosure* closure, int argCount) {
 	if (argCount != closure->func->arity) {
-		runtimeError("Expected %d arguments but got %d.", closure->func->arity, argCount);
+		runtimeError("Expected %d arguments for function call but got %d.", closure->func->arity, argCount);
 		return false;
 	}
 
@@ -243,7 +252,7 @@ bool objFiber::bindMethod(objClass* klass, objString* name) {
 	//At the start the instance whose method we're binding needs to be on top of the stack
 	Value method;
 	if (!klass->methods.get(name, &method)) {
-		runtimeError("Undefined property '%s'.", name->str);
+		runtimeError("%s doesn't contain method '%s'.", klass->name->str, name->str);
 		return false;
 	}
 	//we need to push the method to the stack because if a GC collection happens the ptr inside of method becomes invalid
@@ -263,7 +272,7 @@ bool objFiber::bindMethod(objClass* klass, objString* name) {
 bool objFiber::invoke(objString* fieldName, int argCount) {
 	Value receiver = peek(argCount);
 	if (!IS_INSTANCE(receiver)) {
-		runtimeError("Only instances have methods.");
+		runtimeError("Only instances can call methods, got %s.", valueToStr(receiver).c_str());
 		return false;
 	}
 
@@ -287,7 +296,7 @@ bool objFiber::invoke(objString* fieldName, int argCount) {
 bool objFiber::invokeFromClass(objClass* klass, objString* name, int argCount) {
 	Value method;
 	if (!klass->methods.get(name, &method)) {
-		runtimeError("Undefined property '%s'.", name->str);
+		runtimeError("Class '%s' doesn't contain '%s'.", klass->name->str, name->str);
 		return false;
 	}
 	//the bottom of the call stack will contain the receiver instance
@@ -308,7 +317,7 @@ interpretResult objFiber::execute() {
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			throw runtimeError("Operands must be numbers."); \
+			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str()); \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -318,12 +327,11 @@ interpretResult objFiber::execute() {
 	#define INT_BINARY_OP(valueType, op)\
 		do {\
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			runtimeError("Operands must be numbers."); \
-			return interpretResult::INTERPRETER_RUNTIME_ERROR; \
+			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str()); \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
-			push(valueType((double)((int)a op (int)b))); \
+			push(valueType((double)((uInt64)a op (uInt64)b))); \
 		} while (false)
 
 	#ifdef DEBUG_TRACE_EXECUTION
@@ -380,7 +388,7 @@ interpretResult objFiber::execute() {
 		#pragma region Unary
 		case OP_NEGATE:
 			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number.");
+				return runtimeError("Operand must be a number, got %s.", valueToStr(peek(0)).c_str());
 			}
 			push(NUMBER_VAL(-AS_NUMBER(pop())));
 			break;
@@ -389,7 +397,7 @@ interpretResult objFiber::execute() {
 			break;
 		case OP_BIN_NOT: {
 			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number.");
+				return runtimeError("Operand must be a number, got %s.", valueToStr(peek(0)).c_str());
 			}
 			int num = AS_NUMBER(pop());
 			num = ~num;
@@ -409,7 +417,8 @@ interpretResult objFiber::execute() {
 				push(NUMBER_VAL(a + b));
 			}
 			else {
-				return runtimeError("Operands must be two numbers or two strings.");
+				return runtimeError("Operands must be two numbers or two strings, got %s and %s.",
+					valueToStr(peek(1)).c_str(), valueToStr(peek(0)));
 			}
 			break;
 		}
@@ -428,7 +437,7 @@ interpretResult objFiber::execute() {
 				num.as.num++;
 				push(num);
 			}
-			else return runtimeError("Operands must be two numbers.");
+			else return runtimeError("Operands must be two numbers, got %s and number.", valueToStr(peek(0)).c_str());
 			break;
 		}
 		case OP_SUBTRACT_1: {
@@ -437,7 +446,7 @@ interpretResult objFiber::execute() {
 				num.as.num--;
 				push(num);
 			}
-			else return runtimeError("Operands must be two numbers.");
+			else return runtimeError("Operands must be two numbers, got %s and number.", valueToStr(peek(0)).c_str());
 			break;
 		}
 		#pragma endregion
@@ -463,7 +472,8 @@ interpretResult objFiber::execute() {
 		case OP_GREATER_EQUAL: {
 			//Have to do this because of floating point comparisons
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
-				return runtimeError("Operands must be numbers.");
+				return runtimeError("Operands must be two numbers, got %s and %s.", 
+					valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str());
 			}
 			double b = AS_NUMBER(pop());
 			double a = AS_NUMBER(pop());
@@ -473,7 +483,8 @@ interpretResult objFiber::execute() {
 		}
 		case OP_LESS_EQUAL: {
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
-				return runtimeError("Operands must be numbers.");
+				return runtimeError("Operands must be two numbers, got %s and %s.",
+					valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str());
 			}
 			double b = AS_NUMBER(pop());
 			double a = AS_NUMBER(pop());
@@ -519,48 +530,52 @@ interpretResult objFiber::execute() {
 
 		case OP_DEFINE_GLOBAL: {
 			objString* name = READ_STRING();
-			VM->globals.set(name, peek(0));
+			VM->curModule->vars.set(name, peek(0));
 			pop();
 			break;
 		}
 		case OP_DEFINE_GLOBAL_LONG: {
 			objString* name = READ_STRING_LONG();
-			VM->globals.set(name, peek(0));
+			VM->curModule->vars.set(name, peek(0));
 			pop();
 			break;
 		}
 
 		case OP_GET_GLOBAL: {
 			objString* name = READ_STRING();
+			objModule* mod = AS_MODULE(READ_CONSTANT());
 			Value value;
-			if (!VM->globals.get(name, &value)) {
-				return runtimeError("Undefined variable '%s'.", name->str);
+			if (!mod->vars.get(name, &value)) {
+				if(!VM->globals.get(name, &value)) return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			push(value);
 			break;
 		}
 		case OP_GET_GLOBAL_LONG: {
 			objString* name = READ_STRING_LONG();
+			objModule* mod = AS_MODULE(READ_CONSTANT_LONG());
 			Value value;
-			if (!VM->globals.get(name, &value)) {
-				return runtimeError("Undefined variable '%s'.", name->str);
+			if (!mod->vars.get(name, &value)) {
+				if (!VM->globals.get(name, &value)) return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			push(value);
 			break;
 		}
 
 		case OP_SET_GLOBAL: {
+			objModule* mod = AS_MODULE(pop());
 			objString* name = READ_STRING();
-			if (VM->globals.set(name, peek(0))) {
-				VM->globals.del(name);
+			if (mod->vars.set(name, peek(0))) {
+				mod->vars.del(name);
 				return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			break;
 		}
 		case OP_SET_GLOBAL_LONG: {
+			objModule* mod = AS_MODULE(pop());
 			objString* name = READ_STRING_LONG();
-			if (VM->globals.set(name, peek(0))) {
-				VM->globals.del(name);
+			if (mod->vars.set(name, peek(0))) {
+				mod->vars.del(name);
 				return runtimeError("Undefined variable '%s'.", name->str);
 			}
 			break;
@@ -593,6 +608,25 @@ interpretResult objFiber::execute() {
 		case OP_CLOSE_UPVALUE: {
 			closeUpvalues(stackTop - 1);
 			pop();
+			break;
+		}
+
+		case OP_MODULE_GET: {
+			if (!IS_MODULE(peek(0))) return runtimeError("Expected a module for the left side of '::'.");
+			objModule* mod = AS_MODULE(pop());
+			objString* name = READ_STRING();
+			Value val;
+			if (!mod->vars.get(name, &val)) return runtimeError("Undefined variable %s in file '%s'", name->str, mod->name->str);
+			push(val);
+			break;
+		}
+		case OP_MODULE_GET_LONG: {
+			if(!IS_MODULE(peek(0))) return runtimeError("Expected a module for the left side of '::'.");
+			objModule* mod = AS_MODULE(pop());
+			objString* name = READ_STRING_LONG();
+			Value val;
+			if (!mod->vars.get(name, &val)) return runtimeError("Undefined variable %s in file '%s'", name->str, mod->name->str);
+			push(val);
 			break;
 		}
 		#pragma endregion
@@ -692,7 +726,7 @@ interpretResult objFiber::execute() {
 				}
 			}
 			else {
-				return runtimeError("Switch expression can be only string or number.");
+				return runtimeError("Switch expression can be only string or number, got %s.", valueToStr(peek(0)).c_str());
 			}
 			break;
 		}
@@ -798,8 +832,8 @@ interpretResult objFiber::execute() {
 			//we want to use these 2 values as args and receiver
 			Value field = peek(0);
 			Value callee = peek(1);
-			if (!IS_OBJ(callee))
-				runtimeError("Expected a array or struct, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			if (!IS_ARRAY(callee) && !IS_INSTANCE(callee))
+				return runtimeError("Expected a array or struct, got %s.", valueToStr(callee).c_str());
 
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
@@ -807,7 +841,7 @@ interpretResult objFiber::execute() {
 				//but in order to maintain stack balance we need to get rid of these 2 vars if this is not a get call to a access method
 				pop();
 				pop();
-				if (!IS_NUMBER(field)) return runtimeError("Index must be a number.");
+				if (!IS_NUMBER(field)) return runtimeError("Index must be a number, got %s.", valueToStr(field).c_str());
 				double index = AS_NUMBER(field);
 				objArray* arr = AS_ARRAY(callee);
 				//Trying to access a variable using a float is a error
@@ -832,7 +866,7 @@ interpretResult objFiber::execute() {
 				//pop if this instance doesn't contain a access method to maintain stack balance
 				pop();
 				pop();
-				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
+				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueToStr(field).c_str());
 
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* name = AS_STRING(field);
@@ -848,8 +882,6 @@ interpretResult objFiber::execute() {
 				push(NIL_VAL());
 				break;
 			}
-			default:
-				return runtimeError("Expected a array or struct.");
 			}
 			break;
 		}
@@ -862,14 +894,14 @@ interpretResult objFiber::execute() {
 			//if we encounter a user defined set expr, we will want to exit early and not pop all of the above values as they will be used as args
 			bool earlyExit = false;
 
-			if (!IS_OBJ(callee))
-				runtimeError("Expected a array or struct, got %s.", callee.type == VAL_NUM ? "number" : callee.type == VAL_NIL ? "nil" : "bool");
+			if (!IS_ARRAY(callee) && !IS_INSTANCE(callee))
+				return runtimeError("Expected a array or struct, got %s.", valueToStr(callee).c_str());
 
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
 				objArray* arr = AS_ARRAY(callee);
 
-				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number");
+				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number, got %s.", valueToStr(field).c_str());
 				double index = AS_NUMBER(field);
 				//accessing array with a float is a error
 				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
@@ -894,7 +926,7 @@ interpretResult objFiber::execute() {
 					break;
 				}
 				//if the instance doesn't have a defined set method, proceed as normal
-				if (!IS_STRING(field)) return runtimeError("Expected a string for field name.");
+				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueToStr(field).c_str());
 
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* str = AS_STRING(field);
@@ -902,8 +934,6 @@ interpretResult objFiber::execute() {
 				instance->table.set(str, val);
 				break;
 			}
-			default:
-				return runtimeError("Expected a array or struct.");
 			}
 			if (earlyExit) break;
 			//we want only the value to remain on the stack, since set is a assignment expr
@@ -921,8 +951,7 @@ interpretResult objFiber::execute() {
 
 		case OP_GET_PROPERTY: {
 			if (!IS_INSTANCE(peek(0))) {
-				runtimeError("Only instances/structs have properties.");
-				return RUNTIME_ERROR;
+				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(0)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(0));
@@ -942,8 +971,7 @@ interpretResult objFiber::execute() {
 		}
 		case OP_GET_PROPERTY_LONG: {
 			if (!IS_INSTANCE(peek(0))) {
-				runtimeError("Only instances/structs have properties.");
-				return RUNTIME_ERROR;
+				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(0)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(0));
@@ -964,8 +992,7 @@ interpretResult objFiber::execute() {
 
 		case OP_SET_PROPERTY: {
 			if (!IS_INSTANCE(peek(1))) {
-				runtimeError("Only instances have fields.");
-				return RUNTIME_ERROR;
+				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(1)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(1));
@@ -979,8 +1006,7 @@ interpretResult objFiber::execute() {
 		}
 		case OP_SET_PROPERTY_LONG: {
 			if (!IS_INSTANCE(peek(1))) {
-				runtimeError("Only instances have fields.");
-				return RUNTIME_ERROR;
+				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(1)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(1));
@@ -1052,8 +1078,7 @@ interpretResult objFiber::execute() {
 		case OP_INHERIT: {
 			Value superclass = peek(1);
 			if (!IS_CLASS(superclass)) {
-				runtimeError("Superclass must be a class.");
-				return RUNTIME_ERROR;
+				return runtimeError("Superclass must be a class, got %s.", valueToStr(superclass).c_str());
 			}
 			objClass* subclass = AS_CLASS(peek(0));
 			//copy down inheritance
@@ -1119,7 +1144,7 @@ interpretResult objFiber::execute() {
 			uInt argNum = READ_BYTE();
 			Value val = pop();
 			if (!IS_FIBER(val)) {
-				return runtimeError("Expected a fiber to run.");
+				return runtimeError("Expected a fiber, got %s.", valueToStr(val).c_str());
 			}
 			objFiber* fiber = AS_FIBER(val);
 
@@ -1136,10 +1161,10 @@ interpretResult objFiber::execute() {
 			}
 			//transfers the values to the fiber we're starting/resuming, if no values are specified it transfers nil
 			if (!fiber->hasStarted() && argNum != fiber->startValuesNum) {
-				return runtimeError("Incorrect number of starting values for a fiber.");
+				return runtimeError("Incorrect number of starting values for a fiber, expected %d, got %d.", fiber->startValuesNum, argNum);
 			}
 			else if (fiber->hasStarted() && argNum != 1) {
-				return runtimeError("Can only pass 1 value when resuming a fiber.");
+				return runtimeError("Can only pass 1 value when resuming a fiber, passed %d.", argNum);
 			}
 			//pops and transfers the args to the other fiber
 			for (int i = 0; i < argNum; i++) {
@@ -1162,6 +1187,14 @@ interpretResult objFiber::execute() {
 			break;
 		}
 		#pragma endregion
+
+		#pragma region Modules
+		case OP_START_MODULE: {
+			VM->curModule = AS_MODULE(pop());
+			break;
+		}
+		#pragma endregion
+
 
 		}
 	}

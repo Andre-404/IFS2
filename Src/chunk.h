@@ -95,17 +95,42 @@ enum OpCode {
 	OP_FIBER_CREATE,
 	OP_FIBER_RUN,
 	OP_FIBER_YIELD,
+
+	//Modules
+	OP_START_MODULE,
+	OP_MODULE_GET,
+	OP_MODULE_GET_LONG,
+};
+
+
+struct codeLine {
+	uInt64 end;
+	uInt64 line;
+	string name;
+
+	codeLine() {
+		line = 0;
+		end = 0;
+		name = "";
+	}
+	codeLine(uInt64 _line, string& _name) {
+		line = _line;
+		name = _name;
+	}
 };
 
 //disassemble is here, but the functions it calls are in debug.cpp
 class chunk {
 public:
-	gcVector<int> lines;
+	//these aren't performance critical so we don't put them on the GC managed heap to save collection time
+	vector<codeLine> lines;
+
 	gcVector<uint8_t> code;
 	gcVector<Value> constants;
 	vector<switchTable> switchTables;
 	chunk() {};
-	void writeData(uint8_t opCode, int line);
+	void writeData(uint8_t opCode, uInt line, string& name);
+	codeLine getLine(uInt offset);
 	void disassemble(string name);
 	uInt addConstant(Value val);
 	int addSwitch(switchTable table);

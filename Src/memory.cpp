@@ -11,7 +11,7 @@ GC::GC() {
 	inactiveHeap = nullptr;
 
 	VM = nullptr;
-	compiling = nullptr;
+	compilerSession = nullptr;
 
 	//debug stuff
 	#ifdef DEBUG_GC
@@ -63,7 +63,7 @@ void* GC::allocRawStatic(size_t size) {
 }
 
 void GC::collect() {
-	if (collecting || (VM == nullptr && compiling == nullptr)) return;
+	if (collecting || (VM == nullptr && compilerSession == nullptr)) return;
 	collecting = true;
 	mark();
 	//calculate the address of each marked object after compaction
@@ -83,7 +83,7 @@ void GC::collect() {
 }
 
 void GC::resize(size_t size) {
-	if (collecting || (VM == nullptr && compiling == nullptr)) return;
+	if (collecting || (VM == nullptr && compilerSession == nullptr)) return;
 	collecting = true;
 
 	activeHeap->resize(size);
@@ -106,7 +106,7 @@ void GC::resize(size_t size) {
 }
 
 void GC::shrink() {
-	if (collecting || (VM == nullptr && compiling == nullptr)) return;
+	if (collecting || (VM == nullptr && compilerSession == nullptr)) return;
 	collecting = true;
 	activeHeap->shrink();
 
@@ -156,15 +156,19 @@ void GC::markTable(hashTable* table) {
 void GC::markRoots() {
 	global::internedStrings.entries.mark();
 	if (VM != nullptr) {
+		markObj(VM->curModule);
 		markObj(VM->curFiber);
 		markTable(&VM->globals);
 	}
 	//since a GC collection can be triggered during the compilation, we must also mark all function which are currently being compiled
-	if (compiling != nullptr) {
-		compilerInfo* cur = compiling->current;
+	if (compilerSession != nullptr) {
+		compilerInfo* cur = compilerSession->current;
 		while (cur != nullptr) {
 			markObj(cur->func);
 			cur = cur->enclosing;
+		}
+		for (objModule* mod : compilerSession->modules) {
+			markObj(mod);
 		}
 	}
 }
@@ -214,13 +218,17 @@ void GC::updateRootPtrs() {
 	if (VM != nullptr) {
 		if(VM->curFiber != nullptr) VM->curFiber = reinterpret_cast<objFiber*>(VM->curFiber->moveTo);
 		updateTable(&VM->globals);
+		if(VM->curModule != nullptr) VM->curModule = reinterpret_cast<objModule*>(VM->curModule->moveTo);
 	}
 	//the GC can also be called during the compilation process, so we need to update it's compiler info
-	if (compiling != nullptr) {
-		compilerInfo* cur = compiling->current;
+	if (compilerSession != nullptr) {
+		compilerInfo* cur = compilerSession->current;
 		while (cur != nullptr) {
 			cur->func = reinterpret_cast<objFunc*>(cur->func->moveTo);
 			cur = cur->enclosing;
+		}
+		for (int i = 0; i < compilerSession->modules.size(); i++) {
+			compilerSession->modules[i] = reinterpret_cast<objModule*>(compilerSession->modules[i]->moveTo);
 		}
 	}
 }

@@ -143,7 +143,7 @@ vector<Token> preprocessor::expandMacro(macro& toExpand) {
 
 		//if the macro is already on the stack, it's a recursion
 		macro& _macro = macros[token.getLexeme()];
-		if (containsMacro(macroStack, _macro) > 0) {
+		if (containsMacro(macroStack, _macro)) {
 			error(_macro.name, "Recursive macro expansion detected.");
 			tokens.clear();
 			break;
@@ -201,7 +201,7 @@ vector<Token> preprocessor::expandMacro(macro& toExpand, vector<Token>& callToke
 		if (macros.count(token.getLexeme()) == 0) continue;
 
 		macro& _macro = macros[token.getLexeme()];
-		if (containsMacro(macroStack, _macro) > 0) {
+		if (containsMacro(macroStack, _macro)) {
 			error(_macro.name, "Recursive macro expansion detected.");
 			tokens.clear();
 			break;

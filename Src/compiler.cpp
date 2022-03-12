@@ -30,15 +30,35 @@ compiler::compiler(string path, string fileName, funcType _type) {
 	parser Parser;
 	vector<translationUnit*> sortedUnits = Parser.parse(path, fileName);
 	compiled = true;
-	global::gc.compiling = this;
+	global::gc.compilerSession = this;
 
 	current = new compilerInfo(nullptr, funcType::TYPE_SCRIPT);
 	currentClass = nullptr;
-	//If the parser had a error, make sure we don't run this bytecode
+	//if compiled is false the bytecode produces isn't ran
 	if (Parser.hadError) compiled = false;
 
 	for (translationUnit* unit : sortedUnits) {
 		curUnit = unit;
+		//at runtime, all declarations inside a file will bind to the appropriate module
+		//caching to satisfy the GC
+		gc.cachePtr(copyString(curUnit->name));
+		objModule* curModule = new objModule(dynamic_cast<objString*>(gc.getCachedPtr()));
+		modules.push_back(curModule);
+		emitConstant(OBJ_VAL(curModule));
+		emitByte(OP_START_MODULE);
+		//init the imports
+		for (translationUnit* dep : unit->deps) {
+			string& depName = dep->name;
+			for (objModule* mod : modules) {
+				if (mod->name->compare(depName)) {
+					emitConstant(OBJ_VAL(mod));
+					emitByte(OP_DEFINE_GLOBAL_LONG);
+					emit16Bit(makeConstant(OBJ_VAL(copyString(depName))));
+					break;
+				}
+			}
+		}
+
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
 			try {
@@ -120,28 +140,45 @@ void compiler::visitBinaryExpr(ASTBinaryExpr* expr) {
 		patchJump(jump);
 		return;
 	}
-	expr->getRight()->accept(this);
+	uint8_t op = 0;
 	switch (expr->getToken().type) {
 	//take in double or string(in case of add)
-	case TOKEN_PLUS: emitByte(OP_ADD); break;
-	case TOKEN_MINUS: emitByte(OP_SUBTRACT); break;
-	case TOKEN_SLASH: emitByte(OP_DIVIDE); break;
-	case TOKEN_STAR: emitByte(OP_MULTIPLY); break;
+	case TOKEN_PLUS:	op = OP_ADD; break;
+	case TOKEN_MINUS:	op = OP_SUBTRACT; break;
+	case TOKEN_SLASH:	op = OP_DIVIDE; break;
+	case TOKEN_STAR:	op = OP_MULTIPLY; break;
 	//operands get cast to int for these ops
-	case TOKEN_PERCENTAGE: emitByte(OP_MOD); break;
-	case TOKEN_BITSHIFT_LEFT: emitByte(OP_BITSHIFT_LEFT); break;
-	case TOKEN_BITSHIFT_RIGHT: emitByte(OP_BITSHIFT_RIGHT); break;
-	case TOKEN_BITWISE_AND: emitByte(OP_BITWISE_AND); break;
-	case TOKEN_BITWISE_OR: emitByte(OP_BITWISE_OR); break;
-	case TOKEN_BITWISE_XOR: emitByte(OP_BITWISE_XOR); break;
+	case TOKEN_PERCENTAGE:		op = OP_MOD; break;
+	case TOKEN_BITSHIFT_LEFT:	op = OP_BITSHIFT_LEFT; break;
+	case TOKEN_BITSHIFT_RIGHT:	op = OP_BITSHIFT_RIGHT; break;
+	case TOKEN_BITWISE_AND:		op = OP_BITWISE_AND; break;
+	case TOKEN_BITWISE_OR:		op = OP_BITWISE_OR; break;
+	case TOKEN_BITWISE_XOR:		op = OP_BITWISE_XOR; break;
 	//these return bools
-	case TOKEN_EQUAL_EQUAL: emitByte(OP_EQUAL); break;
-	case TOKEN_BANG_EQUAL: emitByte(OP_NOT_EQUAL); break;
-	case TOKEN_GREATER: emitByte(OP_GREATER); break;
-	case TOKEN_GREATER_EQUAL: emitByte(OP_GREATER_EQUAL); break;
-	case TOKEN_LESS: emitByte(OP_LESS); break;
-	case TOKEN_LESS_EQUAL: emitByte(OP_LESS_EQUAL); break;
+	case TOKEN_EQUAL_EQUAL:		 op = OP_EQUAL; break;
+	case TOKEN_BANG_EQUAL:		 op = OP_NOT_EQUAL; break;
+	case TOKEN_GREATER:			 op = OP_GREATER; break;
+	case TOKEN_GREATER_EQUAL:	 op = OP_GREATER_EQUAL; break;
+	case TOKEN_LESS:			 op = OP_LESS; break;
+	case TOKEN_LESS_EQUAL:		 op = OP_LESS_EQUAL; break;
+	//module stuff
+	case TOKEN_DOUBLE_COLON: {
+		if (expr->getRight()->type == ASTType::LITERAL) {
+			ASTLiteralExpr* ident = dynamic_cast<ASTLiteralExpr*>(expr->getRight());
+			updateLine(ident->getToken());
+			if (ident->getToken().type == TOKEN_IDENTIFIER) {
+				uInt16 constant = identifierConstant(ident->getToken());
+				if (constant > UINT8_MAX) emitBytes(OP_MODULE_GET, constant);
+				else emitByteAnd16Bit(OP_MODULE_GET_LONG, constant);
+				return;
+			}
+			error(ident->getToken(), "Expected a identifier.");
+		}
+		error(expr->getToken(), "Expected a identifier after '::' operator.");
 	}
+	}
+	expr->getRight()->accept(this);
+	emitByte(op);
 }
 
 void compiler::visitUnaryExpr(ASTUnaryExpr* expr) {
@@ -164,6 +201,7 @@ void compiler::visitArrayDeclExpr(ASTArrayDeclExpr* expr) {
 }
 
 void compiler::visitCallExpr(ASTCallExpr* expr) {
+	updateLine(expr->getAccessor());
 	//invoking is field access + call, when the compiler recognizes this pattern it optimizes
 	if(invoke(expr)) return;
 	expr->getCallee()->accept(this);
@@ -319,8 +357,7 @@ void compiler::visitFiberRunExpr(ASTFiberRunExpr* expr) {
 
 
 void compiler::visitVarDecl(ASTVarDecl* decl) {
-	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0
-	updateLine(decl->getToken());
+	//if this is a global, we get a string constant index, if it's a local, it returns a dummy 0;
 	uInt16 global = parseVar(decl->getToken());
 	//compile the right side of the declaration, if there is no right side, the variable is initialized as nil
 	ASTNode* expr = decl->getExpr();
@@ -335,7 +372,6 @@ void compiler::visitVarDecl(ASTVarDecl* decl) {
 }
 
 void compiler::visitFuncDecl(ASTFunc* decl) {
-	updateLine(decl->getName());
 	uInt16 name = parseVar(decl->getName());
 	markInit();
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
@@ -360,6 +396,14 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
+	if (func->upvalueCount == 0) {
+		gc.cachePtr(func);
+		objClosure* closure = new objClosure(dynamic_cast<objFunc*>(gc.getCachedPtr()));
+		emitConstant(OBJ_VAL(closure));
+		defineVar(name);
+		return;
+	}
+
 	uInt16 constant = makeConstant(OBJ_VAL(func));
 
 	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
@@ -375,7 +419,6 @@ void compiler::visitFuncDecl(ASTFunc* decl) {
 
 void compiler::visitClassDecl(ASTClass* decl) {
 	Token className = decl->getName();
-	updateLine(className);
 	uInt16 constant = identifierConstant(className);
 	declareVar(className);
 
@@ -570,7 +613,6 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 			case switchType::NUM: {
 				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
 				updateLine(expr->getToken());
-				//TODO: round this?
 				int key = std::stoi(string(expr->getToken().getLexeme()));
 				long _ip = getChunk()->code.count() - start;
 
@@ -615,6 +657,7 @@ void compiler::visitCase(ASTCase* stmt) {
 }
 
 void compiler::visitReturnStmt(ASTReturn* stmt) {
+	updateLine(stmt->getKeyword());
 	if (current->type == funcType::TYPE_SCRIPT) {
 		error(stmt->getKeyword(), "Can't return from top-level code.");
 	}
@@ -635,7 +678,7 @@ void compiler::visitReturnStmt(ASTReturn* stmt) {
 #pragma region Emitting bytes
 
 void compiler::emitByte(uint8_t byte) {
-	getChunk()->writeData(byte, current->line);//line is incremented whenever we find a statement/expression that contains tokens
+	getChunk()->writeData(byte, current->line, curUnit->name);//line is incremented whenever we find a statement/expression that contains tokens
 }
 
 void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
@@ -671,6 +714,22 @@ void compiler::emitConstant(Value value) {
 	if (constant < 256) emitBytes(OP_CONSTANT, constant);
 	else if (constant < 1 << 15) emitByteAnd16Bit(OP_CONSTANT_LONG, constant);
 	else error("Constants overflow.");
+}
+
+void compiler::emitGlobalVar(Token name, bool canAssign) {
+	uInt arg = identifierConstant(name);
+	uInt mod = makeConstant(OBJ_VAL(modules[modules.size() - 1]));
+	uint8_t getOp = OP_GET_GLOBAL;
+	uint8_t setOp = OP_SET_GLOBAL;
+	if (arg > UINT8_MAX || mod > UINT8_MAX) {
+		getOp = OP_GET_GLOBAL_LONG;
+		setOp = OP_SET_GLOBAL_LONG;
+		emitByteAnd16Bit(canAssign ? setOp : getOp, arg);
+		emit16Bit(mod);
+		return;
+	}
+	emitByte(canAssign ? setOp : getOp);
+	emitBytes(arg, mod);
 }
 
 
@@ -715,6 +774,7 @@ bool identifiersEqual(const string& a, const string& b) {
 }
 
 uInt16 compiler::identifierConstant(Token name) {
+	updateLine(name);
 	string temp = name.getLexeme();
 	//since str is a cached pointer(a collection may occur while resizing the chunk constants array, we need to treat it as a cached ptr
 	uInt16 index = makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
@@ -738,7 +798,7 @@ void compiler::namedVar(Token token, bool canAssign) {
 	updateLine(token);
 	uint8_t getOp;
 	uint8_t setOp;
-	int arg = resolveLocal(token);
+	uInt arg = resolveLocal(token);
 	if (arg != -1) {
 		getOp = OP_GET_LOCAL;
 		setOp = OP_SET_LOCAL;
@@ -746,15 +806,7 @@ void compiler::namedVar(Token token, bool canAssign) {
 		getOp = OP_GET_UPVALUE;
 		setOp = OP_SET_UPVALUE;
 	}else {
-		arg = identifierConstant(token);
-		getOp = OP_GET_GLOBAL;
-		setOp = OP_SET_GLOBAL;
-		if (arg > UINT8_MAX) {
-			getOp = OP_GET_GLOBAL_LONG;
-			setOp = OP_SET_GLOBAL_LONG;
-			emitByteAnd16Bit(canAssign ? setOp : getOp, arg);
-			return;
-		}
+		return emitGlobalVar(token, canAssign);
 	}
 	emitBytes(canAssign ? setOp : getOp, arg);
 }
@@ -903,6 +955,7 @@ Token compiler::syntheticToken(const char* str) {
 
 #pragma region Classes and methods
 void compiler::method(ASTFunc* _method, Token className) {
+	updateLine(_method->getName());
 	uInt16 name = identifierConstant(_method->getName());
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
@@ -928,11 +981,20 @@ void compiler::method(ASTFunc* _method, Token className) {
 	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
 
 	objFunc* func = endFuncDecl();
+	if (func->upvalueCount == 0) {
+		gc.cachePtr(func);
+		objClosure* closure = new objClosure(dynamic_cast<objFunc*>(gc.getCachedPtr()));
+		emitConstant(OBJ_VAL(closure));
+
+		emitByteAnd16Bit(OP_METHOD, name);
+		return;
+	}
 	uInt16 constant = makeConstant(OBJ_VAL(func));
 
 	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
 	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
-
+	//if this function does capture any upvalues, we emit the code for getting them, 
+	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);
@@ -1014,11 +1076,12 @@ void compiler::error(Token token, string msg) {
 
 objFunc* compiler::endFuncDecl() {
 	if(!current->hasReturn) emitReturn();
+	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
+	objFunc* func = current->func;
+	func->body.lines[func->body.lines.size() - 1].end = func->body.code.count();
 	#ifdef DEBUG_PRINT_CODE
 		current->func->body.disassemble(current->func->name == nullptr ? "script" : current->func->name->str);
 	#endif
-	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
-	objFunc* func = current->func;
 	compilerInfo* temp = current->enclosing;
 	delete current;
 	current = temp;

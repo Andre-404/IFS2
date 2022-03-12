@@ -36,6 +36,30 @@ void printValue(Value value) {
     }
 }
 
+string valueToStr(Value val) {
+    switch (val.type) {
+    case VAL_NIL: return "nil";
+    case VAL_NUM: return "number";
+    case VAL_OBJ: {
+        obj* temp = AS_OBJ(val);
+        switch (temp->type) {
+        case OBJ_ARRAY: return "array";
+        case OBJ_BOUND_METHOD: return "method";
+        case OBJ_CLASS: return "class " + string(AS_CLASS(val)->name->str);
+        case OBJ_CLOSURE: return "function";
+        case OBJ_FIBER: return "fiber";
+        case OBJ_FUNC: return "function";
+        case OBJ_INSTANCE: return AS_INSTANCE(val)->klass == nullptr ? "struct" : "instance";
+        case OBJ_MODULE: return "module";
+        case OBJ_NATIVE: return "native function";
+        case OBJ_STRING: return "string";
+        case OBJ_UPVALUE: return "upvalue";
+        }
+    }
+    }
+    return "error, couldn't determine type of value";
+}
+
 //creates a value obj on the stack and 
 Value BOOL_VAL(bool boolean) {
     Value val;

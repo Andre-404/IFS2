@@ -76,7 +76,6 @@ void movingHeapBlock::resize(size_t size) {
 
 void movingHeapBlock::shrink() {
 	size_t newHeapSize = (heapSize >> 2);
-	std::cout << "Heap shrank from: "<<heapSize<<" to: "<<newHeapSize<<"\n";
 	oldHeapBuffer = heapBuffer;
 	try {
 		heapBuffer = new byte[newHeapSize];
@@ -111,7 +110,6 @@ void movingHeapBlock::computeAddress() {
 	if (oldHeapBuffer == nullptr) oldHeapBuffer = heapBuffer;
 	byte* to = heapBuffer;
 	byte* from = oldHeapBuffer;
-
 	while (from < heapTop) {
 		managed* temp = reinterpret_cast<managed*>(from);
 		if (forwardAddress(reinterpret_cast<managed*>(from))) {
@@ -121,7 +119,6 @@ void movingHeapBlock::computeAddress() {
 		}
 		//get the next object from old heap
 		from += temp->getSize();
-
 	}
 }
 
@@ -195,6 +192,7 @@ void movingHeapBlock::dump(bool isPost) {
 
 	std::cout << "\nWent through: " << inc - from << " out of: " << heapSize;
 	std::cout << "\n";
+	std::cout << "Top is: " << (int*)heapTop << "\n";
 }
 
 

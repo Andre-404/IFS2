@@ -51,11 +51,16 @@ class binaryExpr;
 class callExpr;
 class conditionalExpr;
 
+class preprocessUnit;
+
 struct translationUnit {
 	vector<ASTNode*> stmts;
 	string name;
 	file* src;
-	translationUnit(string _name, file* _src) : name(_name), src(_src) {};
+	//used for figuring out which file a definition is coming from(if the scope resolution operator is used)
+	std::vector<translationUnit*> deps;
+
+	translationUnit(vector<translationUnit*>& sortedUnits, preprocessUnit* pUnit);
 	~translationUnit() { delete src; }
 };
 

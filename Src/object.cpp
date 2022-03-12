@@ -64,6 +64,11 @@ void printObject(Value value) {
 	case OBJ_BOUND_METHOD:
 		printFunction(AS_BOUND_METHOD(value)->method->func);
 		break;
+	case OBJ_MODULE: {
+		objModule* mod = AS_MODULE(value);
+		std::cout << "Module: <" << mod->name->str << ">";
+		break;
+	}
 	}
 }
 
@@ -117,6 +122,10 @@ bool objString::compare(char* toCompare, uInt _length) {
 	return true;
 }
 
+bool objString::compare(string& str) {
+	return compare((char*)str.c_str(), str.size());
+}
+
 //assumes the string hasn't been heap allocated
 objString* copyString(char* str, uInt length) {
 	uInt64 hash = hashString(str, length);
@@ -135,6 +144,10 @@ objString* copyString(char* str, uInt length) {
 
 objString* copyString(const char* str, uInt length) {
 	return copyString((char*)str, length);
+}
+
+objString* copyString(string str) {
+	return copyString(str.c_str(), str.size());
 }
 
 //works on the same basis as copyString, but it assumed that "str" has been heap allocated, so it frees it
@@ -223,6 +236,7 @@ objFunc::objFunc() {
 	type = OBJ_FUNC;
 	moveTo = nullptr;
 	name = nullptr;
+	std::cout << "Size: " << sizeof(objFunc)<<"\n";
 }
 
 void objFunc::move(byte* to) {
@@ -237,7 +251,6 @@ void objFunc::trace(std::vector<managed*>& stack) {
 	}
 	body.constants.mark();
 	body.code.mark();
-	body.lines.mark();
 	for (int i = 0; i < body.switchTables.size(); i++) {
 		body.switchTables[i].arr.mark();
 	}
@@ -251,7 +264,6 @@ void objFunc::updatePtrs() {
 	}
 	body.constants.update();
 	body.code.update();
-	body.lines.update();
 	for (int i = 0; i < body.switchTables.size(); i++) {
 		body.switchTables[i].arr.update();
 	}
@@ -343,20 +355,20 @@ void objArray::move(byte* to) {
 }
 
 void objArray::trace(std::vector<managed*>& stack) {
-	//if (numOfHeapPtr > 0) {
+	if (numOfHeapPtr > 0) {
 		for (int i = 0; i < values.count(); i++) {
 			markVal(stack, values[i]);
 		}
-	//}
+	}
 	values.mark();
 }
 
 void objArray::updatePtrs() {
-	//if (numOfHeapPtr > 0) {
+	if (numOfHeapPtr > 0) {
 		for (int i = 0; i < values.count(); i++) {
 			updateVal(&values[i]);
 		}
-	//}
+	}
 	values.update();
 }
 #pragma endregion
@@ -427,4 +439,27 @@ void objBoundMethod::updatePtrs() {
 	method = (objClosure*)method->moveTo;
 	updateVal(&receiver);
 }
+#pragma endregion
+
+#pragma region objModule
+objModule::objModule(objString* _name) {
+	name = _name;
+	type = OBJ_MODULE;
+	moveTo = nullptr;
+}
+
+void objModule::move(byte* to) {
+	memmove(to, this, sizeof(objModule));
+}
+
+void objModule::updatePtrs() {
+	updateTable(&vars);
+	name = reinterpret_cast<objString*>(name->moveTo);
+}
+
+void objModule::trace(std::vector<managed*>& stack) {
+	name->moveTo = name;
+	markTable(stack, vars);
+}
+
 #pragma endregion

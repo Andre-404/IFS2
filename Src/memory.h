@@ -24,7 +24,7 @@ class GC {
 public:
 	GC();
 	vm* VM;
-	compiler* compiling;
+	compiler* compilerSession;
 	void* allocRaw(size_t size, bool shouldLOHAlloc);
 	void* allocRawStatic(size_t size);
 	void clear();

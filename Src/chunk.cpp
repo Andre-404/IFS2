@@ -1,9 +1,15 @@
 #include "chunk.h"
 #include "debug.h"
 
-void chunk::writeData(uint8_t opCode, int line) {
+void chunk::writeData(uint8_t opCode, uInt line, string& name) {
 	code.push(opCode);
-	lines.push(line);
+	if (lines.size() == 0) {
+		lines.push_back(codeLine(line, name));
+		return;
+	}
+	if (lines[lines.size() - 1].line == line) return;
+	lines[lines.size() - 1].end = code.count();
+	lines.push_back(codeLine(line, name));
 }
 
 //adds the constant to the array and returns it's index, which is used in conjuction with OP_CONSTANT
@@ -26,7 +32,15 @@ int chunk::addSwitch(switchTable table) {
 void chunk::disassemble(string name) {
 	std::cout << "=======" << name << "=======\n";
 	//prints every instruction in chunk
-	for (int offset = 0; offset < code.count();) {
+	for (uInt offset = 0; offset < code.count();) {
 		offset = disassembleInstruction(this, offset);
 	}
+}
+
+codeLine chunk::getLine(uInt offset) {
+	for (codeLine line : lines) {
+		if (offset <= line.end) return line;
+	}
+	std::cout << "FUck";
+	exit(64);
 }

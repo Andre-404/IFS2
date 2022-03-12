@@ -48,7 +48,7 @@ struct compilerInfo {
 	funcType type;
 	bool hasReturn;
 
-	int line;
+	uInt line;
 	//keeps track of every break statement that has been encountered
 	vector<_break> breakStmts;
 	//locals
@@ -72,11 +72,11 @@ public:
 	compilerInfo* current;
 	classCompilerInfo* currentClass;
 	bool compiled;
+	vector<objModule*> modules;
 	compiler(string path, string fileName, funcType _type);//for compiling top level code
 	chunk* getChunk();
 	objFunc* endFuncDecl();
 private:
-
 	translationUnit* curUnit;
 
 	#pragma region Helpers
@@ -98,6 +98,7 @@ private:
 	void defineVar(uInt16 name);
 	void namedVar(Token token, bool canAssign);
 	uInt16 parseVar(Token name);
+	void emitGlobalVar(Token name, bool canAssign);
 	//locals
 	void declareVar(Token& name);
 	void addLocal(Token name);

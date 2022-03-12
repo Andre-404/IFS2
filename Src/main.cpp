@@ -20,7 +20,7 @@ int main() {
 	cout << "Input filepath:\n";
 	string path;
 	cin >> path;
-	//doing this insanity to seperate the path to the file(which is needed for includes) and the name of the file to compile
+	//doing this insanity to seperate the path to the file(which is needed for imports) and the name of the file to compile
 	string firstFileName;
 	firstFileName = path.substr(path.find_last_of('\\') + 1, path.size() - path.find_last_of('\\'));
 	firstFileName = firstFileName.substr(0, firstFileName.find(".txt"));
@@ -28,8 +28,8 @@ int main() {
 	cout << "Output:\n\n";
 	if (!path.empty()) {
 		compiler* comp = new compiler(path, firstFileName, funcType::TYPE_SCRIPT);
-		vm* newVm = new vm(comp);
+		vm newVm(comp);
 	}
-	cin.get();
+	system("Pause");
 	return 0;
 }

@@ -3,7 +3,22 @@
 #include "debug.h"
 #include "preprocessor.h"
 
-//TODO: fix memory leak issues with AST nodes inside of expressions
+
+translationUnit::translationUnit(vector<translationUnit*>& sortedUnits, preprocessUnit* pUnit) {
+	name = pUnit->name;
+	src = pUnit->srcFile;
+	for (preprocessUnit* unit : pUnit->deps) {
+		string name = unit->name;
+		//guaranteed to work
+		for (translationUnit* dep : sortedUnits) {
+			if (dep->name == name) {
+				deps.push_back(dep);
+				break;
+			}
+		}
+	}
+}
+
 #pragma region Parselet
 //used for parsing assignment tokens(eg. =, +=, *=...)
 ASTNode* parser::parseAssign(ASTNode* left, Token op) {
@@ -356,6 +371,8 @@ parser::parser() {
 		addInfix(TOKEN_LEFT_BRACKET,	new fieldAccessExpr, precedence::CALL);
 		addInfix(TOKEN_DOT,				new fieldAccessExpr, precedence::CALL);
 
+		addInfix(TOKEN_DOUBLE_COLON,	new binaryExpr, precedence::PRIMARY);
+
 		//Postfix
 		//postfix and mixfix operators get parsed with the infix parselets
 		addInfix(TOKEN_INCREMENT, new unaryVarAlterPostfix, precedence::ALTER);
@@ -377,7 +394,7 @@ vector<translationUnit*> parser::parse(string path, string name) {
 	vector<preprocessUnit*> sortedUnits = pp.getSortedUnits();
 	if (pp.hadError) hadError = true;
 	for (preprocessUnit* pUnit : sortedUnits) {
-		translationUnit* unit = new translationUnit(pUnit->name, pUnit->srcFile);
+		translationUnit* unit = new translationUnit(units, pUnit);
 		units.push_back(unit);
 		curUnit = unit;
 		reset(pUnit->tokens);

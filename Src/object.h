@@ -18,7 +18,8 @@ enum objType {
 	OBJ_CLASS,
 	OBJ_INSTANCE,
 	OBJ_BOUND_METHOD,
-	OBJ_FIBER
+	OBJ_FIBER,
+	OBJ_MODULE
 };
 
 //pointer to a native function
@@ -38,6 +39,7 @@ public:
 	uInt64 hash;
 	objString(char* _str, uInt _length, uInt64 _hash);
 	bool compare(char* toCompare, uInt _length);
+	bool compare(string& str);
 
 	void move(byte* to);
 	size_t getSize() { return sizeof(objString) + length + 1; }
@@ -153,6 +155,19 @@ public:
 
 class objFiber;
 
+class objModule : public obj {
+public:
+	hashTable vars;
+	objString* name;
+
+	objModule(objString* _name);
+
+	void move(byte* to);
+	size_t getSize() { return sizeof(objModule); }
+	void updatePtrs();
+	void trace(std::vector<managed*>& stack);
+};
+
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 
@@ -169,6 +184,7 @@ static inline bool isObjType(Value value, objType type) {
 #define IS_INSTANCE(value)     isObjType(value, OBJ_INSTANCE)
 #define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
 #define	IS_FIBER(value)		   isObjType(value, OBJ_FIBER)
+#define IS_MODULE(value)	   isObjType(value, OBJ_MODULE)
 
 #define AS_STRING(value)       ((objString*)AS_OBJ(value))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -180,9 +196,11 @@ static inline bool isObjType(Value value, objType type) {
 #define AS_INSTANCE(value)     ((objInstance*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value) ((objBoundMethod*)AS_OBJ(value))
 #define AS_FIBER(value)		   ((objFiber*)AS_OBJ(value))
+#define AS_MODULE(value)	   ((objModule*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
 objString* copyString(const char* str, uInt length);
+objString* copyString(string str);
 objString* takeString(char* str, uInt length);
 
 void printObject(Value value);

@@ -178,6 +178,25 @@ static int constantInstruction(string name, chunk* Chunk, int offset, bool isLon
 	return offset + (isLong ? 3 : 2);
 }
 
+static int doubleConstantInstruction(string name, chunk* Chunk, int offset, bool isLong) {
+	uInt constant1 = 0;
+	uInt constant2 = 0;
+	if (!isLong) {
+		constant1 = Chunk->code[offset + 1];
+		constant2 = Chunk->code[offset + 2];
+	}
+	else {
+		constant1 = ((Chunk->code[offset + 1] << 8) | Chunk->code[offset + 2]);
+		constant2 = ((Chunk->code[offset + 3] << 8) | Chunk->code[offset + 4]);
+	}
+	printf("%-16s %4d %4d '", name.c_str(), constant1, constant2);//have to use printf because of string spacing
+	printValue(Chunk->constants[constant1]);
+	printf("' '");
+	printValue(Chunk->constants[constant2]);
+	printf("'\n");
+	return offset + (isLong ? 5 : 3);
+}
+
 static int jumpInstruction(const char* name, int sign, chunk* Chunk, int offset) {
 	uint16_t jump = (uint16_t)(Chunk->code[offset + 1] << 8);
 	jump |= Chunk->code[offset + 2];
@@ -214,10 +233,10 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	//printf usage because of %04d
 	printf("%04d ", offset);
 
-	if (offset > 0 && Chunk->lines[offset] == Chunk->lines[offset - 1]) {
+	if (offset > 0 && Chunk->getLine(offset).line == Chunk->getLine(offset - 1).line) {
 		std::cout << "   | ";
 	}else {
-		printf("%4d ", Chunk->lines[offset]);
+		printf("%4d ", Chunk->getLine(offset).line);
 	}
 
 	uint8_t instruction = Chunk->code[offset];
@@ -281,13 +300,13 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 	case OP_DEFINE_GLOBAL_LONG:
 		return constantInstruction("OP DEFINE GLOBAL LONG", Chunk, offset, true);
 	case OP_GET_GLOBAL:
-		return constantInstruction("OP GET GLOBAL", Chunk, offset, false);
+		return doubleConstantInstruction("OP GET GLOBAL", Chunk, offset, false);
 	case OP_GET_GLOBAL_LONG:
-		return constantInstruction("OP GET GLOBAL LONG", Chunk, offset, true);
+		return doubleConstantInstruction("OP GET GLOBAL LONG", Chunk, offset, true);
 	case OP_SET_GLOBAL:
-		return constantInstruction("OP SET GLOBAL", Chunk, offset, false);
+		return doubleConstantInstruction("OP SET GLOBAL", Chunk, offset, false);
 	case OP_SET_GLOBAL_LONG:
-		return constantInstruction("OP SET GLOBAL LONG", Chunk, offset, true);
+		return doubleConstantInstruction("OP SET GLOBAL LONG", Chunk, offset, true);
 	case OP_GET_LOCAL:
 		return byteInstruction("OP GET LOCAL", Chunk, offset);
 	case OP_SET_LOCAL:
@@ -422,6 +441,12 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		printf("%-16s %4d arg count: %d\n", "OP FIBER CREATE", constant, argCount);
 		return offset + 3;
 	}
+	case OP_START_MODULE:
+		return simpleInstruction("OP START MODULE", offset);
+	case OP_MODULE_GET:
+		return constantInstruction("OP MODULE GET", Chunk, offset, false);
+	case OP_MODULE_GET_LONG:
+		return constantInstruction("OP MODULE GET LONG", Chunk, offset, true);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

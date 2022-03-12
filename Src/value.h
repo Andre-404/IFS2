@@ -43,7 +43,9 @@ Value OBJ_VAL(obj* object);
 
 
 bool valuesEqual(Value a, Value b);
-void printValue(Value value);
+void printValue(Value val);
+
+string valueToStr(Value val);
 
 //Using epsilon value because of floating point precision
 #define FLOAT_EQ(x,v) (fabs(x - v) <= DBL_EPSILON)

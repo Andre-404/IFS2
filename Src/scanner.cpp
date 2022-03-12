@@ -85,7 +85,7 @@ Token scanner::scanToken() {
 	case '>':
 		return makeToken(match('=') ? TOKEN_GREATER_EQUAL : match('>') ? TOKEN_BITSHIFT_RIGHT : TOKEN_GREATER);
 	case '"': return string_();
-	case ':': return makeToken(TOKEN_COLON);
+	case ':': return makeToken(match(':') ? TOKEN_DOUBLE_COLON : TOKEN_COLON);
 	case '?': return makeToken(TOKEN_QUESTIONMARK);
 	case '\n':
 		curFile->lines.push_back(current);
@@ -190,9 +190,7 @@ Token scanner::number() {
 }
 
 bool scanner::isAlpha(char c) {
-	return (c >= 'a' && c <= 'z') ||
-		(c >= 'A' && c <= 'Z') ||
-		c == '_';
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
 Token scanner::identifier() {
@@ -296,6 +294,7 @@ TokenType scanner::directiveType() {
 	case 'm': return checkKeyword(2, 4, "acro", TOKEN_MACRO) == TOKEN_IDENTIFIER ? TOKEN_ERROR : TOKEN_MACRO;
 	case 'i': return checkKeyword(2, 5, "mport", TOKEN_IMPORT) == TOKEN_IDENTIFIER ? TOKEN_ERROR : TOKEN_IMPORT;
 	}
+	return TOKEN_ERROR;
 }
 #pragma endregion
 
