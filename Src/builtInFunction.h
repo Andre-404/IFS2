@@ -6,19 +6,23 @@
 
 #pragma region Arrays
 
-Value nativeArrayCreate(int argCount, Value* args);
-Value nativeArrayCopy(int argCount, Value* args);
-Value nativeArrayResize(int argCount, Value* args);
+void nativeArrayCreate(objFiber* fiber, int argCount, Value* args);
+void nativeArrayCopy(objFiber* fiber, int argCount, Value* args);
+void nativeArrayResize(objFiber* fiber, int argCount, Value* args);
 
-Value nativeArrayPush(int argCount, Value* args);
-Value nativeArrayPop(int argCount, Value* args);
-Value nativeArrayInsert(int argCount, Value* args);
-Value nativeArrayDelete(int argCount, Value* args);
+void nativeArrayPush(objFiber* fiber, int argCount, Value* args);
+void nativeArrayPop(objFiber* fiber, int argCount, Value* args);
+void nativeArrayInsert(objFiber* fiber, int argCount, Value* args);
+void nativeArrayDelete(objFiber* fiber, int argCount, Value* args);
 
-Value nativeArrayLength(int argCount, Value* args);
+void nativeArrayLength(objFiber* fiber, int argCount, Value* args);
 #pragma endregion
 
-Value nativeClock(int argCount, Value* args);
-Value nativeFloor(int argCount, Value* args);
-Value nativeRandomRange(int argCount, Value* args);
-Value nativeSetRandomSeed(int argCount, Value* args);
+void nativeClock(objFiber* fiber, int argCount, Value* args);
+void nativeFloor(objFiber* fiber, int argCount, Value* args);
+void nativeCeil(objFiber* fiber, int argCount, Value* args);
+void nativeRandomRange(objFiber* fiber, int argCount, Value* args);
+void nativeSetRandomSeed(objFiber* fiber, int argCount, Value* args);
+
+void nativeToString(objFiber* fiber, int argCount, Value* args);
+void nativeInput(objFiber* fiber, int argCount, Value* args);

@@ -392,6 +392,7 @@ parser::~parser() {
 vector<translationUnit*> parser::parse(string path, string name) {
 	preprocessor pp(path, name);
 	vector<preprocessUnit*> sortedUnits = pp.getSortedUnits();
+	tracker = pp.tracker;
 	if (pp.hadError) hadError = true;
 	for (preprocessUnit* pUnit : sortedUnits) {
 		translationUnit* unit = new translationUnit(units, pUnit);
@@ -708,7 +709,7 @@ Token parser::consume(TokenType type, string msg) {
 
 int parser::error(Token token, string msg) {
 	hadError = true;
-	report(curUnit->src, token, msg);
+	tracker.addIssue(token, msg, curUnit->src);
 	return 0;
 }
 

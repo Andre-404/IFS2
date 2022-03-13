@@ -29,6 +29,7 @@ compilerInfo::compilerInfo(compilerInfo* _enclosing, funcType _type) : enclosing
 compiler::compiler(string path, string fileName, funcType _type) {
 	parser Parser;
 	vector<translationUnit*> sortedUnits = Parser.parse(path, fileName);
+	tracker = Parser.tracker;
 	compiled = true;
 	global::gc.compilerSession = this;
 
@@ -69,7 +70,7 @@ compiler::compiler(string path, string fileName, funcType _type) {
 			}
 		}
 	}
-
+	tracker.printIssues();
 	for (translationUnit* unit : sortedUnits) delete unit;
 	gc.clearASTNodes();
 }
@@ -464,8 +465,8 @@ void compiler::visitClassDecl(ASTClass* decl) {
 
 void compiler::visitPrintStmt(ASTPrintStmt* stmt) {
 	stmt->getExpr()->accept(this);
-	emitByte(OP_PRINT);
-	emitByte(OP_POP);
+	//OP_TO_STRING is emitted first to handle the case of a instance whose class defines a toString method
+	emitBytes(OP_TO_STRING, OP_PRINT);
 }
 
 void compiler::visitExprStmt(ASTExprStmt* stmt) {
@@ -547,8 +548,6 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	int name = identifierConstant(syntheticToken("begin"));
 	emitByte(OP_INVOKE);
 	emitBytes(name, 0);
-	//emitBytes(OP_GET_PROPERTY, name);
-	//emitBytes(OP_CALL, 0);
 	addLocal(iterator);
 	defineVar(0);
 	//Get the var ready
@@ -713,7 +712,6 @@ void compiler::emitConstant(Value value) {
 	uInt16 constant = makeConstant(value);
 	if (constant < 256) emitBytes(OP_CONSTANT, constant);
 	else if (constant < 1 << 15) emitByteAnd16Bit(OP_CONSTANT_LONG, constant);
-	else error("Constants overflow.");
 }
 
 void compiler::emitGlobalVar(Token name, bool canAssign) {
@@ -1065,12 +1063,12 @@ chunk* compiler::getChunk() {
 }
 
 void compiler::error(string message) {
-	std::cout << "Compile error [line " << current->line << "] in '" << curUnit->name << "': \n" << message << "\n";
+	std::cout << "System compile error [line " << current->line << "] in '" << curUnit->name << "': \n" << message << "\n";
 	throw 20;
 }
 
 void compiler::error(Token token, string msg) {
-	report(curUnit->src, token, msg);
+	tracker.addIssue(token, msg, curUnit->src);
 	throw 20;
 }
 
@@ -1078,6 +1076,7 @@ objFunc* compiler::endFuncDecl() {
 	if(!current->hasReturn) emitReturn();
 	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
 	objFunc* func = current->func;
+	//for the last line of code
 	func->body.lines[func->body.lines.size() - 1].end = func->body.code.count();
 	#ifdef DEBUG_PRINT_CODE
 		current->func->body.disassemble(current->func->name == nullptr ? "script" : current->func->name->str);

@@ -43,6 +43,7 @@ enum OpCode {
 	OP_LESS_EQUAL,
 	//Statements
 	OP_PRINT,
+	OP_TO_STRING,
 	//Variables
 	OP_DEFINE_GLOBAL,
 	OP_DEFINE_GLOBAL_LONG,

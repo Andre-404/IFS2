@@ -22,8 +22,10 @@ enum objType {
 	OBJ_MODULE
 };
 
+class objFiber;
+
 //pointer to a native function
-typedef Value(*NativeFn)(int argCount, Value* args);
+typedef void(*NativeFn)(objFiber* fiber, int argCount, Value* args);
 
 
 class obj : public managed{
@@ -203,8 +205,7 @@ objString* copyString(const char* str, uInt length);
 objString* copyString(string str);
 objString* takeString(char* str, uInt length);
 
-void printObject(Value value);
-void freeObject(obj* object);
+string objectToStr(Value object);
 
 void setMarked(obj* ptr);
 void markObj(std::vector<managed*>& stack, obj* ptr);

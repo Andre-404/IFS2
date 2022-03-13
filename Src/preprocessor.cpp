@@ -55,15 +55,6 @@ preprocessUnit* preprocessor::scanFile(string unitName) {
 	return unit;
 }
 
-void preprocessor::topsort(preprocessUnit* unit) {
-	//TODO: we can get a stack overflow if this goes into deep recursion, try making a iterative stack based DFS implementation
-	unit->traversed = true;
-	for (preprocessUnit* dep : unit->deps) {
-		if (!dep->traversed) topsort(dep);
-	}
-	sortedUnits.push_back(unit);
-}
-
 
 TokenType checkNext(vector<Token>& tokens, int pos) {
 	if (pos + 1 >= tokens.size()) return TOKEN_EOF;
@@ -80,6 +71,158 @@ bool containsMacro(vector<macro>& macros, macro& _macro) {
 	}
 	return false;
 }
+
+void preprocessor::topsort(preprocessUnit* unit) {
+	//TODO: we can get a stack overflow if this goes into deep recursion, try making a iterative stack based DFS implementation
+	unit->traversed = true;
+	for (preprocessUnit* dep : unit->deps) {
+		if (!dep->traversed) topsort(dep);
+	}
+	sortedUnits.push_back(unit);
+}
+
+void preprocessor::processDirectives(preprocessUnit* unit) {
+	vector<Token>& tokens = unit->tokens;
+	//Doing tokens.begin() instead of declaring a it here is dumb, but it needs to update every time we delete/insert stuff
+	for (int i = 0; i < tokens.size(); i++) {
+		Token& token = tokens[i];
+		if (token.type == TOKEN_MACRO) {
+			if (checkNext(tokens, i) != TOKEN_IDENTIFIER) {
+				error(tokens[i], "Expected macro name");
+				break;
+			}
+			//deletes the #macro and macro name
+			tokens.erase(tokens.begin() + i);
+			Token name = tokens[i];
+			tokens.erase(tokens.begin() + i--);
+
+			macro curMacro = macro(name);
+			//detecting if we have a function like macro(eg. #macro add(a, b): (a + b)
+			if (checkNext(tokens, i) == TOKEN_LEFT_PAREN) {
+				int curPos = ++i;
+				//parses arguments
+				while (!isAtEnd(tokens, i) && checkNext(tokens, i) != TOKEN_RIGHT_PAREN) {
+					Token& arg = tokens[++i];
+					//checking if we already have a param of the same name
+					for (int j = 0; j < curMacro.params.size(); j++) {
+						if (arg.getLexeme() == curMacro.params[j].getLexeme()) {
+							error(arg, "Cannot have 2 or more arguments of the same name.");
+							break;
+						}
+					}
+					curMacro.params.push_back(arg);
+					if (checkNext(tokens, i) == TOKEN_COMMA) ++i;
+				}
+				//we break here because if we're at EOF and try erasing i + 1 we'll get a error
+				if (isAtEnd(tokens, i) || checkNext(tokens, i) != TOKEN_RIGHT_PAREN) {
+					error(tokens[i], "Expected ')' after arguments.");
+					break;
+				}
+				i++;
+				//#macro add(a, b): (a + b)
+				//deletes   ^^^^^^
+				auto it = tokens.begin();
+				tokens.erase(it + curPos, it + 1 + i);
+				i = curPos - 1;
+				curMacro.isFunctionLike = true;
+			}
+			//every macro declaration must have ':' before it's body(this is used to differentiate between normal macros and function like macros
+			if (checkNext(tokens, i) != TOKEN_COLON) {
+				error(tokens[i], "Expected ':' following macro name.");
+				break;
+			}
+			tokens.erase(tokens.begin() + 1 + i);
+			//loops until we hit a \n
+			//for each iteration, we add the token to macro body and then delete it(keeping i in check so that we don't go outside of boundries)
+			while (!isAtEnd(tokens, i) && checkNext(tokens, i) != TOKEN_NEWLINE) {
+				curMacro.value.push_back(tokens[++i]);
+				tokens.erase(tokens.begin() + i--);
+			}
+			unit->localMacros.push_back(curMacro);
+		}
+		else if (token.type == TOKEN_IMPORT) {
+			if (checkNext(tokens, i) != TOKEN_STRING) error(tokens[i], "Expected a module name.");
+			//deletes both the import and module name tokens from the token list, and add them to toParse
+			tokens.erase(tokens.begin() + i);
+			Token name = tokens[i];
+			tokens.erase(tokens.begin() + i--);
+			unitsToParse.push_back(name);
+		}
+		else if (token.type == TOKEN_NEWLINE) {
+			//this token is used for macro bodies, and isn't needed for anything else, so we delete it when we find it
+			tokens.erase(tokens.begin() + i--);
+		}
+	}
+}
+
+void preprocessor::addMacros(preprocessUnit* unit) {
+	for (macro& _macro : unit->localMacros) {
+		if (macros.count(_macro.name.getLexeme()) > 0) {
+			error(_macro.name, "Macro redefinition not allowed.");
+			continue;
+		}
+		macros[_macro.name.getLexeme()] = _macro;
+	}
+	for (preprocessUnit* dep : unit->deps) {
+		addMacros(dep);
+	}
+}
+
+void preprocessor::replaceMacros(preprocessUnit* unit) {
+	auto it = unit->tokens.begin();
+	for (int i = 0; i < unit->tokens.size(); i++) {
+		Token token = unit->tokens[i];
+		if (token.type != TOKEN_IDENTIFIER) continue;
+		if (macros.count(token.getLexeme()) == 0) continue;
+		macro& _macro = macros[token.getLexeme()];
+
+		//if a function is macro like we need to parse it's arguments and replace the params inside the macro body with the provided args
+		//this is a simple token replacement
+		if (_macro.isFunctionLike) {
+			//delete macro name
+			unit->tokens.erase(it + i);
+			it = unit->tokens.begin();
+			//calling a function here to detect possible cyclical macros
+			macroStack.push_back(_macro);
+			vector<Token> expanded = expandMacro(_macro, unit->tokens, i - 1);
+			macroStack.pop_back();
+			//for better error detection
+			for (Token& expandedToken : expanded) {
+				expandedToken.line = token.line;
+				expandedToken.partOfMacro = true;
+				expandedToken.macro = token.str;
+			}
+			//insert the macro body with the params replaced by args
+			it = unit->tokens.begin();
+			unit->tokens.insert(it + i, expanded.begin(), expanded.end());
+			i--;
+			continue;
+		}
+		macroStack.push_back(_macro);
+		vector<Token> expanded = expandMacro(_macro);
+		for (Token& expandedToken : expanded) {
+			expandedToken.line = token.line;
+			expandedToken.partOfMacro = true;
+			expandedToken.macro = token.str;
+		}
+		macroStack.pop_back();
+		//get rid of macro name
+		unit->tokens.erase(it + i);
+		unit->tokens.insert(it + i, expanded.begin(), expanded.end());
+		i--;
+		it = unit->tokens.begin();
+	}
+}
+
+void preprocessor::expandMacros() {
+	for (preprocessUnit* unit : sortedUnits) {
+		//adds only the macros of imported units
+		addMacros(unit);
+		replaceMacros(unit);
+		macros.clear();
+	}
+}
+
 
 vector<Token> replaceFuncMacroParams(macro& toExpand, vector<vector<Token>>& args) {
 	//given a set of args, it replaces all params in the macro body with the args
@@ -100,7 +243,6 @@ vector<Token> replaceFuncMacroParams(macro& toExpand, vector<vector<Token>>& arg
 	return fin;
 }
 
-
 int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int pos) {
 	int argCount = 0;
 	//very scuffed solution, but it works for when a function call is passed as a argument
@@ -119,19 +261,6 @@ int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int p
 		args.push_back(vector<Token>());
 	}
 	return pos;
-}
-
-void preprocessor::expandMacros() {
-	for (preprocessUnit* unit : sortedUnits) {
-		for (macro& _macro : unit->localMacros) {
-			if (macros.count(_macro.name.getLexeme()) > 0) {
-				error(_macro.name, "Macro redefinition not allowed.");
-				continue;
-			}
-			macros[_macro.name.getLexeme()] = _macro;
-		}
-		replaceMacros(unit);
-	}
 }
 
 vector<Token> preprocessor::expandMacro(macro& toExpand) {
@@ -232,127 +361,7 @@ vector<Token> preprocessor::expandMacro(macro& toExpand, vector<Token>& callToke
 	return tokens;
 }
 
-void preprocessor::replaceMacros(preprocessUnit* unit) {
-	auto it = unit->tokens.begin();
-	for (int i = 0; i < unit->tokens.size(); i++) {
-		Token token = unit->tokens[i];
-		if (token.type != TOKEN_IDENTIFIER) continue;
-		if (macros.count(token.getLexeme()) == 0) continue;
-		macro& _macro = macros[token.getLexeme()];
-		
-		//if a function is macro like we need to parse it's arguments and replace the params inside the macro body with the provided args
-		//this is a simple token replacement
-		if (_macro.isFunctionLike) {
-			//delete macro name
-			unit->tokens.erase(it + i);
-			it = unit->tokens.begin();
-			//calling a function here to detect possible cyclical macros
-			macroStack.push_back(_macro);
-			vector<Token> expanded = expandMacro(_macro, unit->tokens, i - 1);
-			macroStack.pop_back();
-			//for better error detection
-			for (Token& expandedToken : expanded) {
-				expandedToken.line = token.line;
-				expandedToken.partOfMacro = true;
-				expandedToken.macro = token.str;
-			}
-			//insert the macro body with the params replaced by args
-			it = unit->tokens.begin();
-			unit->tokens.insert(it + i, expanded.begin(), expanded.end());
-			i--;
-			continue;
-		}
-		macroStack.push_back(_macro);
-		vector<Token> expanded = expandMacro(_macro);
-		for (Token& expandedToken : expanded) {
-			expandedToken.line = token.line;
-			expandedToken.partOfMacro = true;
-			expandedToken.macro = token.str;
-		}
-		macroStack.pop_back();
-		//get rid of macro name
-		unit->tokens.erase(it + i);
-		unit->tokens.insert(it + i, expanded.begin(), expanded.end());
-		i--;
-		it = unit->tokens.begin();
-	}
-}
-
-void preprocessor::processDirectives(preprocessUnit* unit) {
-	vector<Token>& tokens = unit->tokens;
-	//Doing tokens.begin() instead of declaring a it here is dumb, but it needs to update every time we delete/insert stuff
-	for (int i = 0; i < tokens.size(); i++) {
-		Token& token = tokens[i];
-		if (token.type == TOKEN_MACRO) {
-			if (checkNext(tokens, i) != TOKEN_IDENTIFIER) {
-				error(tokens[i], "Expected macro name");
-				break;
-			}
-			//deletes the #macro and macro name
-			tokens.erase(tokens.begin() + i);
-			Token name = tokens[i];
-			tokens.erase(tokens.begin() + i--);
-
-			macro curMacro = macro(name);
-			//detecting if we have a function like macro(eg. #macro add(a, b): (a + b)
-			if (checkNext(tokens, i) == TOKEN_LEFT_PAREN) {
-				int curPos = ++i;
-				//parses arguments
-				while (!isAtEnd(tokens, i) && checkNext(tokens, i) != TOKEN_RIGHT_PAREN) {
-					Token& arg = tokens[++i];
-					//checking if we already have a param of the same name
-					for (int j = 0; j < curMacro.params.size(); j++) {
-						if (arg.getLexeme() == curMacro.params[j].getLexeme()) {
-							error(arg, "Cannot have 2 or more arguments of the same name.");
-							break;
-						}
-					}
-					curMacro.params.push_back(arg);
-					if (checkNext(tokens, i) == TOKEN_COMMA) ++i;
-				}
-				//we break here because if we're at EOF and try erasing i + 1 we'll get a error
-				if (isAtEnd(tokens, i) || checkNext(tokens, i) != TOKEN_RIGHT_PAREN) {
-					error(tokens[i], "Expected ')' after arguments.");
-					break;
-				}
-				i++;
-				//#macro add(a, b): (a + b)
-				//deletes   ^^^^^^
-				auto it = tokens.begin();
-				tokens.erase(it + curPos, it + i + 1);
-				i = curPos - 1;
-				curMacro.isFunctionLike = true;
-			}
-			//every macro declaration must have ':' before it's body(this is used to differentiate between normal macros and function like macros
-			if (checkNext(tokens, i) != TOKEN_COLON) {
-				error(tokens[i], "Expected ':' following macro name.");
-				break;
-			}
-			tokens.erase(tokens.begin() + i + 1);
-			//loops until we hit a \n
-			//for each iteration, we add the token to macro body and then delete it(keeping i in check so that we don't go outside of boundries)
-			while (!isAtEnd(tokens, i) && checkNext(tokens, i) != TOKEN_NEWLINE) {
-				curMacro.value.push_back(tokens[++i]);
-				tokens.erase(tokens.begin() + i--);
-			}
-			unit->localMacros.push_back(curMacro);
-		}
-		else if (token.type == TOKEN_IMPORT) {
-			if (checkNext(tokens, i) != TOKEN_STRING) error(tokens[i], "Expected a module name.");
-			//deletes both the import and module name tokens from the token list, and add them to toParse
-			tokens.erase(tokens.begin() + i);
-			Token name = tokens[i];
-			tokens.erase(tokens.begin() + i--);
-			unitsToParse.push_back(name);
-		}
-		else if (token.type == TOKEN_NEWLINE) {
-			//this token is used for macro bodies, and isn't needed for anything else, so we delete it when we find it
-			tokens.erase(tokens.begin() + i--);
-		}
-	}
-}
-
 void preprocessor::error(Token token, string msg) {
 	hadError = true;
-	report(curUnit->srcFile, token, msg);
+	tracker.addIssue(token, msg, curUnit->srcFile);
 }

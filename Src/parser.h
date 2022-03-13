@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <map>
 #include <unordered_map>
+#include "issueTracker.h"
 
 class parser;
 
@@ -69,6 +70,7 @@ public:
 	parser();
 	~parser();
 	bool hadError;
+	issueTracker tracker;
 	vector<translationUnit*> parse(string path, string name);
 
 private:

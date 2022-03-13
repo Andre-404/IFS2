@@ -8,7 +8,7 @@ void chunk::writeData(uint8_t opCode, uInt line, string& name) {
 		return;
 	}
 	if (lines[lines.size() - 1].line == line) return;
-	lines[lines.size() - 1].end = code.count();
+	lines[lines.size() - 1].end = code.count() - 1;
 	lines.push_back(codeLine(line, name));
 }
 
@@ -39,7 +39,7 @@ void chunk::disassemble(string name) {
 
 codeLine chunk::getLine(uInt offset) {
 	for (codeLine line : lines) {
-		if (offset <= line.end) return line;
+		if (offset < line.end) return line;
 	}
 	std::cout << "FUck";
 	exit(64);

@@ -17,6 +17,9 @@ public:
 	objFiber* curFiber;
 	hashTable globals;
 	objModule* curModule;
+
+	//strings used by fibers
+	objString* toString;
 private:
 	void defineNative(string name, NativeFn func, int arity);
 };

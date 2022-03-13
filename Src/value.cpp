@@ -18,25 +18,10 @@ bool valuesEqual(Value a, Value b) {
 
 
 void printValue(Value value) {
-    switch (value.type) {
-    case VAL_BOOL:
-        std::cout << (AS_BOOL(value) ? "true" : "false");
-        break;
-    case VAL_NIL: std::cout << "nil"; break;
-    case VAL_NUM: {
-        double num = AS_NUMBER(value);
-        if (num != ((int)num)) std::cout << num;
-        else std::cout << (int)num;
-        break;
-    }
-    case VAL_OBJ: printObject(value); break;
-    default:
-        std::cout << "Error printing object";
-        exit(64);
-    }
+    std::cout << valueToStr(value);
 }
 
-string valueToStr(Value val) {
+string valueTypeToStr(Value val) {
     switch (val.type) {
     case VAL_NIL: return "nil";
     case VAL_NUM: return "number";
@@ -58,6 +43,25 @@ string valueToStr(Value val) {
     }
     }
     return "error, couldn't determine type of value";
+}
+
+string valueToStr(Value val) {
+    switch (val.type) {
+    case VAL_BOOL:
+        return AS_BOOL(val) ? "true" : "false";
+        break;
+    case VAL_NIL: return "nil"; break;
+    case VAL_NUM: {
+        double num = AS_NUMBER(val);
+        int prec = num == (int)num ? 0 : 5;
+        return std::to_string(num).substr(0, std::to_string(num).find(".") + prec);
+        break;
+    }
+    case VAL_OBJ: return objectToStr(val); break;
+    default:
+        std::cout << "Error printing object";
+        return "";
+    }
 }
 
 //creates a value obj on the stack and 

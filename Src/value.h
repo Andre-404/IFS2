@@ -45,6 +45,7 @@ Value OBJ_VAL(obj* object);
 bool valuesEqual(Value a, Value b);
 void printValue(Value val);
 
+string valueTypeToStr(Value val);
 string valueToStr(Value val);
 
 //Using epsilon value because of floating point precision

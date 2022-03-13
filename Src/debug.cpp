@@ -447,6 +447,8 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return constantInstruction("OP MODULE GET", Chunk, offset, false);
 	case OP_MODULE_GET_LONG:
 		return constantInstruction("OP MODULE GET LONG", Chunk, offset, true);
+	case OP_TO_STRING:
+		return simpleInstruction("OP TO STRING", offset);
 	default:
 		std::cout << "Unknown opcode " << (int)instruction << "\n";
 		return offset + 1;

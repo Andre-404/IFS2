@@ -72,6 +72,7 @@ public:
 	compilerInfo* current;
 	classCompilerInfo* currentClass;
 	bool compiled;
+	issueTracker tracker;
 	vector<objModule*> modules;
 	compiler(string path, string fileName, funcType _type);//for compiling top level code
 	chunk* getChunk();

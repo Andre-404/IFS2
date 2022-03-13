@@ -4,103 +4,64 @@
 
 using namespace global;
 
-void printFunction(objFunc* func) {
+string funcToStr(objFunc* func) {
 	if (!func->name) {
-		printf("<script>");
-		return;
+		return "<script>";
 	}
-	std::cout << "<fn " << func->name->str << ">";
+	return "<fn" + string(func->name->str) + ">";
 }
 
-void printObject(Value value) {
-	switch (OBJ_TYPE(value)) {
+string objectToStr(Value object) {
+	switch (OBJ_TYPE(object)) {
 	case OBJ_STRING:
-		std::cout << AS_CSTRING(value);
-		break;
+		return string(AS_CSTRING(object));
 	case OBJ_FUNC:
-		printFunction(AS_FUNCTION(value));
-		break;
+		return funcToStr(AS_FUNCTION(object));
 	case OBJ_NATIVE:
-		std::cout << "<native fn>";
-		break;
+		return "<native fn>";
 	case OBJ_CLOSURE:
-		printFunction(AS_CLOSURE(value)->func);
-		break;
+		return funcToStr(AS_CLOSURE(object)->func);
 	case OBJ_UPVALUE:
-		std::cout << "upvalue";
-		break;
+		return "upvalue";
 	case OBJ_ARRAY: {
-		std::cout << "[";
-		gcVector<Value>& vals = AS_ARRAY(value)->values;
+		string temp = "[";
+		gcVector<Value>& vals = AS_ARRAY(object)->values;
 		for (int i = 0; i < vals.count(); i++) {
-			printValue(vals[i]);
-			if(i != vals.count() - 1) std::cout << ", ";
+			temp += valueToStr(vals[i]);
+			if (i != vals.count() - 1) temp += ", ";
 		}
-		std::cout << "]";
-		break;
+		temp += "]";
+		return temp;
 	}
-	case OBJ_CLASS:
-		std::cout << AS_CLASS(value)->name->str;
-		break;
+	case OBJ_CLASS: 
+		return string(AS_CLASS(object)->name->str);
 	case OBJ_INSTANCE: {
-		objInstance* inst = AS_INSTANCE(value);
-		if (inst->klass != nullptr) std::cout << AS_INSTANCE(value)->klass->name->str << " instance";
+		objInstance* inst = AS_INSTANCE(object);
+		if (inst->klass != nullptr) return string(AS_INSTANCE(object)->klass->name->str) + " instance";
 		else {
-			std::cout << "{ ";
+			string temp = "{ ";
 			bool isFirst = true;
 			for (int i = 0; i < inst->table.capacity; i++) {
 				entry& _entry = inst->table.entries[i];
 				if (_entry.key != nullptr && _entry.key != TOMBSTONE) {
-					if (!isFirst) std::cout << ", ";
+					if (!isFirst) temp += ", ";
 					else isFirst = false;
-					std::cout << _entry.key->str << " : ";
-					printValue(_entry.val);
+					temp += string(_entry.key->str) + " : ";
+					temp += valueToStr(_entry.val);
 				}
 			}
-			std::cout << " }";
+			temp += " }";
+			return temp;
 		}
-		break;
 	}
-	case OBJ_BOUND_METHOD:
-		printFunction(AS_BOUND_METHOD(value)->method->func);
-		break;
+	case OBJ_BOUND_METHOD: 
+		return funcToStr(AS_BOUND_METHOD(object)->method->func);
 	case OBJ_MODULE: {
-		objModule* mod = AS_MODULE(value);
-		std::cout << "Module: <" << mod->name->str << ">";
-		break;
+		objModule* mod = AS_MODULE(object);
+		return "Module: <" + string(mod->name->str) + ">";
 	}
-	}
-}
-
-//heap allocated objects that are a part of objs are deallocated in it's destructor function
-void freeObject(obj* object) {
-	switch (object->type) {
-	case OBJ_STRING: {
-		delete (objString*)object;
-		break;
-	}
-	case OBJ_FUNC: {
-		delete ((objFunc*)object);
-		break;
-	}
-	case OBJ_NATIVE: {
-		delete ((objNativeFn*)object);
-		break;
-	}
-	case OBJ_ARRAY: {
-		objArray* ob = (objArray*)object;
-		std::cout << "Deleted array: " << ob << "\n";
-		delete ob;
-		break;
-	}
-	case OBJ_CLOSURE: {
-		delete ((objClosure*)object);
-		break;
-	}
-	case OBJ_UPVALUE: {
-		delete ((objUpval*)object);
-		break;
-	}
+	case OBJ_FIBER: 
+		return "fiber";
 	}
 }
 
@@ -240,7 +201,7 @@ objFunc::objFunc() {
 }
 
 void objFunc::move(byte* to) {
-	moveData(to, this);
+	memmove(to, this, sizeof(objFunc));
 }
 
 void objFunc::trace(std::vector<managed*>& stack) {

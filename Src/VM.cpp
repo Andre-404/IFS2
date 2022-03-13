@@ -13,11 +13,16 @@ vm::vm(compiler* current) {
 	gc.VM = this;
 	curFiber = nullptr;
 	curModule = nullptr;
+	toString = copyString("toString");
 	//globals are set in the vm and the fibers access them by having a pointer to the VM
 	defineNative("clock", nativeClock, 0);
-	defineNative("floor", nativeFloor, 1);
 	defineNative("randomRange", nativeRandomRange, 2);
 	defineNative("setRandomSeed", nativeSetRandomSeed, 1);
+	defineNative("string", nativeToString, 1);
+	defineNative("input", nativeInput, 0);
+
+	defineNative("floor", nativeFloor, 1);
+	defineNative("ceil", nativeCeil, 1);
 
 	defineNative("arrayCreate", nativeArrayCreate, 1);
 	defineNative("arrayResize", nativeArrayResize, 2);
@@ -29,7 +34,8 @@ vm::vm(compiler* current) {
 	defineNative("arrayLength", nativeArrayLength, 1);
 
 	//using cachePtr because a relocation might happen while allocating closure or fiber
-	gc.cachePtr(current->endFuncDecl());
+	objFunc* func = current->endFuncDecl();
+	gc.cachePtr(func);
 	gc.cachePtr(new objClosure(dynamic_cast<objFunc*>(gc.getCachedPtr())));
 	objFiber* fiber = new objFiber(dynamic_cast<objClosure*>(gc.getCachedPtr()), this, 0);
 	delete current;

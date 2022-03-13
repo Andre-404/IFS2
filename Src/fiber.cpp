@@ -148,19 +148,23 @@ bool objFiber::callValue(Value callee, int argCount) {
 				return false;
 			}
 			NativeFn native = AS_NATIVE(callee)->func;
-			Value result = NIL_VAL();
 			//native functions throw strings when a error has occured
 			try {
-				result = native(argCount, stackTop - argCount);
+				//kind of hacky to first decrease the stackTop and then pass it as args 
+				//which are no longer considered part of the stack,
+				//but it's needed because if a native fn allocates a new call frame we need all the args + native fn gone
+				stackTop -= argCount + 1;
+				//fiber ptr is passes because a native function might create a new callstack or mutate the stack
+				native(this, argCount, stackTop + 1);
 			}
 			catch (const char* str) {
+				//TODO: fix this, it's dumb
+				if (str == "") return false;
 				const char* name = VM->globals.getKey(callee)->str;//gets the name of the native func
 				runtimeError("Error in %s: %s", name, str);
 				return false;
 			}
-
-			stackTop -= argCount + 1;
-			push(result);
+			//native functions take care of pushing results themselves, so we just return true
 			return true;
 		}
 		case OBJ_CLASS: {
@@ -272,7 +276,7 @@ bool objFiber::bindMethod(objClass* klass, objString* name) {
 bool objFiber::invoke(objString* fieldName, int argCount) {
 	Value receiver = peek(argCount);
 	if (!IS_INSTANCE(receiver)) {
-		runtimeError("Only instances can call methods, got %s.", valueToStr(receiver).c_str());
+		runtimeError("Only instances can call methods, got %s.", valueTypeToStr(receiver).c_str());
 		return false;
 	}
 
@@ -302,6 +306,29 @@ bool objFiber::invokeFromClass(objClass* klass, objString* name, int argCount) {
 	//the bottom of the call stack will contain the receiver instance
 	return call(AS_CLOSURE(method), argCount);
 }
+
+bool pushValToStr(objFiber* fiber, Value _val) {
+	Value val = _val;
+	if (IS_STRING(val)) {
+		fiber->push(val);
+		return true;
+	}
+	if (IS_INSTANCE(val)) {
+		objInstance* inst = AS_INSTANCE(val);
+		global::gc.cachePtr(inst);
+		objString* str = fiber->VM->toString;
+		inst = dynamic_cast<objInstance*>(global::gc.getCachedPtr());
+		Value method;
+		if (inst->klass != nullptr && inst->klass->methods.get(str, &method)) {
+			fiber->push(method);
+			if (!fiber->callValue(method, 0)) return false;
+			return true;
+		}
+	}
+	string str = valueToStr(val);
+	fiber->push(OBJ_VAL(copyString(str.c_str(), str.size())));
+	return true;
+}
 #pragma endregion
 
 interpretResult objFiber::execute() {
@@ -317,7 +344,7 @@ interpretResult objFiber::execute() {
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str()); \
+			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str()); \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -327,7 +354,7 @@ interpretResult objFiber::execute() {
 	#define INT_BINARY_OP(valueType, op)\
 		do {\
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str()); \
+			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str()); \
 			} \
 			double b = AS_NUMBER(pop()); \
 			double a = AS_NUMBER(pop()); \
@@ -388,7 +415,7 @@ interpretResult objFiber::execute() {
 		#pragma region Unary
 		case OP_NEGATE:
 			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number, got %s.", valueToStr(peek(0)).c_str());
+				return runtimeError("Operand must be a number, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
 			push(NUMBER_VAL(-AS_NUMBER(pop())));
 			break;
@@ -397,7 +424,7 @@ interpretResult objFiber::execute() {
 			break;
 		case OP_BIN_NOT: {
 			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number, got %s.", valueToStr(peek(0)).c_str());
+				return runtimeError("Operand must be a number, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
 			int num = AS_NUMBER(pop());
 			num = ~num;
@@ -418,7 +445,7 @@ interpretResult objFiber::execute() {
 			}
 			else {
 				return runtimeError("Operands must be two numbers or two strings, got %s and %s.",
-					valueToStr(peek(1)).c_str(), valueToStr(peek(0)));
+					valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)));
 			}
 			break;
 		}
@@ -437,7 +464,7 @@ interpretResult objFiber::execute() {
 				num.as.num++;
 				push(num);
 			}
-			else return runtimeError("Operands must be two numbers, got %s and number.", valueToStr(peek(0)).c_str());
+			else return runtimeError("Operands must be two numbers, got %s and number.", valueTypeToStr(peek(0)).c_str());
 			break;
 		}
 		case OP_SUBTRACT_1: {
@@ -446,7 +473,7 @@ interpretResult objFiber::execute() {
 				num.as.num--;
 				push(num);
 			}
-			else return runtimeError("Operands must be two numbers, got %s and number.", valueToStr(peek(0)).c_str());
+			else return runtimeError("Operands must be two numbers, got %s and number.", valueTypeToStr(peek(0)).c_str());
 			break;
 		}
 		#pragma endregion
@@ -473,7 +500,7 @@ interpretResult objFiber::execute() {
 			//Have to do this because of floating point comparisons
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
 				return runtimeError("Operands must be two numbers, got %s and %s.", 
-					valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str());
+					valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str());
 			}
 			double b = AS_NUMBER(pop());
 			double a = AS_NUMBER(pop());
@@ -484,7 +511,7 @@ interpretResult objFiber::execute() {
 		case OP_LESS_EQUAL: {
 			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
 				return runtimeError("Operands must be two numbers, got %s and %s.",
-					valueToStr(peek(1)).c_str(), valueToStr(peek(0)).c_str());
+					valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str());
 			}
 			double b = AS_NUMBER(pop());
 			double a = AS_NUMBER(pop());
@@ -494,37 +521,18 @@ interpretResult objFiber::execute() {
 		}
 		#pragma endregion
 
-		#pragma region Statements
+		#pragma region Statements and vars
 		case OP_PRINT: {
-			Value toPrint = peek(0);
-			if (!IS_INSTANCE(toPrint)) {
-				//there is always a OP_POP after OP_PRINT, but if we know we're not going to call a toString method of some object,
-				//we pop the value and skip over the OP_POP
-				printValue(pop());
-				READ_BYTE();
-			}
-			else {
-				Value instVal = peek(0);
-
-				objInstance* inst = AS_INSTANCE(instVal);
-				Value val;
-
-				if (inst->klass == nullptr) {
-					//there is always a OP_POP after OP_PRINT, but if we know we're not going to call a toString method of some object,
-					//we pop the value and skip over the OP_POP
-					printObject(pop());
-					READ_BYTE();
-					break;
-				}
-				//TODO: optimize this, if no object has a "toString" method this slows down the code massivly
-				objString* temp = copyString("toString", 8);
-				if (!invoke(temp, 0)) {
-					return RUNTIME_ERROR;
-				}
-				frame = &frames[frameCount - 1];
-				break;
-			}
+			printValue(pop());
 			std::cout << "\n";
+			break;
+		}
+
+		case OP_TO_STRING: {
+			if (!pushValToStr(this, pop())) return RUNTIME_ERROR;
+			//in case pushValToStr encountered a instance of a class that has defined a toString method
+			//we need to update the frame pointer
+			frame = &frames[frameCount - 1];
 			break;
 		}
 
@@ -726,7 +734,7 @@ interpretResult objFiber::execute() {
 				}
 			}
 			else {
-				return runtimeError("Switch expression can be only string or number, got %s.", valueToStr(peek(0)).c_str());
+				return runtimeError("Switch expression can be only string or number, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
 			break;
 		}
@@ -833,7 +841,7 @@ interpretResult objFiber::execute() {
 			Value field = peek(0);
 			Value callee = peek(1);
 			if (!IS_ARRAY(callee) && !IS_INSTANCE(callee))
-				return runtimeError("Expected a array or struct, got %s.", valueToStr(callee).c_str());
+				return runtimeError("Expected a array or struct, got %s.", valueTypeToStr(callee).c_str());
 
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
@@ -841,7 +849,7 @@ interpretResult objFiber::execute() {
 				//but in order to maintain stack balance we need to get rid of these 2 vars if this is not a get call to a access method
 				pop();
 				pop();
-				if (!IS_NUMBER(field)) return runtimeError("Index must be a number, got %s.", valueToStr(field).c_str());
+				if (!IS_NUMBER(field)) return runtimeError("Index must be a number, got %s.", valueTypeToStr(field).c_str());
 				double index = AS_NUMBER(field);
 				objArray* arr = AS_ARRAY(callee);
 				//Trying to access a variable using a float is a error
@@ -866,7 +874,7 @@ interpretResult objFiber::execute() {
 				//pop if this instance doesn't contain a access method to maintain stack balance
 				pop();
 				pop();
-				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueToStr(field).c_str());
+				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueTypeToStr(field).c_str());
 
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* name = AS_STRING(field);
@@ -895,13 +903,13 @@ interpretResult objFiber::execute() {
 			bool earlyExit = false;
 
 			if (!IS_ARRAY(callee) && !IS_INSTANCE(callee))
-				return runtimeError("Expected a array or struct, got %s.", valueToStr(callee).c_str());
+				return runtimeError("Expected a array or struct, got %s.", valueTypeToStr(callee).c_str());
 
 			switch (AS_OBJ(callee)->type) {
 			case OBJ_ARRAY: {
 				objArray* arr = AS_ARRAY(callee);
 
-				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number, got %s.", valueToStr(field).c_str());
+				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number, got %s.", valueTypeToStr(field).c_str());
 				double index = AS_NUMBER(field);
 				//accessing array with a float is a error
 				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
@@ -926,7 +934,7 @@ interpretResult objFiber::execute() {
 					break;
 				}
 				//if the instance doesn't have a defined set method, proceed as normal
-				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueToStr(field).c_str());
+				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueTypeToStr(field).c_str());
 
 				objInstance* instance = AS_INSTANCE(callee);
 				objString* str = AS_STRING(field);
@@ -951,7 +959,7 @@ interpretResult objFiber::execute() {
 
 		case OP_GET_PROPERTY: {
 			if (!IS_INSTANCE(peek(0))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(0)).c_str());
+				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(0));
@@ -971,7 +979,7 @@ interpretResult objFiber::execute() {
 		}
 		case OP_GET_PROPERTY_LONG: {
 			if (!IS_INSTANCE(peek(0))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(0)).c_str());
+				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(0));
@@ -992,7 +1000,7 @@ interpretResult objFiber::execute() {
 
 		case OP_SET_PROPERTY: {
 			if (!IS_INSTANCE(peek(1))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(1)).c_str());
+				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(1)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(1));
@@ -1006,7 +1014,7 @@ interpretResult objFiber::execute() {
 		}
 		case OP_SET_PROPERTY_LONG: {
 			if (!IS_INSTANCE(peek(1))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueToStr(peek(1)).c_str());
+				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(1)).c_str());
 			}
 
 			objInstance* instance = AS_INSTANCE(peek(1));
@@ -1078,7 +1086,7 @@ interpretResult objFiber::execute() {
 		case OP_INHERIT: {
 			Value superclass = peek(1);
 			if (!IS_CLASS(superclass)) {
-				return runtimeError("Superclass must be a class, got %s.", valueToStr(superclass).c_str());
+				return runtimeError("Superclass must be a class, got %s.", valueTypeToStr(superclass).c_str());
 			}
 			objClass* subclass = AS_CLASS(peek(0));
 			//copy down inheritance
@@ -1140,11 +1148,12 @@ interpretResult objFiber::execute() {
 			push(OBJ_VAL(newFiber));
 			break;
 		}
+
 		case OP_FIBER_RUN: {
 			uInt argNum = READ_BYTE();
 			Value val = pop();
 			if (!IS_FIBER(val)) {
-				return runtimeError("Expected a fiber, got %s.", valueToStr(val).c_str());
+				return runtimeError("Expected a fiber, got %s.", valueTypeToStr(val).c_str());
 			}
 			objFiber* fiber = AS_FIBER(val);
 
@@ -1175,6 +1184,7 @@ interpretResult objFiber::execute() {
 			VM->switchToFiber(fiber);
 			break;
 		}
+
 		case OP_FIBER_YIELD: {
 			Value val = pop();
 			if (prevFiber == nullptr) {
@@ -1190,6 +1200,7 @@ interpretResult objFiber::execute() {
 
 		#pragma region Modules
 		case OP_START_MODULE: {
+			//dictates which module will OP_DEFINE_GLOBAL look for
 			VM->curModule = AS_MODULE(pop());
 			break;
 		}

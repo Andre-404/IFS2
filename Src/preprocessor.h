@@ -2,6 +2,7 @@
 #include "common.h"
 #include "scanner.h"
 #include <unordered_map>
+#include "issueTracker.h"
 
 struct macro {
 	Token name;
@@ -34,6 +35,7 @@ public:
 	vector<preprocessUnit*> getSortedUnits() { return sortedUnits; }
 
 	bool hadError;
+	issueTracker tracker;
 private:
 	string filepath;
 	preprocessUnit* curUnit;
@@ -50,6 +52,7 @@ private:
 	vector<Token> expandMacro(macro& _macro);
 	vector<Token> expandMacro(macro& _macro, vector<Token>& callTokens, int pos);
 	void replaceMacros(preprocessUnit* unit);
+	void addMacros(preprocessUnit* unit);
 
 	void reset();
 	preprocessUnit* scanFile(string unitName);

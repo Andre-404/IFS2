@@ -41,6 +41,7 @@ public:
 	bool hasStarted() { return state != fiberState::NOT_STARTED; }
 
 
+
 	//Memory stuff
 	void move(byte* to) {};
 	size_t getSize() { return sizeof(objFiber); }
@@ -55,6 +56,7 @@ private:
 	void push(Value val);
 	Value pop();
 	Value peek(int depth);
+	bool friend pushValToStr(objFiber* fiber, Value val);
 
 	void resetStack();
 	interpretResult runtimeError(const char* format, ...);

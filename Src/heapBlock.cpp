@@ -36,6 +36,7 @@ movingHeapBlock::movingHeapBlock() {
 		heapBuffer = new byte[HEAP_START_SIZE];
 	}catch (std::bad_alloc& ba) {
 		std::cout << "Couldn't allocate memory for heap, exiting...\n";
+		exit(64);
 	}
 	oldHeapBuffer = nullptr;
 	heapTop = heapBuffer;
@@ -70,6 +71,7 @@ void movingHeapBlock::resize(size_t size) {
 		heapBuffer = new byte[newHeapSize];
 	}catch (std::bad_alloc& ba) {
 		std::cout << "Couldn't allocate memory to resize the heap, exiting...\n";
+		exit(64);
 	}
 	heapSize = newHeapSize;
 }
@@ -82,6 +84,7 @@ void movingHeapBlock::shrink() {
 	}
 	catch (std::bad_alloc& ba) {
 		std::cout << "Couldn't allocate memory to resize the heap, exiting...\n";
+		exit(64);
 	}
 	heapSize = newHeapSize;
 }

@@ -30,6 +30,7 @@
     <ClCompile Include="gcVector.cpp" />
     <ClCompile Include="hashTable.cpp" />
     <ClCompile Include="heapBlock.cpp" />
+    <ClCompile Include="issueTracker.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="managed.cpp" />
     <ClCompile Include="memory.cpp" />
@@ -54,6 +55,7 @@
     <ClInclude Include="gcVector.h" />
     <ClInclude Include="hashTable.h" />
     <ClInclude Include="heapBlock.h" />
+    <ClInclude Include="issueTracker.h" />
     <ClInclude Include="managed.h" />
     <ClInclude Include="memory.h" />
     <ClInclude Include="namespaces.h" />
