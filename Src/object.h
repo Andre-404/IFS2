@@ -188,7 +188,7 @@ static inline bool isObjType(Value value, objType type) {
 #define	IS_FIBER(value)		   isObjType(value, OBJ_FIBER)
 #define IS_MODULE(value)	   isObjType(value, OBJ_MODULE)
 
-#define AS_STRING(value)       ((objString*)AS_OBJ(value))
+#define AS_STRING(value)       ((objString*)(AS_OBJ(value)))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
 #define AS_FUNCTION(value)     ((objFunc*)AS_OBJ(value))
 #define AS_NATIVE(value) 	   (((objNativeFn*)AS_OBJ(value)))

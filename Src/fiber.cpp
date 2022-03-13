@@ -571,8 +571,8 @@ interpretResult objFiber::execute() {
 		}
 
 		case OP_SET_GLOBAL: {
-			objModule* mod = AS_MODULE(pop());
 			objString* name = READ_STRING();
+			objModule* mod = AS_MODULE(READ_CONSTANT());
 			if (mod->vars.set(name, peek(0))) {
 				mod->vars.del(name);
 				return runtimeError("Undefined variable '%s'.", name->str);
@@ -580,8 +580,8 @@ interpretResult objFiber::execute() {
 			break;
 		}
 		case OP_SET_GLOBAL_LONG: {
-			objModule* mod = AS_MODULE(pop());
 			objString* name = READ_STRING_LONG();
+			objModule* mod = AS_MODULE(READ_CONSTANT_LONG());
 			if (mod->vars.set(name, peek(0))) {
 				mod->vars.del(name);
 				return runtimeError("Undefined variable '%s'.", name->str);
