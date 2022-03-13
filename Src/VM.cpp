@@ -23,6 +23,27 @@ vm::vm(compiler* current) {
 
 	defineNative("floor", nativeFloor, 1);
 	defineNative("ceil", nativeCeil, 1);
+	defineNative("round", nativeRound, 1);
+
+	defineNative("max", nativeMax, -1);
+	defineNative("min", nativeMin, -1);
+	defineNative("mean", nativeMean, -1);
+
+	defineNative("sin", nativeSin, 1);
+	defineNative("dsin", nativeDsin, 1);
+	defineNative("cos", nativeCos, 1);
+	defineNative("dcos", nativeDcos, 1);
+	defineNative("tan", nativeTan, 1);
+	defineNative("dtan", nativeDtan, 1);
+
+	defineNative("logn", nativeLogn, 2);
+	defineNative("log2", nativeLog2, 1);
+	defineNative("log10", nativeLog10, 1);
+	defineNative("ln", nativeLogE, 1);
+
+	defineNative("pow", nativePow, 2);
+	defineNative("sqrt", nativeSqrt, 1);
+	defineNative("sqr", nativeSqr, 1);
 
 	defineNative("arrayCreate", nativeArrayCreate, 1);
 	defineNative("arrayResize", nativeArrayResize, 2);

@@ -26,6 +26,8 @@ enum class fiberState {
 	FINSIHED
 };
 
+string expectedType(string msg, Value val);
+
 class objFiber : public obj {
 public:
 	objFiber(objClosure* _code, vm* _VM, uInt64 _startValuesNum);

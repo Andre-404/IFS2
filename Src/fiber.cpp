@@ -61,6 +61,9 @@ void transferValue(objFiber* fiber, Value val) {
 
 #pragma region VM
 #pragma region Helpers
+string expectedType(string msg, Value val) {
+	return msg + valueTypeToStr(val) + ".";
+}
 
 uint8_t objFiber::getOp(long _ip) {
 	return frames[frameCount - 1].closure->func->body.code[_ip];
@@ -119,6 +122,7 @@ static bool isFalsey(Value value) {
 	return ((IS_BOOL(value) && !AS_BOOL(value)) || IS_NIL(value));
 }
 
+
 //concats 2 strings by allocating a new char* buffer using new and uses that to make a new objString
 void objFiber::concatenate() {
 	objString* b = AS_STRING(peek(0));
@@ -143,7 +147,8 @@ bool objFiber::callValue(Value callee, int argCount) {
 			return call(AS_CLOSURE(callee), argCount);
 		case OBJ_NATIVE: {
 			int arity = AS_NATIVE(callee)->arity;
-			if (argCount != arity) {
+			//if arity is -1 it means that the function takes in a variable number of args
+			if (arity != -1 && argCount != arity) {
 				runtimeError("Expected %d arguments for function call but got %d.", arity, argCount);
 				return false;
 			}
@@ -157,11 +162,11 @@ bool objFiber::callValue(Value callee, int argCount) {
 				//fiber ptr is passes because a native function might create a new callstack or mutate the stack
 				native(this, argCount, stackTop + 1);
 			}
-			catch (const char* str) {
+			catch (string str) {
 				//TODO: fix this, it's dumb
 				if (str == "") return false;
 				const char* name = VM->globals.getKey(callee)->str;//gets the name of the native func
-				runtimeError("Error in %s: %s", name, str);
+				runtimeError("Error in %s: %s", name, str.c_str());
 				return false;
 			}
 			//native functions take care of pushing results themselves, so we just return true
