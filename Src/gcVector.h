@@ -70,7 +70,7 @@ public:
 		return val;
 	}
 
-	void insert(const T& val, int index) {
+	void insert(const T& val, uInt64 index) {
 		if (index < 0 || index > header->count) {
 			std::cout << "Array access out of bounds";
 			exit(64);
@@ -86,7 +86,7 @@ public:
 		header->count++;
 	}
 
-	T removeAt(int index) {
+	T removeAt(uInt64 index) {
 		if (index < 0 || index > header->count) {
 			std::cout << "Array access out of bounds";
 			exit(64);
@@ -111,7 +111,7 @@ public:
 		header = nullptr;
 	}
 
-	void resize(int newSize) {
+	void resize(uInt64 newSize) {
 		//if the array hasn't been initialized until now, create a new array and return
 		if (header == nullptr) {
 			size_t amortizedSize = (1ll << (64 - _lzcnt_u64(newSize - 1)));
@@ -150,7 +150,7 @@ public:
 		for (int i = 0; i < other.count(); i++) arr[header->count++] = other[i];
 	}
 
-	T& operator[] (int index) {
+	T& operator[] (uInt64 index) {
 		if (index < 0 || index > header->count) {
 			std::cout << "Array access out of bounds";
 			exit(64);
@@ -159,7 +159,7 @@ public:
 		return arr[index];
 	}
 
-	const T& operator[] (int index) const {
+	const T& operator[] (uInt64 index) const {
 		if (index < 0 || index > header->count) {
 			std::cout << "Array access out of bounds";
 			exit(64);

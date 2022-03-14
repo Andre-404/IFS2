@@ -156,7 +156,8 @@ void scanner::skipWhitespace() {
 }
 
 Token scanner::string_() {
-	while (peek() != '"' && !isAtEnd()) {
+	while (!isAtEnd()) {
+		if (peek() == '"') break;
 		if (peek() == '\n') {
 			line++;
 			curFile->lines.push_back(current);

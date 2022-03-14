@@ -19,7 +19,10 @@ vm::vm(compiler* current) {
 	defineNative("randomRange", nativeRandomRange, 2);
 	defineNative("setRandomSeed", nativeSetRandomSeed, 1);
 	defineNative("string", nativeToString, 1);
+	defineNative("real", nativeToReal, 1);
 	defineNative("input", nativeInput, 0);
+
+	#pragma region Math
 
 	defineNative("floor", nativeFloor, 1);
 	defineNative("ceil", nativeCeil, 1);
@@ -45,6 +48,45 @@ vm::vm(compiler* current) {
 	defineNative("sqrt", nativeSqrt, 1);
 	defineNative("sqr", nativeSqr, 1);
 
+	#pragma endregion
+
+	#pragma region Strings
+	defineNative("stringLength", nativeStringLength, 1);
+	defineNative("stringInsert", nativeStringInsert, 3);
+	defineNative("stringDelete", nativeStringDelete, 3);
+	defineNative("stringSubstr", nativeStringSubstr, 3);
+
+	defineNative("stringCharAt", nativeStringCharAt, 2);
+	defineNative("stringByteAt", nativeStringByteAt, 2);
+
+	defineNative("stringFind", nativeStringPos, 2);
+	defineNative("stringFindLast", nativeStringLastPos, 2);
+
+	defineNative("stringIsUpper", nativeStringIsUpper, 2);
+	defineNative("stringIsLower", nativeStringIsLower, 2);
+
+	defineNative("stringUpper", nativeStringUpper, 1);
+	defineNative("stringLower", nativeStringLower, 1);
+
+	defineNative("stringDigits", nativeStringToDigits, 1);
+	#pragma endregion
+
+	#pragma region Types
+	defineNative("isNumber", nativeIsNumber, 1);
+	defineNative("isNil", nativeIsNil, 1);
+	defineNative("isBool", nativeIsBool, 1);
+	defineNative("isString", nativeIsString, 1);
+	defineNative("isFunction", nativeIsFunction, 1);
+	defineNative("isMethod", nativeIsMethod, 1);
+	defineNative("isArray", nativeIsArray, 1);
+	defineNative("isInstance", nativeIsInstance, 1);
+	defineNative("isStruct", nativeIsStruct, 1);
+	defineNative("isClass", nativeIsClass, 1);
+	defineNative("isFiber", nativeIsFiber, 1);
+	defineNative("isModule", nativeIsModule, 1);
+	#pragma endregion
+
+	#pragma region Arrays
 	defineNative("arrayCreate", nativeArrayCreate, 1);
 	defineNative("arrayResize", nativeArrayResize, 2);
 	defineNative("arrayCopy", nativeArrayCopy, 1);
@@ -53,6 +95,8 @@ vm::vm(compiler* current) {
 	defineNative("arrayInsert", nativeArrayInsert, 3);
 	defineNative("arrayDelete", nativeArrayDelete, 2);
 	defineNative("arrayLength", nativeArrayLength, 1);
+	defineNative("arrayFill", nativeArrayFill, 4);
+	#pragma endregion
 
 	//using cachePtr because a relocation might happen while allocating closure or fiber
 	objFunc* func = current->endFuncDecl();

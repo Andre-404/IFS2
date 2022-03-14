@@ -22,46 +22,27 @@ string objectToStr(Value object) {
 	case OBJ_CLOSURE:
 		return funcToStr(AS_CLOSURE(object)->func);
 	case OBJ_UPVALUE:
-		return "upvalue";
+		return "<upvalue>";
 	case OBJ_ARRAY: {
-		string temp = "[";
-		gcVector<Value>& vals = AS_ARRAY(object)->values;
-		for (int i = 0; i < vals.count(); i++) {
-			temp += valueToStr(vals[i]);
-			if (i != vals.count() - 1) temp += ", ";
-		}
-		temp += "]";
-		return temp;
+		return "<array>";
 	}
 	case OBJ_CLASS: 
-		return string(AS_CLASS(object)->name->str);
+		return "<" + string(AS_CLASS(object)->name->str) + ">";
 	case OBJ_INSTANCE: {
 		objInstance* inst = AS_INSTANCE(object);
-		if (inst->klass != nullptr) return string(AS_INSTANCE(object)->klass->name->str) + " instance";
+		if (inst->klass != nullptr) return "<" + string(AS_INSTANCE(object)->klass->name->str) + " instance>";
 		else {
-			string temp = "{ ";
-			bool isFirst = true;
-			for (int i = 0; i < inst->table.capacity; i++) {
-				entry& _entry = inst->table.entries[i];
-				if (_entry.key != nullptr && _entry.key != TOMBSTONE) {
-					if (!isFirst) temp += ", ";
-					else isFirst = false;
-					temp += string(_entry.key->str) + " : ";
-					temp += valueToStr(_entry.val);
-				}
-			}
-			temp += " }";
-			return temp;
+			return "<struct>";
 		}
 	}
 	case OBJ_BOUND_METHOD: 
-		return funcToStr(AS_BOUND_METHOD(object)->method->func);
+		return "<" + funcToStr(AS_BOUND_METHOD(object)->method->func) + ">";
 	case OBJ_MODULE: {
 		objModule* mod = AS_MODULE(object);
-		return "Module: <" + string(mod->name->str) + ">";
+		return "<module " + string(mod->name->str) + ">";
 	}
 	case OBJ_FIBER: 
-		return "fiber";
+		return "<fiber>";
 	}
 }
 

@@ -122,6 +122,21 @@ static bool isFalsey(Value value) {
 	return ((IS_BOOL(value) && !AS_BOOL(value)) || IS_NIL(value));
 }
 
+int cachePtrs(Value* vals, int howMany) {
+	int howManyObjs = 0;
+	for (int i = 0; i < howMany; i++) {
+		if (IS_OBJ(vals[i])) {
+			global::gc.cachePtr(AS_OBJ(vals[i]));
+			howManyObjs++;
+		}
+	}
+	return howManyObjs;
+}
+
+void uncachePtrs(int howMany) {
+	for (int i = 0; i < howMany; i++) global::gc.getCachedPtr();
+}
+
 
 //concats 2 strings by allocating a new char* buffer using new and uses that to make a new objString
 void objFiber::concatenate() {
@@ -159,8 +174,13 @@ bool objFiber::callValue(Value callee, int argCount) {
 				//which are no longer considered part of the stack,
 				//but it's needed because if a native fn allocates a new call frame we need all the args + native fn gone
 				stackTop -= argCount + 1;
+				//caching is needed because all of the arguments to a native function are no longer considered to be on stack
+				//since stackTop now points just below them, to avoid any kind of gc shenanigans happening if a native fn
+				//allocates new objects, we cache every argument that is a object
+				int objArgs = cachePtrs(stackTop + 1, argCount);
 				//fiber ptr is passes because a native function might create a new callstack or mutate the stack
 				native(this, argCount, stackTop + 1);
+				uncachePtrs(objArgs);
 			}
 			catch (string str) {
 				//TODO: fix this, it's dumb
