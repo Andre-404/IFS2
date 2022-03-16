@@ -159,6 +159,7 @@ void GC::markRoots() {
 		markObj(VM->curModule);
 		markObj(VM->curFiber);
 		markTable(&VM->globals);
+		markObj(VM->toString);
 	}
 	//since a GC collection can be triggered during the compilation, we must also mark all function which are currently being compiled
 	if (compilerSession != nullptr) {
@@ -219,6 +220,8 @@ void GC::updateRootPtrs() {
 		if(VM->curFiber != nullptr) VM->curFiber = reinterpret_cast<objFiber*>(VM->curFiber->moveTo);
 		updateTable(&VM->globals);
 		if(VM->curModule != nullptr) VM->curModule = reinterpret_cast<objModule*>(VM->curModule->moveTo);
+		VM->toString = reinterpret_cast<objString*>(VM->toString->moveTo);
+
 	}
 	//the GC can also be called during the compilation process, so we need to update it's compiler info
 	if (compilerSession != nullptr) {

@@ -55,8 +55,12 @@ void objFiber::pause() {
 	state = fiberState::PAUSED;
 }
 
-void transferValue(objFiber* fiber, Value val) {
-	fiber->push(val);
+void objFiber::transferValue(Value val) {
+	push(val);
+}
+
+void objFiber::reduceStack(uInt nToPop) {
+	stackTop -= nToPop;
 }
 
 #pragma region VM
@@ -122,22 +126,6 @@ static bool isFalsey(Value value) {
 	return ((IS_BOOL(value) && !AS_BOOL(value)) || IS_NIL(value));
 }
 
-int cachePtrs(Value* vals, int howMany) {
-	int howManyObjs = 0;
-	for (int i = 0; i < howMany; i++) {
-		if (IS_OBJ(vals[i])) {
-			global::gc.cachePtr(AS_OBJ(vals[i]));
-			howManyObjs++;
-		}
-	}
-	return howManyObjs;
-}
-
-void uncachePtrs(int howMany) {
-	for (int i = 0; i < howMany; i++) global::gc.getCachedPtr();
-}
-
-
 //concats 2 strings by allocating a new char* buffer using new and uses that to make a new objString
 void objFiber::concatenate() {
 	objString* b = AS_STRING(peek(0));
@@ -170,20 +158,20 @@ bool objFiber::callValue(Value callee, int argCount) {
 			NativeFn native = AS_NATIVE(callee)->func;
 			//native functions throw strings when a error has occured
 			try {
-				//kind of hacky to first decrease the stackTop and then pass it as args 
-				//which are no longer considered part of the stack,
-				//but it's needed because if a native fn allocates a new call frame we need all the args + native fn gone
-				stackTop -= argCount + 1;
-				//caching is needed because all of the arguments to a native function are no longer considered to be on stack
-				//since stackTop now points just below them, to avoid any kind of gc shenanigans happening if a native fn
-				//allocates new objects, we cache every argument that is a object
-				int objArgs = cachePtrs(stackTop + 1, argCount);
 				//fiber ptr is passes because a native function might create a new callstack or mutate the stack
-				native(this, argCount, stackTop + 1);
-				uncachePtrs(objArgs);
+				bool shouldPop = native(this, argCount, stackTop - argCount);
+				//shouldPop is false if the native function already popped it's arguments(eg. if a native created a new callframe)
+				if (shouldPop) {
+					//right now the result of the native function sits above the arguments, so we first take the result
+					Value top = pop();
+					//pop the args + native function itself
+					reduceStack(argCount + 1);
+					//push the result of the native function back on top
+					push(top);
+				}
 			}
 			catch (string str) {
-				//TODO: fix this, it's dumb
+				//globals are guaranteed not to change after the native funcs have been defined
 				if (str == "") return false;
 				const char* name = VM->globals.getKey(callee)->str;//gets the name of the native func
 				runtimeError("Error in %s: %s", name, str.c_str());
@@ -786,7 +774,7 @@ interpretResult objFiber::execute() {
 				Value val = pop();
 				//implcit yielding once a fiber has finished running through all it's code
 				if (prevFiber != nullptr) {
-					transferValue(prevFiber, NIL_VAL());
+					prevFiber->transferValue(result);
 					VM->switchToFiber(prevFiber);
 					//overwrites the paused state set by switchToFiber, this flag means that if we try to run this fiber again we get nil back
 					state = fiberState::FINSIHED;
@@ -1202,7 +1190,7 @@ interpretResult objFiber::execute() {
 			}
 			//pops and transfers the args to the other fiber
 			for (int i = 0; i < argNum; i++) {
-				transferValue(fiber, pop());
+				fiber->transferValue(pop());
 			}
 			//who to yield to
 			fiber->prevFiber = this;
@@ -1216,7 +1204,7 @@ interpretResult objFiber::execute() {
 				return runtimeError("Trying to yield to a nonexisting fiber.");
 			}
 			//works like return, if we have "yield;" then we yield nil
-			transferValue(prevFiber, val);
+			prevFiber->transferValue(val);
 			VM->switchToFiber(prevFiber);
 			prevFiber = nullptr;
 			break;

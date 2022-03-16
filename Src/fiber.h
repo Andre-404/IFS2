@@ -35,7 +35,9 @@ public:
 
 	interpretResult execute();
 	void pause();
-	void friend transferValue(objFiber* fiber, Value val);
+	//stuff used by native functions
+	void transferValue(Value val);
+	void reduceStack(uInt nToPop);
 
 	//getters
 	bool isRunning() { return state == fiberState::RUNNING; }

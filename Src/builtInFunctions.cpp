@@ -6,9 +6,7 @@
 
 using namespace global;
 //throwing strings for errors that get caught in callValue()
-//fiber is passes as a arg to push values, 
-//note that pushing will override 'args' field as it's no longer considered part of the stack
-//this also means that if some argument is a heap object it will need to be cached
+//fiber is passed as a arg to push values to, and the return bool is whether the native func has popped it's own args or not
 
 #pragma region Helpers
 void arrRangeError(uInt argNum, double index, uInt end, bool strong) {
@@ -26,20 +24,21 @@ void strRangeError(uInt argNum, double index, uInt end) {
 	throw "String length is " + strEnd + "," + "argument " + std::to_string(argNum) + " is " + strIndex + ".";
 }
 
-void isString(Value val) {
-	if (!IS_STRING(val)) throw expectedType("Expected string, got ", val);
+void isString(Value val, int argNum) {
+	if (!IS_STRING(val)) throw expectedType("Expected string, argument" + std::to_string(argNum) + " is ", val);
 }
 #pragma endregion
 
 #pragma region Arrays
-void nativeArrayCreate(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayCreate(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double size = AS_NUMBER(*args);
 
 	objArray* arr = new objArray(size);
-	transferValue(fiber, OBJ_VAL(arr));
+	fiber->transferValue(OBJ_VAL(arr));
+	return true;
 }
-void nativeArrayCopy(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayCopy(objFiber* fiber, int argCount, Value* args) {
 	if(!IS_ARRAY(*args)) throw expectedType("Expected a array, argument 0 is ", *args);
 	objArray* dstArr = new objArray();
 	objArray* srcArr = AS_ARRAY(*args);
@@ -51,9 +50,10 @@ void nativeArrayCopy(objFiber* fiber, int argCount, Value* args) {
 	gc.cachePtr(dstArr);
 	dstArr->values.addAll(srcArr->values);
 	gc.getCachedPtr();
-	transferValue(fiber, OBJ_VAL(dstArr));
+	fiber->transferValue(OBJ_VAL(dstArr));
+	return true;
 }
-void nativeArrayResize(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayResize(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args)) throw expectedType("Expected a array, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number, argument 1 is ", *(args + 1));
 
@@ -68,9 +68,10 @@ void nativeArrayResize(objFiber* fiber, int argCount, Value* args) {
 	int end = (oldSize > newSize ? arr->values.count() : oldSize);
 	for (int i = 0; i < end; i++) if (IS_OBJ(arr->values[i])) arr->numOfHeapPtr++;
 
-	transferValue(fiber, NIL_VAL());
+	fiber->transferValue(NIL_VAL());
+	return true;
 }
-void nativeArrayFill(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayFill(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args)) throw expectedType("Expected a array, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number for start of range, argument 1 is ", *(args + 1));
 	if (!IS_NUMBER(*(args + 2))) throw expectedType("Expected a number for end of range, argument 2 is ", *(args + 2));
@@ -89,19 +90,21 @@ void nativeArrayFill(objFiber* fiber, int argCount, Value* args) {
 		arr->values[i] = val;
 	}
 
-	transferValue(fiber, NIL_VAL());
+	fiber->transferValue(NIL_VAL());
+	return true;
 }
 
-void nativeArrayPush(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayPush(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args)) throw expectedType("Expected a array, argument 0 is ", *args);
 	objArray* arr = AS_ARRAY(*args);
 	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
 	if (IS_OBJ(*(args + 1))) arr->numOfHeapPtr++;
 	arr->values.push(*(args + 1));
 	global::gc.getCachedPtr();
-	transferValue(fiber, NIL_VAL());
+	fiber->transferValue(NIL_VAL());
+	return true;
 }
-void nativeArrayPop(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayPop(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw expectedType("Expected a array, argument 0 is ", *args);
 	gcVector<Value>& vals = AS_ARRAY(*args)->values;
 	if (vals.count() == 0) throw string("Can't pop from empty array.");
@@ -110,10 +113,11 @@ void nativeArrayPop(objFiber* fiber, int argCount, Value* args) {
 	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
 	if (IS_OBJ(val)) AS_ARRAY(*args)->numOfHeapPtr--;
 
-	transferValue(fiber, val);
+	fiber->transferValue(val);
+	return true;
 }
 
-void nativeArrayInsert(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayInsert(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw expectedType("Expected a array, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number, argument 1 is ", *(args + 1));
 	objArray* arr = AS_ARRAY(*args);
@@ -124,10 +128,11 @@ void nativeArrayInsert(objFiber* fiber, int argCount, Value* args) {
 	if (IS_OBJ(*(args + 2))) arr->numOfHeapPtr++;
 	arr->values.insert(*(args + 2), index);
 
-	transferValue(fiber, NIL_VAL());
+	fiber->transferValue(NIL_VAL());
+	return true;
 }
 
-void nativeArrayDelete(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayDelete(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args)) throw expectedType("Expected a array, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number, argument 1 is ", *(args + 1));
 	objArray* arr = AS_ARRAY(*args);
@@ -137,111 +142,125 @@ void nativeArrayDelete(objFiber* fiber, int argCount, Value* args) {
 
 	//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
 	if (IS_OBJ(val)) arr->numOfHeapPtr--;
-	transferValue(fiber, val);
+	fiber->transferValue(val);
+	return true;
 }
 
-void nativeArrayLength(objFiber* fiber, int argCount, Value* args) {
+bool nativeArrayLength(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_ARRAY(*args))throw expectedType("Expected a array, argument 0 is ", *args);
 	objArray* arr = AS_ARRAY(*args);
-	transferValue(fiber, NUMBER_VAL(AS_ARRAY(*args)->values.count()));
+	fiber->transferValue(NUMBER_VAL(AS_ARRAY(*args)->values.count()));
+	return true;
 }
 
 #pragma endregion
 
 #pragma region IO
-void nativeFileRead(objFiber* fiber, int argCount, Value* args) {
+bool nativeFileRead(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_STRING(*args)) throw "Expected path name.";
 	string fileData = readFile(AS_STRING(*args)->str);
 	objString* str = copyString(fileData.c_str(), fileData.length());
-	transferValue(fiber, OBJ_VAL(str));
+	fiber->transferValue(OBJ_VAL(str));
+	return true;
 }
 
-void nativeInput(objFiber* fiber, int argCount, Value* args) {
+bool nativeInput(objFiber* fiber, int argCount, Value* args) {
 	string input;
 	std::cin >> input;
 	objString* str = copyString(input.c_str(), input.length());
-	transferValue(fiber, OBJ_VAL(str));
+	fiber->transferValue(OBJ_VAL(str));
+	return true;
 }
 
 
 #pragma endregion
 
 #pragma region Types
-void nativeIsNumber(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_NUMBER(*args)));
+bool nativeIsNumber(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_NUMBER(*args)));
+	return true;
 }
-void nativeIsNil(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_NIL(*args)));
+bool nativeIsNil(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_NIL(*args)));
+	return true;
 }
-void nativeIsBool(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_BOOL(*args)));
+bool nativeIsBool(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_BOOL(*args)));
+	return true;
 }
-void nativeIsString(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_STRING(*args)));
+bool nativeIsString(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_STRING(*args)));
+	return true;
 }
-void nativeIsArray(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_ARRAY(*args)));
+bool nativeIsArray(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_ARRAY(*args)));
+	return true;
 }
-void nativeIsStruct(objFiber* fiber, int argCount, Value* args) {
+bool nativeIsStruct(objFiber* fiber, int argCount, Value* args) {
 	bool isStruct = false;
 	if (IS_INSTANCE(*args)) {
 		objInstance* inst = AS_INSTANCE(*args);
 		if (inst->klass == nullptr) isStruct = true;
 	}
-	transferValue(fiber, BOOL_VAL(isStruct));
+	fiber->transferValue(BOOL_VAL(isStruct));
+	return true;
 }
-void nativeIsInstance(objFiber* fiber, int argCount, Value* args) {
+bool nativeIsInstance(objFiber* fiber, int argCount, Value* args) {
 	bool isInstance = false;
 	if (IS_INSTANCE(*args)) {
 		objInstance* inst = AS_INSTANCE(*args);
 		if (inst->klass != nullptr) isInstance = true;
 	}
-	transferValue(fiber, BOOL_VAL(isInstance));
+	fiber->transferValue(BOOL_VAL(isInstance));
+	return true;
 }
-void nativeIsClass(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_CLASS(*args)));
+bool nativeIsClass(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_CLASS(*args)));
+	return true;
 }
-void nativeIsFunction(objFiber* fiber, int argCount, Value* args) {
+bool nativeIsFunction(objFiber* fiber, int argCount, Value* args) {
 	bool isFunc = false;
 	if (IS_FUNCTION(*args) || IS_CLOSURE(*args)) isFunc = true;
-	transferValue(fiber, BOOL_VAL(isFunc));
+	fiber->transferValue(BOOL_VAL(isFunc));
+	return true;
 }
-void nativeIsMethod(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_BOUND_METHOD(*args)));
+bool nativeIsMethod(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_BOUND_METHOD(*args)));
+	return true;
 }
-void nativeIsModule(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_MODULE(*args)));
+bool nativeIsModule(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_MODULE(*args)));
+	return true;
 }
-void nativeIsFiber(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, BOOL_VAL(IS_FIBER(*args)));
+bool nativeIsFiber(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(BOOL_VAL(IS_FIBER(*args)));
+	return true;
 }
 #pragma endregion
 
-
-void nativeClock(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, NUMBER_VAL((double)clock() / CLOCKS_PER_SEC));
-}
-
 #pragma region Math
-void nativeFloor(objFiber* fiber, int argCount, Value* args) {
+bool nativeFloor(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(floor(d)));
+	fiber->transferValue(NUMBER_VAL(floor(d)));
+	return true;
 }
-void nativeCeil(objFiber* fiber, int argCount, Value* args) {
+bool nativeCeil(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(ceil(d)));
+	fiber->transferValue(NUMBER_VAL(ceil(d)));
+	return true;
 }
-void nativeRound(objFiber* fiber, int argCount, Value* args) {
+bool nativeRound(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(round(d)));
+	fiber->transferValue(NUMBER_VAL(round(d)));
+	return true;
 }
-void nativeMax(objFiber* fiber, int argCount, Value* args) {
+bool nativeMax(objFiber* fiber, int argCount, Value* args) {
 	if (argCount == 0) throw "Expected atleast 1 argument, got 0.";
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
-	if(argCount == 1) transferValue(fiber, *args);
+	if(argCount == 1) fiber->transferValue(*args);
 	int i = 1;
 	double curMax = AS_NUMBER(*args);
 	while (i < argCount) {
@@ -249,12 +268,13 @@ void nativeMax(objFiber* fiber, int argCount, Value* args) {
 		if (AS_NUMBER(*(args + i)) > curMax) curMax = AS_NUMBER(*(args + i));
 		i++;
 	}
-	transferValue(fiber, NUMBER_VAL(curMax));
+	fiber->transferValue(NUMBER_VAL(curMax));
+	return true;
 }
-void nativeMin(objFiber* fiber, int argCount, Value* args) {
+bool nativeMin(objFiber* fiber, int argCount, Value* args) {
 	if (argCount == 0) throw "Expected atleast 1 argument, got 0.";
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
-	if (argCount == 1) transferValue(fiber, *args);
+	if (argCount == 1) fiber->transferValue(*args);
 	int i = 1;
 	double curMin = AS_NUMBER(*args);
 	while (i < argCount) {
@@ -262,9 +282,10 @@ void nativeMin(objFiber* fiber, int argCount, Value* args) {
 		if (AS_NUMBER(*(args + i)) < curMin) curMin = AS_NUMBER(*(args + i));
 		i++;
 	}
-	transferValue(fiber, NUMBER_VAL(curMin));
+	fiber->transferValue(NUMBER_VAL(curMin));
+	return true;
 }
-void nativeMean(objFiber* fiber, int argCount, Value* args) {
+bool nativeMean(objFiber* fiber, int argCount, Value* args) {
 	if (argCount == 0) throw "Expected atleast 1 argument, got 0.";
 	int i = 0;
 	double median = 0;
@@ -273,94 +294,109 @@ void nativeMean(objFiber* fiber, int argCount, Value* args) {
 		median += AS_NUMBER(*(args + i));
 		i++;
 	}
-	transferValue(fiber, NUMBER_VAL(median / argCount));
+	fiber->transferValue(NUMBER_VAL(median / argCount));
+	return true;
 }
 
 
-void nativeSin(objFiber* fiber, int argCount, Value* args) {
+bool nativeSin(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(sin(d)));
+	fiber->transferValue(NUMBER_VAL(sin(d)));
+	return true;
 }
-void nativeDsin(objFiber* fiber, int argCount, Value* args) {
+bool nativeDsin(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(sin((d*pi)/180)));
+	fiber->transferValue(NUMBER_VAL(sin((d*pi)/180)));
+	return true;
 }
-void nativeCos(objFiber* fiber, int argCount, Value* args) {
+bool nativeCos(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(cos(d)));
+	fiber->transferValue(NUMBER_VAL(cos(d)));
+	return true;
 }
-void nativeDcos(objFiber* fiber, int argCount, Value* args) {
+bool nativeDcos(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(cos((d * pi) / 180)));
+	fiber->transferValue(NUMBER_VAL(cos((d * pi) / 180)));
+	return true;
 }
-void nativeTan(objFiber* fiber, int argCount, Value* args) {
+bool nativeTan(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(tan(d)));
+	fiber->transferValue(NUMBER_VAL(tan(d)));
+	return true;
 }
-void nativeDtan(objFiber* fiber, int argCount, Value* args) {
+bool nativeDtan(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(tan((d * pi) / 180)));
+	fiber->transferValue(NUMBER_VAL(tan((d * pi) / 180)));
+	return true;
 }
 
 
-void nativeLogn(objFiber* fiber, int argCount, Value* args) {
+bool nativeLogn(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args))  throw expectedType("Expected a number, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number, argument 1 is ", *(args + 1));
 	double d = AS_NUMBER(*args);
 	double d2 = AS_NUMBER(*(args + 1));
-	transferValue(fiber, NUMBER_VAL(log(d) / log(d2)));
+	fiber->transferValue(NUMBER_VAL(log(d) / log(d2)));
+	return true;
 }
-void nativeLog2(objFiber* fiber, int argCount, Value* args) {
+bool nativeLog2(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(log2(d)));
+	fiber->transferValue(NUMBER_VAL(log2(d)));
+	return true;
 }
-void nativeLog10(objFiber* fiber, int argCount, Value* args) {
+bool nativeLog10(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(log10(d)));
+	fiber->transferValue(NUMBER_VAL(log10(d)));
+	return true;
 }
-void nativeLogE(objFiber* fiber, int argCount, Value* args) {
+bool nativeLogE(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(log(d)));
+	fiber->transferValue(NUMBER_VAL(log(d)));
+	return true;
 }
 
 
-void nativePow(objFiber* fiber, int argCount, Value* args) {
+bool nativePow(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args))  throw expectedType("Expected a number, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number, argument 1 is ", *(args + 1));
 	double d = AS_NUMBER(*args);
 	double d2 = AS_NUMBER(*(args + 1));
-	transferValue(fiber, NUMBER_VAL(pow(d, d2)));
+	fiber->transferValue(NUMBER_VAL(pow(d, d2)));
+	return true;
 }
-void nativeSqr(objFiber* fiber, int argCount, Value* args) {
+bool nativeSqr(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(sqrt(d)));
+	fiber->transferValue(NUMBER_VAL(sqrt(d)));
+	return true;
 }
-void nativeSqrt(objFiber* fiber, int argCount, Value* args) {
+bool nativeSqrt(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double d = AS_NUMBER(*args);
-	transferValue(fiber, NUMBER_VAL(sqrt(d)));
+	fiber->transferValue(NUMBER_VAL(sqrt(d)));
+	return true;
 }
 #pragma endregion
 
 #pragma region Strings
-void nativeStringLength(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
-	transferValue(fiber, NUMBER_VAL(AS_STRING(*args)->length));
+bool nativeStringLength(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
+	fiber->transferValue(NUMBER_VAL(AS_STRING(*args)->length));
+	return true;
 }
 
-void nativeStringInsert(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
-	isString(*(args + 1));
+bool nativeStringInsert(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
+	isString(*(args + 1), 1);
 	if (!IS_NUMBER(*(args + 2))) throw expectedType("Expected number for insert pos, argument 2 is", *(args + 2));
 	objString* str = AS_STRING(*args);
 	objString* subStr = AS_STRING(*(args + 1));
@@ -369,10 +405,11 @@ void nativeStringInsert(objFiber* fiber, int argCount, Value* args) {
 
 	string newStr(str->str);
 	newStr.insert(pos, subStr->str);
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
-void nativeStringDelete(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringDelete(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for start pos, argument 1 is", *(args + 1));
 	if (!IS_NUMBER(*(args + 2))) throw expectedType("Expected number for length, argument 2 is", *(args + 2));
 	objString* str = AS_STRING(*args);
@@ -383,10 +420,11 @@ void nativeStringDelete(objFiber* fiber, int argCount, Value* args) {
 
 	string newStr(str->str);
 	newStr.erase(start, len);
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
-void nativeStringSubstr(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringSubstr(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for start pos, argument 1 is", *(args + 1));
 	if (!IS_NUMBER(*(args + 2))) throw expectedType("Expected number for length, argument 2 is", *(args + 2));
 	objString* str = AS_STRING(*args);
@@ -397,23 +435,26 @@ void nativeStringSubstr(objFiber* fiber, int argCount, Value* args) {
 
 	string newStr(str->str);
 	newStr = newStr.substr(start, len);
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
-void nativeStringReplace(objFiber* fiber, int argCount, Value* args) {
-	/*isString(*args);
-	isString(*(args + 1));
-	isString(*(args + 2));
+bool nativeStringReplace(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
+	isString(*(args + 1), 1);
+	isString(*(args + 2), 2);
 	objString* str = AS_STRING(*args);
 	objString* subStr = AS_STRING(*(args + 1));
 	objString* newSubStr = AS_STRING(*(args + 2));
 
 	string newStr(str->str);
-	newStr.insert(pos, string(subStr->str));
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));*/
+	uInt64 pos = newStr.find(subStr->str);
+	newStr.replace(pos, subStr->length, newSubStr->str);
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
 
-void nativeStringCharAt(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringCharAt(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for insert pos, argument 1 is", *(args + 1));
 	objString* str = AS_STRING(*args);
 	double pos = AS_NUMBER(*(args + 1));
@@ -421,85 +462,93 @@ void nativeStringCharAt(objFiber* fiber, int argCount, Value* args) {
 
 	string newStr(str->str);
 	newStr = newStr[pos];
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
-void nativeStringByteAt(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringByteAt(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for insert pos, argument 1 is", *(args + 1));
 	objString* str = AS_STRING(*args);
 	double pos = AS_NUMBER(*(args + 1));
 	strRangeError(1, pos, str->length);
 
-	transferValue(fiber, NUMBER_VAL(string(str->str)[pos]));
+	fiber->transferValue(NUMBER_VAL(string(str->str)[pos]));
+	return true;
 }
 
-void nativeStringPos(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
-	isString(*(args + 1));
+bool nativeStringPos(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
+	isString(*(args + 1), 1);
 	objString* str = AS_STRING(*args);
 	objString* subStr = AS_STRING(*(args + 1));
 
 	double pos = -1;
 	string newStr(str->str);
 	pos = newStr.find(subStr->str);
-	transferValue(fiber, NUMBER_VAL(pos));
+	fiber->transferValue(NUMBER_VAL(pos));
+	return true;
 }
-void nativeStringLastPos(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
-	isString(*(args + 1));
+bool nativeStringLastPos(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
+	isString(*(args + 1), 1);
 	objString* str = AS_STRING(*args);
 	objString* subStr = AS_STRING(*(args + 1));
 
 	double pos = -1;
 	string newStr(str->str);
 	pos = newStr.rfind(subStr->str);
-	transferValue(fiber, NUMBER_VAL(pos));
+	fiber->transferValue(NUMBER_VAL(pos));
+	return true;
 }
 
-void nativeStringIsUpper(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringIsUpper(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for insert pos, argument 1 is", *(args + 1));
 	objString* str = AS_STRING(*args);
 	double pos = AS_NUMBER(*(args + 1));
 	strRangeError(1, pos, str->length);
 
 	char c = *(str->str + (uInt64)pos);
-	transferValue(fiber, BOOL_VAL(std::isupper(c)));
+	fiber->transferValue(BOOL_VAL(std::isupper(c)));
+	return true;
 }
-void nativeStringIsLower(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringIsLower(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for insert pos, argument 1 is", *(args + 1));
 	objString* str = AS_STRING(*args);
 	double pos = AS_NUMBER(*(args + 1));
 	strRangeError(1, pos, str->length);
 
 	char c = *(str->str + (uInt64)pos);
-	transferValue(fiber, BOOL_VAL(std::islower(c)));
+	fiber->transferValue(BOOL_VAL(std::islower(c)));
+	return true;
 }
 
-void nativeStringLower(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringLower(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	objString* str = AS_STRING(*args);
 
 	string newStr(str->str);
 	for (uInt64 i = 0; i < newStr.length(); i++) {
 		if (std::isupper(newStr[i])) newStr[i] = std::tolower(newStr[i]);
 	}
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
-void nativeStringUpper(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringUpper(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	objString* str = AS_STRING(*args);
 
 	string newStr(str->str);
 	for (uInt64 i = 0; i < newStr.length(); i++) {
 		if (std::islower(newStr[i])) newStr[i] = std::toupper(newStr[i]);
 	}
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
 
-void nativeStringToDigits(objFiber* fiber, int argCount, Value* args) {
-	isString(*args);
+bool nativeStringToDigits(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
 	objString* str = AS_STRING(*args);
 
 
@@ -507,40 +556,74 @@ void nativeStringToDigits(objFiber* fiber, int argCount, Value* args) {
 	for (uInt64 i = 0; i < str->length; i++) {
 		if ((str->str[i] >= '0' && str->str[i] <= '9') || str->str[i] == '.') newStr += str->str[i];
 	}
-	transferValue(fiber, OBJ_VAL(copyString(newStr)));
+	fiber->transferValue(OBJ_VAL(copyString(newStr)));
+	return true;
 }
 #pragma endregion
 
-
-void nativeRandomNumber(objFiber* fiber, int argCount, Value* args) {
-	transferValue(fiber, NUMBER_VAL(std::uniform_int_distribution<uInt64>(0, UINT64_MAX)(rng)));
+//TODO: finish implementing these
+#pragma region Files
+bool nativeFileOpen(objFiber* fiber, int argCount, Value* args) {
+	isString(*args, 0);
+	if(!IS_NUMBER(*(args + 1))) throw expectedType("Expected number for type, argument 1 is", *(args + 1));
+	string path(AS_CSTRING(*args));
+	objFile* file = new objFile(fileType(AS_NUMBER(*(args + 1))));
+	file->file.open(path);
+	if (file->file.fail()) throw "Failed to open " + path;
+	fiber->transferValue(OBJ_VAL(file));
+	return true;
 }
-void nativeRandomRange(objFiber* fiber, int argCount, Value* args) {
+bool nativeFileClose(objFiber* fiber, int argCount, Value* args);
+bool nativeFileExists(objFiber* fiber, int argCount, Value* args);
+
+bool nativeFileReadString(objFiber* fiber, int argCount, Value* args);
+bool nativeFileReadReal(objFiber* fiber, int argCount, Value* args);
+bool nativeFileReadLn(objFiber* fiber, int argCount, Value* args);
+
+bool nativeFileWriteString(objFiber* fiber, int argCount, Value* args);
+bool nativeFileWriteReal(objFiber* fiber, int argCount, Value* args);
+bool nativeFileWriteLn(objFiber* fiber, int argCount, Value* args);
+#pragma endregion
+
+bool nativeClock(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(NUMBER_VAL((double)clock() / CLOCKS_PER_SEC));
+	return true;
+}
+
+bool nativeRandomNumber(objFiber* fiber, int argCount, Value* args) {
+	fiber->transferValue(NUMBER_VAL(std::uniform_int_distribution<uInt64>(0, UINT64_MAX)(rng)));
+	return true;
+}
+bool nativeRandomRange(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args))  throw expectedType("Expected a number, argument 0 is ", *args);
 	if (!IS_NUMBER(*(args + 1))) throw expectedType("Expected a number, argument 1 is ", *(args + 1));
-	transferValue(fiber, NUMBER_VAL(std::uniform_int_distribution<uInt64>(AS_NUMBER(*args), AS_NUMBER(*(args + 1)))(rng)));
+	fiber->transferValue(NUMBER_VAL(std::uniform_int_distribution<uInt64>(AS_NUMBER(*args), AS_NUMBER(*(args + 1)))(rng)));
+	return true;
 }
-void nativeSetRandomSeed(objFiber* fiber, int argCount, Value* args) {
+bool nativeSetRandomSeed(objFiber* fiber, int argCount, Value* args) {
 	if (!IS_NUMBER(*args)) throw expectedType("Expected a number, argument 0 is ", *args);
 	double seed = AS_NUMBER(*args);
 	if (seed == -1) rng = std::mt19937(std::chrono::steady_clock::now().time_since_epoch().count());
 	else rng = std::mt19937(seed);
-	transferValue(fiber, NIL_VAL());
+	fiber->transferValue(NIL_VAL());
+	return true;
 }
 
 
-void nativeToString(objFiber* fiber, int argCount, Value* args) {
+bool nativeToString(objFiber* fiber, int argCount, Value* args) {
 	//Either creates a new objString and pushes it onto the fiber stack,
 	//or creates a new callframe if *args is a instance whose class defines toString
+	fiber->reduceStack(argCount + 1);
 	if(!pushValToStr(fiber, *args)) throw "";
+	return false;
 }
-void nativeToReal(objFiber* fiber, int argCount, Value* args) {
+bool nativeToReal(objFiber* fiber, int argCount, Value* args) {
 	Value val = *args;
 	if (IS_BOOL(val)) {
-		if (AS_BOOL(val)) transferValue(fiber, NUMBER_VAL(1));
-		else transferValue(fiber, NUMBER_VAL(0));
+		if (AS_BOOL(val)) fiber->transferValue(NUMBER_VAL(1));
+		else fiber->transferValue(NUMBER_VAL(0));
 	}
-	else if (IS_NIL(val)) transferValue(fiber, NUMBER_VAL(0));
+	else if (IS_NIL(val)) fiber->transferValue(NUMBER_VAL(0));
 	else {
 		switch (OBJ_TYPE(*args)) {
 		case OBJ_STRING: {
@@ -549,16 +632,17 @@ void nativeToReal(objFiber* fiber, int argCount, Value* args) {
 				uInt64 pos;
 				double num = std::stod(str, &pos);
 				if (pos < str.size())
-					throw "Trying to convert invalid string to a number, argument 0 is " + str + ".";
-				transferValue(fiber, NUMBER_VAL(num));
+					throw "Trying to convert invalid string to a number, argument 0 is \"" + str + "\".";
+				fiber->transferValue(NUMBER_VAL(num));
 			}
 			catch (std::invalid_argument) {
-				throw "Trying to convert invalid string to a number, argument 0 is " + str + ".";
+				throw "Trying to convert invalid string to a number, argument 0 is \"" + str + "\".";
 			}
 			break;
 		}
 		default:
-			transferValue(fiber, NUMBER_VAL(((uInt64)AS_OBJ(*args))));
+			fiber->transferValue(NUMBER_VAL(((uInt64)AS_OBJ(*args))));
 		}
 	}
+	return true;
 }

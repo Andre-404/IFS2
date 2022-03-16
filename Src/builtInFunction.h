@@ -6,105 +6,106 @@
 
 #pragma region Arrays
 
-void nativeArrayCreate(objFiber* fiber, int argCount, Value* args);
-void nativeArrayCopy(objFiber* fiber, int argCount, Value* args);
-void nativeArrayResize(objFiber* fiber, int argCount, Value* args);
-void nativeArrayFill(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayCreate(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayCopy(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayResize(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayFill(objFiber* fiber, int argCount, Value* args);
 
-void nativeArrayPush(objFiber* fiber, int argCount, Value* args);
-void nativeArrayPop(objFiber* fiber, int argCount, Value* args);
-void nativeArrayInsert(objFiber* fiber, int argCount, Value* args);
-void nativeArrayDelete(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayPush(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayPop(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayInsert(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayDelete(objFiber* fiber, int argCount, Value* args);
 
-void nativeArrayLength(objFiber* fiber, int argCount, Value* args);
+bool nativeArrayLength(objFiber* fiber, int argCount, Value* args);
 #pragma endregion
 
 #pragma region Math
-void nativeFloor(objFiber* fiber, int argCount, Value* args);
-void nativeCeil(objFiber* fiber, int argCount, Value* args);
-void nativeRound(objFiber* fiber, int argCount, Value* args);
+bool nativeFloor(objFiber* fiber, int argCount, Value* args);
+bool nativeCeil(objFiber* fiber, int argCount, Value* args);
+bool nativeRound(objFiber* fiber, int argCount, Value* args);
 
-void nativeMax(objFiber* fiber, int argCount, Value* args);
-void nativeMin(objFiber* fiber, int argCount, Value* args);
-void nativeMean(objFiber* fiber, int argCount, Value* args);
+bool nativeMax(objFiber* fiber, int argCount, Value* args);
+bool nativeMin(objFiber* fiber, int argCount, Value* args);
+bool nativeMean(objFiber* fiber, int argCount, Value* args);
 
-void nativeSin(objFiber* fiber, int argCount, Value* args);
-void nativeDsin(objFiber* fiber, int argCount, Value* args);
-void nativeCos(objFiber* fiber, int argCount, Value* args);
-void nativeDcos(objFiber* fiber, int argCount, Value* args);
-void nativeTan(objFiber* fiber, int argCount, Value* args);
-void nativeDtan(objFiber* fiber, int argCount, Value* args);
+bool nativeSin(objFiber* fiber, int argCount, Value* args);
+bool nativeDsin(objFiber* fiber, int argCount, Value* args);
+bool nativeCos(objFiber* fiber, int argCount, Value* args);
+bool nativeDcos(objFiber* fiber, int argCount, Value* args);
+bool nativeTan(objFiber* fiber, int argCount, Value* args);
+bool nativeDtan(objFiber* fiber, int argCount, Value* args);
 
-void nativeLogn(objFiber* fiber, int argCount, Value* args);
-void nativeLog10(objFiber* fiber, int argCount, Value* args);
-void nativeLog2(objFiber* fiber, int argCount, Value* args);
-void nativeLogE(objFiber* fiber, int argCount, Value* args);
+bool nativeLogn(objFiber* fiber, int argCount, Value* args);
+bool nativeLog10(objFiber* fiber, int argCount, Value* args);
+bool nativeLog2(objFiber* fiber, int argCount, Value* args);
+bool nativeLogE(objFiber* fiber, int argCount, Value* args);
 
-void nativePow(objFiber* fiber, int argCount, Value* args);
-void nativeSqrt(objFiber* fiber, int argCount, Value* args);
-void nativeSqr(objFiber* fiber, int argCount, Value* args);
+bool nativePow(objFiber* fiber, int argCount, Value* args);
+bool nativeSqrt(objFiber* fiber, int argCount, Value* args);
+bool nativeSqr(objFiber* fiber, int argCount, Value* args);
 #pragma endregion
 
 #pragma region Types
-void nativeIsNumber(objFiber* fiber, int argCount, Value* args);
-void nativeIsNil(objFiber* fiber, int argCount, Value* args);
-void nativeIsBool(objFiber* fiber, int argCount, Value* args);
-void nativeIsString(objFiber* fiber, int argCount, Value* args);
-void nativeIsArray(objFiber* fiber, int argCount, Value* args);
-void nativeIsStruct(objFiber* fiber, int argCount, Value* args);
-void nativeIsInstance(objFiber* fiber, int argCount, Value* args);
-void nativeIsClass(objFiber* fiber, int argCount, Value* args);
-void nativeIsFunction(objFiber* fiber, int argCount, Value* args);
-void nativeIsMethod(objFiber* fiber, int argCount, Value* args);
-void nativeIsModule(objFiber* fiber, int argCount, Value* args);
-void nativeIsFiber(objFiber* fiber, int argCount, Value* args);
+bool nativeIsNumber(objFiber* fiber, int argCount, Value* args);
+bool nativeIsNil(objFiber* fiber, int argCount, Value* args);
+bool nativeIsBool(objFiber* fiber, int argCount, Value* args);
+bool nativeIsString(objFiber* fiber, int argCount, Value* args);
+bool nativeIsArray(objFiber* fiber, int argCount, Value* args);
+bool nativeIsStruct(objFiber* fiber, int argCount, Value* args);
+bool nativeIsInstance(objFiber* fiber, int argCount, Value* args);
+bool nativeIsClass(objFiber* fiber, int argCount, Value* args);
+bool nativeIsFunction(objFiber* fiber, int argCount, Value* args);
+bool nativeIsMethod(objFiber* fiber, int argCount, Value* args);
+bool nativeIsModule(objFiber* fiber, int argCount, Value* args);
+bool nativeIsFiber(objFiber* fiber, int argCount, Value* args);
 #pragma endregion
 
 #pragma region Strings
-void nativeStringLength(objFiber* fiber, int argCount, Value* args);
+bool nativeStringLength(objFiber* fiber, int argCount, Value* args);
 
-void nativeStringInsert(objFiber* fiber, int argCount, Value* args);
-void nativeStringDelete(objFiber* fiber, int argCount, Value* args);
-void nativeStringSubstr(objFiber* fiber, int argCount, Value* args);
-void nativeStringReplace(objFiber* fiber, int argCount, Value* args);
+bool nativeStringInsert(objFiber* fiber, int argCount, Value* args);
+bool nativeStringDelete(objFiber* fiber, int argCount, Value* args);
+bool nativeStringSubstr(objFiber* fiber, int argCount, Value* args);
+bool nativeStringReplace(objFiber* fiber, int argCount, Value* args);
 
-void nativeStringCharAt(objFiber* fiber, int argCount, Value* args);
-void nativeStringByteAt(objFiber* fiber, int argCount, Value* args);
+bool nativeStringCharAt(objFiber* fiber, int argCount, Value* args);
+bool nativeStringByteAt(objFiber* fiber, int argCount, Value* args);
 
-void nativeStringPos(objFiber* fiber, int argCount, Value* args);
-void nativeStringLastPos(objFiber* fiber, int argCount, Value* args);
+bool nativeStringPos(objFiber* fiber, int argCount, Value* args);
+bool nativeStringLastPos(objFiber* fiber, int argCount, Value* args);
 
-void nativeStringIsUpper(objFiber* fiber, int argCount, Value* args);
-void nativeStringIsLower(objFiber* fiber, int argCount, Value* args);
+bool nativeStringIsUpper(objFiber* fiber, int argCount, Value* args);
+bool nativeStringIsLower(objFiber* fiber, int argCount, Value* args);
 
-void nativeStringLower(objFiber* fiber, int argCount, Value* args);
-void nativeStringUpper(objFiber* fiber, int argCount, Value* args);
+bool nativeStringLower(objFiber* fiber, int argCount, Value* args);
+bool nativeStringUpper(objFiber* fiber, int argCount, Value* args);
 
-void nativeStringToDigits(objFiber* fiber, int argCount, Value* args);
+bool nativeStringToDigits(objFiber* fiber, int argCount, Value* args);
 #pragma endregion
 
+//TODO: finish implementing these
 #pragma region Files
-void nativeFileOpen(objFiber* fiber, int argCount, Value* args);
-void nativeFileClose(objFiber* fiber, int argCount, Value* args);
-void nativeFileExists(objFiber* fiber, int argCount, Value* args);
+bool nativeFileOpen(objFiber* fiber, int argCount, Value* args);
+bool nativeFileClose(objFiber* fiber, int argCount, Value* args);
+bool nativeFileExists(objFiber* fiber, int argCount, Value* args);
 
-void nativeFileReadString(objFiber* fiber, int argCount, Value* args);
-void nativeFileReadReal(objFiber* fiber, int argCount, Value* args);
-void nativeFileReadLn(objFiber* fiber, int argCount, Value* args);
+bool nativeFileReadString(objFiber* fiber, int argCount, Value* args);
+bool nativeFileReadReal(objFiber* fiber, int argCount, Value* args);
+bool nativeFileReadLn(objFiber* fiber, int argCount, Value* args);
 
-void nativeFileWriteString(objFiber* fiber, int argCount, Value* args);
-void nativeFileWriteReal(objFiber* fiber, int argCount, Value* args);
-void nativeFileWriteLn(objFiber* fiber, int argCount, Value* args);
+bool nativeFileWriteString(objFiber* fiber, int argCount, Value* args);
+bool nativeFileWriteReal(objFiber* fiber, int argCount, Value* args);
+bool nativeFileWriteLn(objFiber* fiber, int argCount, Value* args);
 #pragma endregion
 
 
-void nativeClock(objFiber* fiber, int argCount, Value* args);
+bool nativeClock(objFiber* fiber, int argCount, Value* args);
 
-void nativeRandomRange(objFiber* fiber, int argCount, Value* args);
-void nativeRandomNumber(objFiber* fiber, int argCount, Value* args);
-void nativeSetRandomSeed(objFiber* fiber, int argCount, Value* args);
+bool nativeRandomRange(objFiber* fiber, int argCount, Value* args);
+bool nativeRandomNumber(objFiber* fiber, int argCount, Value* args);
+bool nativeSetRandomSeed(objFiber* fiber, int argCount, Value* args);
 
-void nativeToString(objFiber* fiber, int argCount, Value* args);
-void nativeToReal(objFiber* fiber, int argCount, Value* args);
+bool nativeToString(objFiber* fiber, int argCount, Value* args);
+bool nativeToReal(objFiber* fiber, int argCount, Value* args);
 
-void nativeInput(objFiber* fiber, int argCount, Value* args);
+bool nativeInput(objFiber* fiber, int argCount, Value* args);

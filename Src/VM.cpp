@@ -55,6 +55,7 @@ vm::vm(compiler* current) {
 	defineNative("stringInsert", nativeStringInsert, 3);
 	defineNative("stringDelete", nativeStringDelete, 3);
 	defineNative("stringSubstr", nativeStringSubstr, 3);
+	defineNative("stringReplace", nativeStringReplace, 3);
 
 	defineNative("stringCharAt", nativeStringCharAt, 2);
 	defineNative("stringByteAt", nativeStringByteAt, 2);

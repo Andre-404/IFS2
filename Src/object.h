@@ -6,7 +6,7 @@
 #include "hashTable.h"
 #include "managed.h"
 #include "gcVector.h"
-
+#include <fstream>
 
 enum objType {
 	OBJ_STRING,
@@ -19,13 +19,14 @@ enum objType {
 	OBJ_INSTANCE,
 	OBJ_BOUND_METHOD,
 	OBJ_FIBER,
-	OBJ_MODULE
+	OBJ_MODULE,
+	OBJ_FILE
 };
 
 class objFiber;
 
 //pointer to a native function
-typedef void(*NativeFn)(objFiber* fiber, int argCount, Value* args);
+typedef bool(*NativeFn)(objFiber* fiber, int argCount, Value* args);
 
 
 class obj : public managed{
@@ -170,6 +171,25 @@ public:
 	void trace(std::vector<managed*>& stack);
 };
 
+enum class fileType {
+	READONLY,
+	WRITEONLY,
+	READ_AND_WRITE,
+};
+
+class objFile : public obj {
+public:
+	std::fstream file;
+	fileType type;
+
+	objFile(fileType _type) : type(_type) {};
+
+	void move(byte* to);
+	size_t getSize() { return sizeof(objFile); }
+	void updatePtrs() {};
+	void trace(std::vector<managed*>& stack) {};
+};
+
 
 #define OBJ_TYPE(value)        (AS_OBJ(value)->type)
 
@@ -187,6 +207,7 @@ static inline bool isObjType(Value value, objType type) {
 #define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
 #define	IS_FIBER(value)		   isObjType(value, OBJ_FIBER)
 #define IS_MODULE(value)	   isObjType(value, OBJ_MODULE)
+#define IS_FILE(value)		   isObjType(value, OBJ_FILE)
 
 #define AS_STRING(value)       ((objString*)(AS_OBJ(value)))
 #define AS_CSTRING(value)      (((objString*)AS_OBJ(value))->str)//gets raw string
@@ -199,6 +220,7 @@ static inline bool isObjType(Value value, objType type) {
 #define AS_BOUND_METHOD(value) ((objBoundMethod*)AS_OBJ(value))
 #define AS_FIBER(value)		   ((objFiber*)AS_OBJ(value))
 #define AS_MODULE(value)	   ((objModule*)AS_OBJ(value))
+#define AS_FILE(value)		   ((objFile*)AS_OBJ(value))
 
 objString* copyString(char* str, uInt length);
 objString* copyString(const char* str, uInt length);

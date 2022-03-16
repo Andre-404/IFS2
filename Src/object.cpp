@@ -400,8 +400,15 @@ void objModule::updatePtrs() {
 }
 
 void objModule::trace(std::vector<managed*>& stack) {
-	name->moveTo = name;
+	markObj(stack, name);
 	markTable(stack, vars);
 }
 
 #pragma endregion
+
+#pragma region objFile
+void objFile::move(byte* to) {
+	memmove(to, this, sizeof(objFile));
+}
+#pragma endregion
+
