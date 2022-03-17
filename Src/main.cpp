@@ -16,18 +16,26 @@ hashTable global::internedStrings = hashTable();
 GC global::gc = GC();
 std::mt19937 global::rng(0);
 
+string dirPath(string path) {
+	string mainFileName = path.substr(path.find_last_of('\\') + 1, path.size() - path.find_last_of('\\'));
+	if (mainFileName.find(".ifs") == mainFileName.npos) {
+		std::cout << "File doesn't contain the correct(.ifs) extension.\n";
+		exit(64);
+	}
+	mainFileName = mainFileName.substr(0, mainFileName.find(".ifs"));
+	if (mainFileName != "main") {
+		std::cout << "Target file needs to be called \"main.ifs\", got file \""<<mainFileName<<"\"\n";
+	}
+	return path.substr(0, path.find_last_of('\\') + 1);
+}
+
 int main() {
 	cout << "Input filepath:\n";
 	string path;
 	cin >> path;
-	//doing this insanity to seperate the path to the file(which is needed for imports) and the name of the file to compile
-	string firstFileName;
-	firstFileName = path.substr(path.find_last_of('\\') + 1, path.size() - path.find_last_of('\\'));
-	firstFileName = firstFileName.substr(0, firstFileName.find(".txt"));
-	path = path.substr(0, path.find_last_of('\\') + 1);
 	cout << "Output:\n\n";
 	if (!path.empty()) {
-		compiler* comp = new compiler(path, firstFileName, funcType::TYPE_SCRIPT);
+		compiler* comp = new compiler(dirPath(path), "main", funcType::TYPE_SCRIPT);
 		vm newVm(comp);
 	}
 	system("Pause");

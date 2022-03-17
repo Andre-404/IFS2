@@ -25,7 +25,7 @@ void preprocessor::reset() {
 
 preprocessUnit* preprocessor::scanFile(string unitName) {
 	reset();
-	string fullPath = filepath + unitName + ".txt";
+	string fullPath = filepath + unitName + ".ifs";
 
 	scanner sc(readFile(fullPath), unitName);
 	preprocessUnit* unit = new preprocessUnit(unitName, sc.getArr(), sc.getFile());

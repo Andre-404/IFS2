@@ -675,12 +675,15 @@ void compiler::visitReturnStmt(ASTReturn* stmt) {
 	if (current->type == funcType::TYPE_SCRIPT) {
 		error(stmt->getKeyword(), "Can't return from top-level code.");
 	}
+	else if (current->type == funcType::TYPE_CONSTRUCTOR) {
+		error(stmt->getKeyword(), "Can't return a value from a constructor.");
+	}
+	else if (current->type == funcType::TYPE_FIBER) {
+		error(stmt->getKeyword(), "Use 'yield' to return value from a fiber and pause it's execution.");
+	}
 	if (stmt->getExpr() == NULL) {
 		emitReturn();
 		return;
-	}
-	if (current->type == funcType::TYPE_CONSTRUCTOR) {
-		error(stmt->getKeyword(), "Can't return a value from an constructor.");
 	}
 	stmt->getExpr()->accept(this);
 	emitByte(OP_RETURN);
