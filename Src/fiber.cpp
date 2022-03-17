@@ -683,7 +683,7 @@ interpretResult objFiber::execute() {
 			break;
 		}
 
-		case OP_BREAK: {
+		case OP_JUMP_POPN: {
 			uint16_t toPop = READ_SHORT();
 			int i = 0;
 			while (i < toPop) {

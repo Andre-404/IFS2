@@ -321,12 +321,12 @@ int disassembleInstruction(chunk* Chunk, int offset) {
 		return jumpInstruction("OP JUMP IF FALSE POP", 1, Chunk, offset);
 	case OP_LOOP:
 		return jumpInstruction("OP LOOP", -1, Chunk, offset);
-	case OP_BREAK: {
+	case OP_JUMP_POPN: {
 		uint16_t toPop = (uint16_t)(Chunk->code[offset + 1] << 8);
 		toPop |= Chunk->code[offset + 2];
 		uint16_t jump = (uint16_t)(Chunk->code[offset + 3] << 8);
 		jump |= Chunk->code[offset + 4];
-		printf("%-16s %4d -> %d POP %d\n", "OP BREAK" , offset, offset + 5 + jump, toPop);
+		printf("%-16s %4d -> %d POP %d\n", "OP JUMP POPN" , offset, offset + 5 + jump, toPop);
 		return offset + 5;
 	}
 	case OP_SWITCH:

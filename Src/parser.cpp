@@ -506,7 +506,7 @@ ASTNode* parser::classDecl() {
 }
 
 ASTNode* parser::statement() {
-	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK, TOKEN_SWITCH, TOKEN_RETURN})) {
+	if (match({ TOKEN_PRINT, TOKEN_LEFT_BRACE, TOKEN_IF, TOKEN_WHILE, TOKEN_FOR, TOKEN_BREAK, TOKEN_SWITCH, TOKEN_RETURN, TOKEN_CONTINUE})) {
 		switch (previous().type) {
 		case TOKEN_PRINT: return printStmt();
 		case TOKEN_LEFT_BRACE: return blockStmt();
@@ -514,6 +514,7 @@ ASTNode* parser::statement() {
 		case TOKEN_WHILE: return whileStmt();
 		case TOKEN_FOR: return forStmt();
 		case TOKEN_BREAK: return breakStmt();
+		case TOKEN_CONTINUE: return continueStmt();
 		case TOKEN_SWITCH: return switchStmt();
 		case TOKEN_RETURN: return _return();
 		}
@@ -556,14 +557,17 @@ ASTNode* parser::ifStmt() {
 }
 
 ASTNode* parser::whileStmt() {
+	loopDepth++;
 	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
 	ASTNode* condition = expression();
 	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 	ASTNode* body = statement();
+	loopDepth--;
 	return new ASTWhileStmt(body, condition);
 }
 
 ASTNode* parser::forStmt() {
+	loopDepth++;
 	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
 	//initalizer
 	ASTNode* init = NULL;
@@ -588,15 +592,18 @@ ASTNode* parser::forStmt() {
 	consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
 	//disallows declarations unless they're in a block
 	ASTNode* body = statement();
+	loopDepth--;
 	return new ASTForStmt(init, condition, increment, body);
 }
 
 ASTNode* parser::foreachStmt() {
+	loopDepth++;
 	Token varName = consume(TOKEN_IDENTIFIER, "Expected a variable name.");
 	advance();
 	ASTNode* collection = expression();
 	consume(TOKEN_RIGHT_PAREN, "Expected ')' after foreach clause.");
 	ASTNode* body = statement();
+	loopDepth--;
 	return new ASTForeachStmt(varName, collection, body);
 }
 
@@ -604,6 +611,12 @@ ASTNode* parser::breakStmt() {
 	if (loopDepth == 0 && switchDepth == 0) throw error(previous(), "Cannot use 'break' outside of loops or switch statements.");
 	consume(TOKEN_SEMICOLON, "Expect ';' after break.");
 	return new ASTBreakStmt(previous());
+}
+
+ASTNode* parser::continueStmt() {
+	if (loopDepth == 0) throw error(previous(), "Cannot use 'continue' outside of loops.");
+	consume(TOKEN_SEMICOLON, "Expect ';' after continue.");
+	return new ASTContinueStmt(previous());
 }
 
 ASTNode* parser::switchStmt() {

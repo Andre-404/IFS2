@@ -31,6 +31,7 @@ class ASTWhileStmt;
 class ASTForStmt;
 class ASTForeachStmt;
 class ASTBreakStmt;
+class ASTContinueStmt;
 class ASTSwitchStmt;
 class ASTCase;
 class ASTReturn;
@@ -62,6 +63,7 @@ enum class ASTType {
 	FOR_STMT,
 	FOREACH_STMT,
 	BREAK_STMT,
+	CONTINUE_STMT,
 	SWITCH_STMT,
 	CASE,
 	FUNC,
@@ -109,6 +111,7 @@ public:
 	virtual void visitForStmt(ASTForStmt* stmt) = 0;
 	virtual void visitForeachStmt(ASTForeachStmt* stmt) = 0;
 	virtual void visitBreakStmt(ASTBreakStmt* stmt) = 0;
+	virtual void visitContinueStmt(ASTContinueStmt* stmt) = 0;
 	virtual void visitSwitchStmt(ASTSwitchStmt* stmt) = 0;
 	virtual void visitCase(ASTCase* _case) = 0;
 	virtual void visitReturnStmt(ASTReturn* stmt) = 0;
@@ -413,6 +416,15 @@ private:
 	Token token;
 public:
 	ASTBreakStmt(Token _token);
+	void accept(visitor* vis);
+	Token getToken() { return token; }
+};
+
+class ASTContinueStmt : public ASTNode {
+private:
+	Token token;
+public:
+	ASTContinueStmt(Token _token);
 	void accept(visitor* vis);
 	Token getToken() { return token; }
 };

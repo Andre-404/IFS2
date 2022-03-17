@@ -369,6 +369,17 @@ void ASTBreakStmt::accept(visitor* vis) {
 }
 #pragma endregion
 
+#pragma region Continue
+ASTContinueStmt::ASTContinueStmt(Token _token) {
+	token = _token;
+	type = ASTType::CONTINUE_STMT;
+	gc.addASTNode(this);
+}
+void ASTContinueStmt::accept(visitor* vis) {
+	vis->visitContinueStmt(this);
+}
+#pragma endregion
+
 #pragma region Switch stmt
 ASTSwitchStmt::ASTSwitchStmt(ASTNode* _expr, vector<ASTNode*>& _cases, switchType _type, bool _hasDefault) {
 	expr = _expr;

@@ -507,6 +507,7 @@ void compiler::visitWhileStmt(ASTWhileStmt* stmt) {
 	stmt->getCondition()->accept(this);
 	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
 	stmt->getBody()->accept(this);
+	patchContinue();
 	emitLoop(loopStart);
 	patchJump(jump);
 	patchBreak();
@@ -525,6 +526,8 @@ void compiler::visitForStmt(ASTForStmt* stmt) {
 	}
 	//body is mandatory
 	stmt->getBody()->accept(this);
+	//patching continue here to increment if a variable for incrementing has been defined
+	patchContinue();
 	//if there is a increment expression, we compile it and emit a POP to get rid of the result
 	if (stmt->getIncrement() != NULL) {
 		stmt->getIncrement()->accept(this);
@@ -545,7 +548,7 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	Token iterator = syntheticToken("0iterable");
 	//get the iterator
 	stmt->getCollection()->accept(this);
-	int name = identifierConstant(syntheticToken("begin"));
+	uInt16 name = identifierConstant(syntheticToken("begin"));
 	emitByte(OP_INVOKE);
 	emitBytes(name, 0);
 	addLocal(iterator);
@@ -574,6 +577,7 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 	stmt->getBody()->accept(this);
 
 	//end of loop
+	patchContinue();
 	emitLoop(loopStart);
 	patchJump(jump);
 	endScope();
@@ -581,14 +585,25 @@ void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
 }
 
 void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
-	//the amount of variables to pop and the amount of code to jump is determined in handleBreak()
+	//the amount of variables to pop and the amount of code to jump is determined in patchBreak()
 	//which is called at the end of loops
 	updateLine(stmt->getToken());
-	emitByte(OP_BREAK);
+	emitByte(OP_JUMP_POPN);
 	int breakJump = getChunk()->code.count();
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
 	current->breakStmts.emplace_back(current->scopeDepth, breakJump, current->localCount);
+}
+
+void compiler::visitContinueStmt(ASTContinueStmt* stmt) {
+	//the amount of variables to pop and the amount of code to jump is determined in patchContinue()
+	//which is called at the end of loops
+	updateLine(stmt->getToken());
+	emitByte(OP_JUMP_POPN);
+	int continueJump = getChunk()->code.count();
+	emitBytes(0xff, 0xff);
+	emitBytes(0xff, 0xff);
+	current->continueStmts.emplace_back(current->scopeDepth, continueJump, current->localCount);
 }
 
 void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
@@ -928,7 +943,7 @@ void compiler::patchBreak() {
 	int curCode = getChunk()->code.count();
 	//most recent breaks are going to be on top
 	for (int i = current->breakStmts.size() - 1; i >= 0; i--) {
-		_break curBreak = current->breakStmts[i];
+		jump curBreak = current->breakStmts[i];
 		//if the break stmt we're looking at has a depth that's equal or higher than current depth, we bail out
 		if (curBreak.depth > current->scopeDepth) {
 			int jumpLenght = curCode - curBreak.offset - 4;
@@ -944,6 +959,29 @@ void compiler::patchBreak() {
 		}else break;
 	}
 }
+
+void compiler::patchContinue() {
+	int curCode = getChunk()->code.count();
+	//most recent continues are going to be on top
+	for (int i = current->continueStmts.size() - 1; i >= 0; i--) {
+		jump curContinue = current->continueStmts[i];
+		//if the break stmt we're looking at has a depth that's equal or higher than current depth, we bail out
+		if (curContinue.depth >= current->scopeDepth) {
+			int jumpLenght = curCode - curContinue.offset - 4;
+			int toPop = curContinue.varNum - current->localCount;
+			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
+			getChunk()->code[curContinue.offset] = (toPop >> 8) & 0xff;
+			getChunk()->code[curContinue.offset + 1] = toPop & 0xff;
+			//amount to jump
+			getChunk()->code[curContinue.offset + 2] = (jumpLenght >> 8) & 0xff;
+			getChunk()->code[curContinue.offset + 3] = jumpLenght & 0xff;
+			//delete break from array
+			current->continueStmts.pop_back();
+		}
+		else break;
+	}
+}
+
 
 Token compiler::syntheticToken(const char* str) {
 	return Token(str, current->line, TOKEN_IDENTIFIER);

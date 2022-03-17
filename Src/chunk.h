@@ -66,7 +66,7 @@ enum OpCode {
 	OP_JUMP_IF_TRUE,
 	OP_JUMP_IF_FALSE_POP,
 	OP_LOOP,
-	OP_BREAK,
+	OP_JUMP_POPN,
 	OP_SWITCH,
 
 	//Functions

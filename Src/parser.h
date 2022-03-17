@@ -43,15 +43,6 @@ public:
 	int prec;
 };
 
-class assignmentExpr;
-class unaryExpr;
-class literalExpr;
-class unaryVarAlterPrefix;
-class unaryVarAlterPostfix;
-class binaryExpr;
-class callExpr;
-class conditionalExpr;
-
 class preprocessUnit;
 
 struct translationUnit {
@@ -124,6 +115,7 @@ private:
 	ASTNode* forStmt();
 	ASTNode* foreachStmt();
 	ASTNode* breakStmt();
+	ASTNode* continueStmt();
 	ASTNode* switchStmt();
 	ASTNode* _case();
 	ASTNode* _return();

@@ -33,11 +33,11 @@ struct upvalue{
 	}
 };
 
-struct _break {
+struct jump {
 	int depth = 0;
 	int offset = -1;
 	int varNum = 0;
-	_break(int _d, int _o, int _varNum) : depth(_d), offset(_o), varNum(_varNum) {}
+	jump(int _d, int _o, int _varNum) : depth(_d), offset(_o), varNum(_varNum) {}
 };
 
 struct compilerInfo {
@@ -49,8 +49,9 @@ struct compilerInfo {
 	bool hasReturn;
 
 	uInt line;
-	//keeps track of every break statement that has been encountered
-	vector<_break> breakStmts;
+	//keeps track of every break and continue statement that has been encountered
+	vector<jump> breakStmts;
+	vector<jump> continueStmts;
 	//locals
 	local locals[LOCAL_MAX];
 	int localCount;
@@ -93,6 +94,7 @@ private:
 	void patchJump(int offset);
 	void emitLoop(int start);
 	void patchBreak();
+	void patchContinue();
 	uInt16 makeConstant(Value value);
 	//variables
 	uInt16 identifierConstant(Token name);
@@ -151,6 +153,7 @@ private:
 	void visitForStmt(ASTForStmt* stmt);
 	void visitForeachStmt(ASTForeachStmt* stmt);
 	void visitBreakStmt(ASTBreakStmt* stmt);
+	void visitContinueStmt(ASTContinueStmt* stmt);
 	void visitSwitchStmt(ASTSwitchStmt* stmt);
 	void visitCase(ASTCase* _case);
 	void visitReturnStmt(ASTReturn* stmt);
