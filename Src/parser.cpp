@@ -743,9 +743,7 @@ void parser::sync() {
 		case TOKEN_PRINT:
 		case TOKEN_RETURN:
 		case TOKEN_SWITCH:
-		case TOKEN_FOREACH:
 		case TOKEN_RIGHT_BRACE:
-		case TOKEN_LEFT_BRACE:
 			return;
 		}
 

@@ -249,12 +249,7 @@ TokenType scanner::identifierType() {
 		if (current - start > 1) {
 			switch (source[start + 1]) {
 			case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
-			case 'o':
-				//since foreach has the same letters as for we first check the total number of letters
-				if (current - start > 3) {
-					return checkKeyword(2, 5, "reach", TOKEN_FOREACH);
-				}
-				return checkKeyword(2, 1, "r", TOKEN_FOR);
+			case 'o': return checkKeyword(2, 1, "r", TOKEN_FOR);
 			case 'u': return checkKeyword(2, 2, "nc", TOKEN_FUNC);
 			case 'i': return checkKeyword(2, 3, "ber", TOKEN_FIBER);
 			}

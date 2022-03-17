@@ -70,7 +70,7 @@ compiler::compiler(string path, string fileName, funcType _type) {
 			}
 		}
 	}
-	tracker.printIssues();
+	if(!compiled) tracker.printIssues();
 	for (translationUnit* unit : sortedUnits) delete unit;
 	gc.clearASTNodes();
 }
