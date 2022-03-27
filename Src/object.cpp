@@ -178,7 +178,6 @@ objFunc::objFunc() {
 	type = OBJ_FUNC;
 	moveTo = nullptr;
 	name = nullptr;
-	std::cout << "Size: " << sizeof(objFunc)<<"\n";
 }
 
 void objFunc::move(byte* to) {

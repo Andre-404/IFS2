@@ -448,7 +448,10 @@ bool nativeStringReplace(objFiber* fiber, int argCount, Value* args) {
 
 	string newStr(str->str);
 	uInt64 pos = newStr.find(subStr->str);
-	newStr.replace(pos, subStr->length, newSubStr->str);
+	while (pos != newStr.npos) {
+		newStr.replace(pos, subStr->length, newSubStr->str);
+		pos = newStr.find(subStr->str);
+	}
 	fiber->transferValue(OBJ_VAL(copyString(newStr)));
 	return true;
 }
