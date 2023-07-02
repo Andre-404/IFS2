@@ -25,12 +25,8 @@ struct local {
 };
 
 struct upvalue{
-	uint8_t index;
-	bool isLocal;
-	upvalue() {
-		index = 0;
-		isLocal = false;
-	}
+	uint8_t index = 0;
+	bool isLocal = false;
 };
 
 struct jump {

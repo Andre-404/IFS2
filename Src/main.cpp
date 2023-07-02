@@ -29,10 +29,14 @@ string dirPath(string path) {
 	return path.substr(0, path.find_last_of('\\') + 1);
 }
 
-int main() {
-	cout << "Input filepath:\n";
+int main(int argc, char* argv[]) {
 	string path;
-	cin >> path;
+	if (argc == 1) {
+		cout << "Input filepath:\n";
+		cin >> path;
+	}
+	else if (argc == 2) path = string(argv[1]);
+	else cout << "Too many arguments.";
 	cout << "Output:\n\n";
 	if (!path.empty()) {
 		compiler* comp = new compiler(dirPath(path), "main", funcType::TYPE_SCRIPT);
